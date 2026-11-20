@@ -1,0 +1,17 @@
+# What trials to watch for. Every list is optional; an empty list means "any".
+# Entries within a list are OR'ed together; the lists are AND'ed.
+
+[search]
+# Diseases or conditions, e.g. ["multiple sclerosis", "MS"]
+conditions = []
+# Free-text keywords (drug names, interventions...), e.g. ["ocrelizumab"]
+terms = []
+# Cities, states or countries, e.g. ["Boston", "Massachusetts"]
+locations = []
+# Phases: 1, 2, 3, 4, early1, NA
+phases = []
+# Recruitment status, e.g. ["RECRUITING", "NOT_YET_RECRUITING"]
+statuses = ["RECRUITING", "NOT_YET_RECRUITING"]
+
+# On the very first run, look back this many days.
+first_run_lookback_days = 7
