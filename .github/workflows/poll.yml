@@ -1,0 +1,88 @@
+name: Poll for new trials
+
+on:
+  schedule:
+    # Hourly, at minute 17 to avoid the top-of-hour queue on GitHub runners.
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write # push the seen-IDs file to the state branch
+
+# Never run two polls at once: they would race on the seen-IDs file.
+concurrency:
+  group: poll
+  cancel-in-progress: false
+
+env:
+  STATE_BRANCH: state
+  STATE_DIR: ${{ github.workspace }}/.state-branch
+  SEEN_IDS_FILE: state/seen_ids.json
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore seen IDs from the state branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin "$STATE_BRANCH" >/dev/null; then
+            git fetch --depth=1 origin "$STATE_BRANCH"
+            git worktree add --detach "$STATE_DIR" FETCH_HEAD
+          else
+            echo "No '$STATE_BRANCH' branch yet: this is the first run."
+            git worktree add --detach "$STATE_DIR"
+            git -C "$STATE_DIR" checkout --orphan "$STATE_BRANCH"
+            git -C "$STATE_DIR" rm -rfq --ignore-unmatch .
+          fi
+          if [ -f "$STATE_DIR/$SEEN_IDS_FILE" ]; then
+            mkdir -p "$(dirname "$SEEN_IDS_FILE")"
+            cp "$STATE_DIR/$SEEN_IDS_FILE" "$SEEN_IDS_FILE"
+            echo "Restored $(wc -c < "$SEEN_IDS_FILE") bytes of seen IDs."
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies (if any)
+        run: |
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run the poller
+        id: poll
+        # Notifier secrets (added by the alerts work) go in an env: block here.
+        run: python -m guineaping
+
+      - name: Show new trials in the run summary
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f new_trials.md ]; then
+            cat new_trials.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No new trials this run." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Save seen IDs to the state branch
+        # Save even if the poller failed part-way, so IDs it already
+        # handled are not alerted on again next hour.
+        if: ${{ !cancelled() }}
+        run: |
+          if [ ! -f "$SEEN_IDS_FILE" ]; then
+            echo "Poller wrote no $SEEN_IDS_FILE; nothing to save."
+            exit 0
+          fi
+          mkdir -p "$STATE_DIR/$(dirname "$SEEN_IDS_FILE")"
+          cp "$SEEN_IDS_FILE" "$STATE_DIR/$SEEN_IDS_FILE"
+          cd "$STATE_DIR"
+          git add "$SEEN_IDS_FILE"
+          if git diff --cached --quiet; then
+            echo "Seen IDs unchanged."
+            exit 0
+          fi
+          git commit -qm "Update seen trial IDs ($(date -u +%FT%TZ))"
+          git push origin "HEAD:refs/heads/$STATE_BRANCH"
