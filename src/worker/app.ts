@@ -5,7 +5,10 @@ import { fetchJson, findTrials, forList, normalizeCriteria } from "../shared/ctg
 import { accessFrom, setAllowed } from "./access";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, RECENT_DAYS } from "./check";
+import { listClinics } from "./clinics";
 import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
+import { plainFetch, readDueSource } from "./openings/read";
+import { SOURCES } from "./openings/sources";
 import { getProfile, nearByMember, saveProfile } from "./profile";
 import { pushPendingAlerts, pushTest, validKeys, vapidFrom } from "./push";
 import { report } from "./report";
@@ -390,6 +393,15 @@ app.delete("/api/members/:id", async (c) => {
     return c.json({ error: "They're removed and can't use GuineaPing, but Cloudflare's sign-in list couldn't be updated. Take their email off the Members policy in the Cloudflare dashboard." }, 502);
   }
   return c.body(null, 204);
+});
+
+/** Every Clinic, nearest first when the Member's Profile has a ZIP code, each with its current Openings. */
+app.get("/api/clinics", async (c) => c.json(await listClinics(c.env.DB, await myNear(c))));
+
+/** Reads the next due Clinic source on demand during local development. Still at most once a day each. */
+app.post("/api/dev/read-clinic", async (c) => {
+  if (!isDevRequest(c)) return c.json({ error: "Not found" }, 404);
+  return c.json((await readDueSource(c.env.DB, SOURCES, plainFetch)) ?? { status: "nothing due" });
 });
 
 /** Runs a Check (and its Pushes) on demand during local development; Vite's Cloudflare plugin has no cron trigger. */

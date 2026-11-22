@@ -1,15 +1,26 @@
 import * as Sentry from "@sentry/cloudflare";
 import { app } from "./app";
 import { checkAndPush } from "./check";
+import { plainFetch, readDueSource } from "./openings/read";
+import { SOURCES } from "./openings/sources";
 import { report, safeReason, sentryOptions } from "./report";
 
 /** The Sentry cron monitor for the hourly Check. It raises the alarm when a Check fails or never runs. */
 const MONITOR = "hourly-check";
+/** Matches wrangler.jsonc. Each run reads at most one Clinic source, and each source at most once a day. */
+const CLINIC_CRON = "47 * * * *";
 
 const handler = {
   fetch: app.fetch,
   /** The hourly Check and its Pushes (wrangler.jsonc triggers.crons). */
-  async scheduled(_event, env) {
+  async scheduled(event, env) {
+    // The Clinic read has its own trigger, so a Clinic's site failing can never fail a Check.
+    if (event.cron === CLINIC_CRON) {
+      const r = await readDueSource(env.DB, SOURCES, plainFetch);
+      if (r && r.status !== "ok") report(`A Clinic's list could not be read (${r.source}: ${r.status})`, r.detail);
+      if (r) console.log(`Clinic read ${r.source}: ${r.status}, ${r.found} Openings`);
+      return;
+    }
     await Sentry.withMonitor(
       MONITOR,
       async () => {
