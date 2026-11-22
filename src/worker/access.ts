@@ -36,9 +36,10 @@ export async function setAllowed(cfg: AccessConfig, email: string, allowed: bool
   const include = allowed ? [...policy.include, { email: { email } }] : policy.include.filter((r) => !isEmailRule(r, email));
   // Access refuses a policy that allows nobody; the last address stays until someone else is added.
   if (!include.length) throw new Error("The sign-in list can't be left empty");
-  const body: Policy = { name: policy.name, decision: policy.decision, include, exclude: policy.exclude ?? [], require: policy.require ?? [] };
-  if (policy.session_duration) body.session_duration = policy.session_duration;
-  if (policy.precedence !== undefined) body.precedence = policy.precedence;
+  // Send back everything Cloudflare gave us except what it sets itself, so a setting added to the
+  // policy later in the dashboard isn't silently reset by the next invite.
+  const body: Record<string, unknown> = { ...policy, include };
+  for (const readOnly of ["id", "uid", "created_at", "updated_at", "reusable"]) delete body[readOnly];
   const saved = await call(url, { method: "PUT", headers, body: JSON.stringify(body) });
   if (!saved.ok) throw new Error(`Cloudflare Access answered ${saved.status} changing the sign-in list`);
 }
