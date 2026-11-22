@@ -20,6 +20,9 @@ const FIELDS = [
   "LeadSponsorName",
   "MinimumAge",
   "MaximumAge",
+  "Sex",
+  "HealthyVolunteers",
+  "EligibilityCriteria",
   "LocationCity",
   "LocationState",
   "LocationCountry",
@@ -162,10 +165,16 @@ type Study = {
     designModule?: { phases?: string[] };
     conditionsModule?: { conditions?: string[] };
     sponsorCollaboratorsModule?: { leadSponsor?: { name?: string } };
-    eligibilityModule?: { minimumAge?: string; maximumAge?: string };
+    eligibilityModule?: { minimumAge?: string; maximumAge?: string; sex?: string; healthyVolunteers?: boolean; eligibilityCriteria?: string };
     contactsLocationsModule?: { locations?: { city?: string; state?: string; country?: string; geoPoint?: { lat?: number; lon?: number } }[] };
   };
 };
+
+/** Criteria text beyond this is cut; the listing itself has the rest. Keeps stored Alerts small. */
+export const MAX_CRITERIA_CHARS = 6000;
+
+/** A Trial as lists show it: without the long eligibility text, which only an Alert's own page uses. */
+export const forList = ({ eligibility: _, ...trial }: Trial): Trial => trial;
 
 /** Great-circle distance in miles. */
 export function milesBetween(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
@@ -204,6 +213,11 @@ export function toTrial(raw: unknown, near?: Near | null): Trial | null {
     maximumAge: ps.eligibilityModule?.maximumAge ?? "",
     locations,
     ...(near ? { nearest } : {}),
+    eligibility: {
+      sex: ps.eligibilityModule?.sex ?? "",
+      healthyVolunteers: ps.eligibilityModule?.healthyVolunteers ?? null,
+      criteria: (ps.eligibilityModule?.eligibilityCriteria ?? "").slice(0, MAX_CRITERIA_CHARS),
+    },
     url: STUDY_URL + nctId,
   };
 }

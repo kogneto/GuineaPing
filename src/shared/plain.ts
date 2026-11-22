@@ -78,3 +78,44 @@ export function keyFacts(trial: Trial): string[] {
     (s): s is string => !!s,
   );
 }
+
+/** One part of a study's entry criteria, as bullet points in the study's own words. */
+export type CriteriaSection = { kind: "include" | "exclude" | "other"; items: string[] };
+
+/**
+ * Splits a study's criteria text into "can join" and "can't join" lists. The words are the
+ * study's own: this only finds the headings and bullet points ClinicalTrials.gov listings use.
+ * Text with no bullet points comes back as one "other" section of paragraphs.
+ */
+export function criteriaSections(text: string): CriteriaSection[] {
+  const sections: CriteriaSection[] = [];
+  let current: CriteriaSection = { kind: "other", items: [] };
+  const last = () => current.items.length - 1;
+  // Listings escape some characters with backslashes, e.g. "\>45".
+  for (const raw of text.replace(/\\([<>*_[\]#~-])/g, "$1").split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const heading = /^(?:key\s+)?(inclusion|exclusion)\s+criteria\b[^a-z]*$/i.exec(line);
+    if (heading) {
+      if (current.items.length) sections.push(current);
+      current = { kind: heading[1]!.toLowerCase() === "inclusion" ? "include" : "exclude", items: [] };
+      continue;
+    }
+    const bullet = /^(?:[*•·-]|\d{1,2}[.)])\s+(.*)$/.exec(line);
+    const nested = !!bullet && /^\s{2,}/.test(raw);
+    if (bullet && nested && current.items.length) {
+      // A sub-point joins its parent: "Serious disease: relapses; rapid decline".
+      const parent = current.items[last()]!.replace(/\s*:$/, ":");
+      current.items[last()] = `${parent}${parent.endsWith(":") ? "" : ";"} ${bullet[1]}`;
+    } else if (bullet) current.items.push(bullet[1]!);
+    else if (current.items.length && current.kind !== "other") current.items[last()] += ` ${line}`;
+    else current.items.push(line);
+  }
+  if (current.items.length) sections.push(current);
+  return sections.map((s) => ({ ...s, items: s.items.map((i) => i.replace(/[;,]$/, "").trim()).filter(Boolean) }));
+}
+
+/** "Women only", "Men only", or null when anyone can join. */
+export function sexText(sex: string): string | null {
+  return sex === "FEMALE" ? "Women only" : sex === "MALE" ? "Men only" : null;
+}
