@@ -45,7 +45,9 @@ export function DevicesPage() {
           why === "denied"
             ? "Notifications are blocked for GuineaPing in this browser. Allow them in the browser's site settings, then try again."
             : why === "dismissed"
-              ? "No problem. Tap the button again whenever you're ready."
+              ? // The prompt was closed, or the browser never showed it: Chrome quietly holds back requests from
+                // new sites and shows only a small bell or "Notifications blocked" note.
+                "Notifications weren't allowed. If you didn't see a question, your browser held it back: tap the icon to the left of the web address, open Permissions or Site settings, set Notifications to Allow, then tap the button again."
               : `Couldn't turn notifications on: ${why}`,
       });
     } finally {

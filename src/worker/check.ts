@@ -32,6 +32,9 @@ export type CheckResult = {
 export async function runCheck(db: D1Database, get: FetchJson, now = new Date().toISOString()): Promise<CheckResult> {
   const last = await db.prepare("SELECT started_at FROM checks WHERE ok = 1 ORDER BY started_at DESC LIMIT 1").first<{ started_at: string }>();
   const since = daysBefore(last?.started_at ?? now, OVERLAP_DAYS);
+  // Finish time is the start plus how long this run took, so a Check given its own clock stays on it.
+  const clock = Date.now();
+  const finishedAt = () => new Date(Date.parse(now) + (Date.now() - clock)).toISOString();
 
   // Every Watch is asked about, even one nobody follows right now: it must keep recording what it
   // finds, or whoever follows it next would be alerted on Trials posted before they followed.
@@ -44,7 +47,7 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
       .prepare(
         "INSERT INTO checks (id, started_at, finished_at, ok, since, watches_checked, alerts_created, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
       )
-      .bind(crypto.randomUUID(), now, new Date().toISOString(), result.ok ? 1 : 0, since, result.watchesChecked, result.alertsCreated, result.error ?? null);
+      .bind(crypto.randomUUID(), now, finishedAt(), result.ok ? 1 : 0, since, result.watchesChecked, result.alertsCreated, result.error ?? null);
 
   // Ask about every Watch before writing anything: a Check succeeds whole or not at all, so a
   // failure never moves `since` past Trials nobody was told about.
