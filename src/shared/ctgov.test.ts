@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Criteria } from "./api";
-import { buildParams, findTrials, normalizeCriteria, quoteTerm, toTrial } from "./ctgov";
+import { buildParams, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
 import { agesText, phaseText } from "./plain";
 
-const criteria = (c: Partial<Criteria>): Criteria => ({ conditions: [], terms: [], phases: [], statuses: [], ...c });
+const criteria = (c: Partial<Criteria>): Criteria => withDefaults(c);
 
 describe("query building", () => {
   it("quotes each term and strips characters that would change the query", () => {
@@ -30,6 +30,57 @@ describe("query building", () => {
     expect(normalizeCriteria({ conditions: ["  "], terms: [] })).toEqual({ error: "A Watch needs at least one condition or keyword" });
     expect(normalizeCriteria({ conditions: ["MS"], phases: ["PHASE9"] })).toEqual({ error: "Unknown phase PHASE9" });
     expect(normalizeCriteria({ conditions: [" MS ", "MS"], statuses: ["RECRUITING"] })).toEqual(criteria({ conditions: ["MS"], statuses: ["RECRUITING"] }));
+  });
+});
+
+describe("where and who", () => {
+  it("asks for trials near a point, open to an age and sex, the way the live API understands", () => {
+    const p = buildParams(criteria({ conditions: ["MS"], near: { zip: "02139", miles: 25, lat: 42.36, lon: -71.1 }, age: 45, sex: "FEMALE" }), "2026-11-19");
+    expect(p["filter.geo"]).toBe("distance(42.36,-71.1,25mi)");
+    expect(p["filter.advanced"]).toBe(
+      "AREA[StudyFirstPostDate]RANGE[2026-11-19,MAX]" +
+        " AND (AREA[MinimumAge]RANGE[MIN, 45 years] OR NOT AREA[MinimumAge]RANGE[MIN, MAX])" +
+        " AND (AREA[MaximumAge]RANGE[45 years, MAX] OR NOT AREA[MaximumAge]RANGE[MIN, MAX])" +
+        " AND NOT AREA[Sex]MALE",
+    );
+    expect(buildParams(criteria({ conditions: ["x"], sex: "MALE" }), "2026-11-19")["filter.advanced"]).toContain("NOT AREA[Sex]FEMALE");
+    expect(buildParams(criteria({ conditions: ["x"] }), "2026-11-19")["filter.geo"]).toBeUndefined();
+  });
+
+  it("validates ZIP codes, distances, ages and sexes", () => {
+    const ok = normalizeCriteria({ conditions: ["MS"], near: { zip: " 02139 ", miles: 50 }, age: "45", sex: "MALE" });
+    expect(ok).toMatchObject({ near: { zip: "02139", miles: 50 }, age: 45, sex: "MALE" });
+    expect(normalizeCriteria({ conditions: ["MS"], near: { zip: "2139", miles: 50 } })).toEqual({ error: "Enter a 5-digit US ZIP code" });
+    expect(normalizeCriteria({ conditions: ["MS"], near: { zip: "02139", miles: 7 } })).toEqual({ error: "Pick one of the distances offered" });
+    expect(normalizeCriteria({ conditions: ["MS"], age: 4.5 })).toEqual({ error: "Enter an age in whole years, 0 to 120" });
+    expect(normalizeCriteria({ conditions: ["MS"], sex: "ALL" })).toEqual({ error: "Unknown sex ALL" });
+  });
+
+  it("works out the nearest site to the Watch's ZIP code", () => {
+    const near = { zip: "02139", miles: 50, lat: 42.3646, lon: -71.1028 };
+    const t = toTrial(
+      {
+        protocolSection: {
+          identificationModule: { nctId: "NCT12345678" },
+          contactsLocationsModule: {
+            locations: [
+              { city: "Worcester", state: "Massachusetts", geoPoint: { lat: 42.2626, lon: -71.8023 } },
+              { city: "Boston", state: "Massachusetts", geoPoint: { lat: 42.3584, lon: -71.0598 } },
+              { city: "Nowhere", state: "Massachusetts" },
+            ],
+          },
+        },
+      },
+      near,
+    );
+    expect(t?.nearest).toEqual({ place: "Boston, Massachusetts", miles: 2 });
+    // Cambridge, MA to New York City is about 190 miles as the crow flies.
+    expect(milesBetween({ lat: 42.3646, lon: -71.1028 }, { lat: 40.7128, lon: -74.006 })).toBeGreaterThan(185);
+    expect(milesBetween({ lat: 42.3646, lon: -71.1028 }, { lat: 40.7128, lon: -74.006 })).toBeLessThan(195);
+  });
+
+  it("keeps older Watches working when new criteria fields are missing", () => {
+    expect(withDefaults({ conditions: ["MS"], terms: [], phases: [], statuses: [] })).toMatchObject({ near: null, age: null, sex: null });
   });
 });
 

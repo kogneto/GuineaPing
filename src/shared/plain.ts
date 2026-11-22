@@ -66,9 +66,15 @@ export function locationsText(locations: string[], shown = 3): string | null {
   return locations.slice(0, shown).join("; ") + more;
 }
 
+export function nearestText(trial: Trial): string | null {
+  if (!trial.nearest) return null;
+  const miles = trial.nearest.miles < 1 ? "under 1 mi" : `${trial.nearest.miles} mi`;
+  return `Nearest site: ${trial.nearest.place}, ${miles}`;
+}
+
 /** The short line of facts shown under a Trial's title. */
 export function keyFacts(trial: Trial): string[] {
-  return [statusText(trial.status), phaseText(trial.phases), agesText(trial.minimumAge, trial.maximumAge)].filter(
+  return [statusText(trial.status), nearestText(trial), phaseText(trial.phases), agesText(trial.minimumAge, trial.maximumAge)].filter(
     (s): s is string => !!s,
   );
 }

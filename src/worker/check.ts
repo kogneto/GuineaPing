@@ -3,7 +3,7 @@
  * finds for the first time, and turn that into Alerts, at most one per Member per Trial.
  */
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
-import { fetchJson, findTrials, type FetchJson } from "../shared/ctgov";
+import { fetchJson, findTrials, withDefaults, type FetchJson } from "../shared/ctgov";
 import { pushNewAlerts, vapidFrom, type NewAlert } from "./push";
 
 /**
@@ -51,7 +51,7 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
   const found: { watchId: string; watchName: string; isPrivate: boolean; trials: Trial[] }[] = [];
   try {
     for (const w of watches) {
-      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, trials: await findTrials(JSON.parse(w.criteria) as Criteria, since, get) });
+      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, trials: await findTrials(withDefaults(JSON.parse(w.criteria) as Partial<Criteria>), since, get) });
     }
   } catch (err) {
     const result: CheckResult = { ok: false, watchesChecked: 0, alertsCreated: 0, newAlerts: [], error: String(err instanceof Error ? err.message : err).slice(0, 500) };

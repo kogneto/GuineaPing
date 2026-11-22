@@ -27,8 +27,18 @@ function recentMatches(criteria: Criteria, all = false): Promise<Trial[]> {
 
 const upstreamError = { error: "Couldn't reach ClinicalTrials.gov just now. Please try again in a minute." };
 
-async function readWatchInput(body: unknown): Promise<WatchInput | { error: string }> {
-  const criteria = normalizeCriteria((body as { criteria?: unknown } | null)?.criteria);
+/** Validates criteria from the browser and turns a ZIP code into the point ClinicalTrials.gov needs. */
+async function readCriteria(db: D1Database, raw: unknown): Promise<Criteria | { error: string }> {
+  const input = normalizeCriteria(raw);
+  if ("error" in input) return input;
+  if (!input.near) return { ...input, near: null };
+  const point = await db.prepare("SELECT lat, lon FROM zips WHERE zip = ?").bind(input.near.zip).first<{ lat: number; lon: number }>();
+  if (!point) return { error: `GuineaPing doesn't know the ZIP code ${input.near.zip}. Check it, or try a nearby one.` };
+  return { ...input, near: { ...input.near, lat: point.lat, lon: point.lon } };
+}
+
+async function readWatchInput(db: D1Database, body: unknown): Promise<WatchInput | { error: string }> {
+  const criteria = await readCriteria(db, (body as { criteria?: unknown } | null)?.criteria);
   if ("error" in criteria) return criteria;
   return parseWatchInput(body, criteria);
 }
@@ -40,7 +50,7 @@ app.get("/api/status", async (c) => c.json(await checkStatus(c.env.DB)));
 app.get("/api/watches", async (c) => c.json(await listWatches(c.env.DB, c.get("me"))));
 
 app.post("/api/watches", async (c) => {
-  const input = await readWatchInput(await c.req.json().catch(() => null));
+  const input = await readWatchInput(c.env.DB, await c.req.json().catch(() => null));
   if ("error" in input) return c.json(input, 400);
   let recent: Trial[];
   try {
@@ -62,7 +72,7 @@ app.put("/api/watches/:id", async (c) => {
   const existing = await getWatch(c.env.DB, me, c.req.param("id"));
   if (!existing) return c.json({ error: "No such Watch" }, 404);
   if (!existing.isOwner) return c.json({ error: "Only the Watch's Owner can change it" }, 403);
-  const input = await readWatchInput(await c.req.json().catch(() => null));
+  const input = await readWatchInput(c.env.DB, await c.req.json().catch(() => null));
   if ("error" in input) return c.json(input, 400);
   let recent: Trial[] | null = null;
   if (JSON.stringify(input.criteria) !== JSON.stringify(existing.criteria)) {
@@ -100,9 +110,34 @@ app.get("/api/watches/:id/recent", async (c) => {
   }
 });
 
+/**
+ * Condition suggestions while an Owner types, from ClinicalTrials.gov's own suggestion endpoint.
+ * It is internal and undocumented, so any trouble returns no suggestions and typing still works.
+ */
+app.get("/api/suggest", async (c) => {
+  const q = (c.req.query("q") ?? "").trim();
+  if (q.length < 2 || q.length > 60) return c.json([]);
+  try {
+    const res = await fetch(`https://clinicaltrials.gov/api/int/suggest?${new URLSearchParams({ input: q, dictionary: "Condition" })}`, {
+      headers: { "User-Agent": "GuineaPing/0.1 (+https://github.com/kogneto/GuineaPing)", Accept: "application/json" },
+    });
+    if (!res.ok) return c.json([]);
+    const data = (await res.json()) as unknown;
+    if (!Array.isArray(data)) return c.json([]);
+    const words = data
+      .filter((s): s is string => typeof s === "string")
+      // The endpoint escapes some characters with backslashes, e.g. "Lung Cancer\(NSCLC\)".
+      .map((s) => s.replace(/\\(.)/g, "$1").trim())
+      .filter(Boolean);
+    return c.json([...new Set(words)].slice(0, 8));
+  } catch {
+    return c.json([]);
+  }
+});
+
 /** Recent matches for criteria still being edited, before the Watch is saved. */
 app.post("/api/preview", async (c) => {
-  const criteria = normalizeCriteria((await c.req.json().catch(() => null))?.criteria);
+  const criteria = await readCriteria(c.env.DB, (await c.req.json().catch(() => null))?.criteria);
   if ("error" in criteria) return c.json(criteria, 400);
   try {
     return c.json(await recentMatches(criteria));
