@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import type { CheckStatus, Me } from "../shared/api";
-import { ago, api } from "./api";
+import { ago, api, type ApiError } from "./api";
 import { Illustration } from "./components/Illustration";
 import { AlertPage } from "./pages/AlertPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { DevicesPage } from "./pages/DevicesPage";
+import { MembersPage } from "./pages/MembersPage";
 import { WatchEditorPage } from "./pages/WatchEditorPage";
 import { WatchesPage } from "./pages/WatchesPage";
 import { WatchPage } from "./pages/WatchPage";
@@ -14,6 +15,7 @@ function route(path: string) {
   let m: RegExpExecArray | null;
   if ((m = /^\/alerts\/([\w-]+)$/.exec(path))) return <AlertPage id={m[1]!} />;
   if (path === "/devices") return <DevicesPage />;
+  if (path === "/members") return <MembersPage />;
   if (path === "/watches") return <WatchesPage />;
   if (path === "/watches/new") return <WatchEditorPage />;
   if ((m = /^\/watches\/([\w-]+)\/edit$/.exec(path))) return <WatchEditorPage id={m[1]!} />;
@@ -41,12 +43,24 @@ export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [status, setStatus] = useState<CheckStatus | null>(null);
   const [signedOut, setSignedOut] = useState(false);
+  const [removed, setRemoved] = useState<string | null>(null);
 
   useEffect(() => {
-    api<Me>("/api/me").then(setMe, () => setSignedOut(true));
+    api<Me>("/api/me").then(setMe, (e: ApiError) => (e.status === 403 ? setRemoved(e.message) : setSignedOut(true)));
     api<CheckStatus>("/api/status").then(setStatus, () => {});
   }, []);
 
+  if (removed) {
+    return (
+      <main className="page narrow">
+        <div className="empty">
+          <Illustration name="goodbye" />
+          <h1>GuineaPing</h1>
+          <p>{removed}</p>
+        </div>
+      </main>
+    );
+  }
   if (signedOut) {
     return (
       <main className="page narrow">
@@ -59,7 +73,7 @@ export function App() {
     );
   }
 
-  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/devices") ? "devices" : "alerts";
+  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/devices") ? "devices" : path.startsWith("/members") ? "members" : "alerts";
   return (
     <>
       <header className="top">
@@ -75,6 +89,9 @@ export function App() {
           </Link>
           <Link to="/devices" className={section === "devices" ? "active" : ""}>
             Devices
+          </Link>
+          <Link to="/members" className={section === "members" ? "active" : ""}>
+            Members
           </Link>
         </nav>
         {me && <span className="who">{me.email}</span>}

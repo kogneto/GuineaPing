@@ -35,21 +35,26 @@ async function accessEmail(c: Context<AppEnv>): Promise<string | null> {
   }
 }
 
-/** Anyone Access let in is a Member; the first visit creates their record. */
-async function memberFor(db: D1Database, rawEmail: string): Promise<Me> {
+/**
+ * Anyone Access let in is a Member; the first visit creates their record. The exception is a
+ * Member who was removed: Access may still honour their old session, so they are refused here.
+ */
+async function memberFor(db: D1Database, rawEmail: string): Promise<Me | null> {
   const email = rawEmail.trim().toLowerCase();
   await db
     .prepare("INSERT INTO members (id, email, created_at) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING")
     .bind(crypto.randomUUID(), email, new Date().toISOString())
     .run();
-  const row = await db.prepare("SELECT id FROM members WHERE email = ?").bind(email).first<{ id: string }>();
-  return { memberId: row!.id, email };
+  const row = await db.prepare("SELECT id, removed_at FROM members WHERE email = ?").bind(email).first<{ id: string; removed_at: string | null }>();
+  return row!.removed_at ? null : { memberId: row!.id, email };
 }
 
 export const requireMember: MiddlewareHandler<AppEnv> = async (c, next) => {
   const email = await accessEmail(c);
   if (!email) return c.json({ error: "Not signed in" }, 401);
-  c.set("me", await memberFor(c.env.DB, email));
+  const me = await memberFor(c.env.DB, email);
+  if (!me) return c.json({ error: "You're no longer a Member of this group. Ask a Member to invite you again." }, 403);
+  c.set("me", me);
   await next();
 };
 

@@ -7,7 +7,7 @@ Alerts a small group of patients and family members when a clinical trial matchi
 ### People
 
 **Member**:
-A person in the group, allowed in by email address. Every person who uses GuineaPing is a Member.
+A person in the group, allowed in by email address. Every person who uses GuineaPing is a Member. Any Member can invite someone or remove a Member, themselves included; Members can see who the other Members are.
 _Avoid_: User, subscriber, account, patient
 
 **Device**:
