@@ -1,5 +1,5 @@
 /**
- * Key facts about a Trial in plain words, for patients and family members. Hand-written rules,
+ * Key facts about a Trial in plain words, for volunteers, not clinicians. Hand-written rules,
  * not generated text, so nothing here can misstate a medical fact.
  */
 import type { Mark } from "./api";

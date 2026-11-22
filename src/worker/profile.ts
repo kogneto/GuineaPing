@@ -6,7 +6,8 @@ import { DISTANCES, SEXES, type Near, type Profile, type Sex } from "../shared/a
 
 type Row = { birth_year: number | null; sex: Sex | null; zip: string | null; miles: number | null; lat: number | null; lon: number | null; healthy: number; conditions: string };
 
-const EMPTY: Profile = { birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: false, conditions: [] };
+/** Before a Member saves anything. GuineaPing is mostly for healthy volunteers, so that starts ticked. */
+const EMPTY: Profile = { birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: true, conditions: [] };
 
 export async function getProfile(db: D1Database, memberId: string): Promise<Profile> {
   const row = await db.prepare("SELECT birth_year, sex, zip, miles, healthy, conditions FROM profiles WHERE member_id = ?").bind(memberId).first<Row>();

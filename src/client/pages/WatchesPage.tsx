@@ -5,7 +5,9 @@ import { Illustration } from "../components/Illustration";
 import { Link } from "../router";
 
 export function describeCriteria(w: Watch): string {
-  return [...w.criteria.conditions, ...w.criteria.terms].join(", ");
+  const c = w.criteria;
+  const who = [c.healthy ? "Healthy volunteers" : "", c.near ? `within ${c.near.miles} miles of ${c.near.zip}` : ""].filter(Boolean).join(" ");
+  return [[...c.conditions, ...c.terms].join(", "), who].filter(Boolean).join(" · ");
 }
 
 export function FollowButton({ watch, onChange }: { watch: Watch; onChange: (w: Watch) => void }) {

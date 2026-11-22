@@ -1,6 +1,6 @@
 # GuineaPing
 
-Alerts a small group of patients and family members when a new clinical trial matching a Watch they follow is posted on ClinicalTrials.gov. Vocabulary is in [CONTEXT.md](CONTEXT.md), and decisions are in [docs/adr](docs/adr).
+Alerts a small group of people, mostly healthy volunteers, when a new clinical trial matching a Watch they follow is posted on ClinicalTrials.gov. Vocabulary is in [CONTEXT.md](CONTEXT.md), and decisions are in [docs/adr](docs/adr).
 
 React + Vite + Hono on Cloudflare Workers, with D1. A Cron Trigger runs the hourly Check, and Cloudflare Access handles sign-in.
 

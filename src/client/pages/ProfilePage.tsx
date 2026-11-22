@@ -90,14 +90,14 @@ export function ProfilePage() {
             </label>
           </div>
         </fieldset>
-        <label>
-          Your conditions
-          <input value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="multiple sclerosis" />
-          <span className="hint">Separate several with commas.</span>
-        </label>
         <label className="check">
           <input type="checkbox" checked={healthy} onChange={(e) => setHealthy(e.target.checked)} />
-          I'd also join studies as a healthy volunteer
+          I'd join studies as a healthy volunteer
+        </label>
+        <label>
+          Conditions you have <span className="muted">(optional)</span>
+          <input value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="asthma" />
+          <span className="hint">Only for studies that look for people with a condition. Separate several with commas.</span>
         </label>
         {message && (
           <p className={message.kind === "error" ? "error" : "muted"} role="status">

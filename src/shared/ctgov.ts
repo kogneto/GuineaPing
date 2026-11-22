@@ -72,7 +72,6 @@ export function normalizeCriteria(input: unknown): CriteriaInput | { error: stri
   if (badPhase) return { error: `Unknown phase ${badPhase}` };
   const badStatus = statuses.find((s) => !(STATUSES as readonly string[]).includes(s));
   if (badStatus) return { error: `Unknown status ${badStatus}` };
-  if (!conditions.some(quoteTerm) && !terms.some(quoteTerm)) return { error: "A Watch needs at least one condition or keyword" };
 
   let near: CriteriaInput["near"] = null;
   if (raw.near != null) {
@@ -92,7 +91,12 @@ export function normalizeCriteria(input: unknown): CriteriaInput | { error: stri
     if (!(SEXES as readonly unknown[]).includes(raw.sex)) return { error: `Unknown sex ${String(raw.sex)}` };
     sex = raw.sex as Sex;
   }
-  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], near, age, sex, healthy: raw.healthy === true };
+  const healthy = raw.healthy === true;
+  // Something has to narrow the search. Words do; so does "healthy volunteers near here", which is
+  // what a volunteer with no condition wants. Healthy volunteers anywhere would be every such Trial.
+  const hasWords = conditions.some(quoteTerm) || terms.some(quoteTerm);
+  if (!hasWords && !(healthy && near)) return { error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" };
+  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], near, age, sex, healthy };
 }
 
 /**
