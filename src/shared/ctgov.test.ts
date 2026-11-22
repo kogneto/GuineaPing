@@ -27,7 +27,16 @@ describe("query building", () => {
   });
 
   it("refuses a Watch that would match every Trial, and unknown enums", () => {
-    expect(normalizeCriteria({ conditions: ["  "], terms: [] })).toEqual({ error: "A Watch needs at least one condition or keyword" });
+    expect(normalizeCriteria({ conditions: ["  "], terms: [] })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
+    // A volunteer with no condition: healthy-volunteer studies near a ZIP code, and nothing else.
+    const open = normalizeCriteria({ conditions: [], healthy: true, near: { zip: "02139", miles: 50 } });
+    expect(open).toMatchObject({ conditions: [], terms: [], healthy: true, near: { zip: "02139", miles: 50 } });
+    const p = buildParams(criteria({ healthy: true, near: { zip: "02139", miles: 50, lat: 42.36, lon: -71.1 } }), "2026-11-19");
+    expect(p["query.cond"]).toBeUndefined();
+    expect(p["filter.advanced"]).toContain("AREA[HealthyVolunteers]true");
+    expect(p["filter.geo"]).toBe("distance(42.36,-71.1,50mi)");
+    expect(normalizeCriteria({ conditions: [], healthy: true })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
+    expect(normalizeCriteria({ conditions: [], near: { zip: "02139", miles: 50 } })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
     expect(normalizeCriteria({ conditions: ["MS"], phases: ["PHASE9"] })).toEqual({ error: "Unknown phase PHASE9" });
     expect(normalizeCriteria({ conditions: [" MS ", "MS"], statuses: ["RECRUITING"] })).toEqual(criteria({ conditions: ["MS"], statuses: ["RECRUITING"] }));
   });

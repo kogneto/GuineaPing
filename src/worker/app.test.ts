@@ -498,7 +498,7 @@ describe("Profiles", () => {
 
   it("keeps a Member's Profile to themselves and checks what goes in", async () => {
     const mum = as(app, env, `prof${n}@x.org`);
-    expect((await mum<Profile>("/api/profile")).json).toEqual({ birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: false, conditions: [] });
+    expect((await mum<Profile>("/api/profile")).json).toEqual({ birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: true, conditions: [] });
     const saved = await mum<Profile>("/api/profile", "PUT", { birthYear: "1981", sex: "FEMALE", zip: " 02139 ", healthyVolunteer: true, conditions: [" MS ", "MS", ""] });
     expect(saved.json).toEqual({ birthYear: 1981, sex: "FEMALE", zip: "02139", miles: 50, healthyVolunteer: true, conditions: ["MS"] });
     expect((await mum<Profile>("/api/profile")).json).toEqual(saved.json);
@@ -507,6 +507,15 @@ describe("Profiles", () => {
       expect((await mum("/api/profile", "PUT", bad)).status, JSON.stringify(bad)).toBe(400);
     }
     expect(JSON.stringify((await mum("/api/members")).json)).not.toMatch(/1981|02139/);
+  });
+
+  it("lets a volunteer watch for healthy-volunteer studies near them, with no condition at all", async () => {
+    const vol = as(app, env, `vol${n}@x.org`);
+    const made = await vol<Watch>("/api/watches", "POST", { name: "Near me", criteria: { conditions: [], terms: [], phases: [], statuses: [], healthy: true, near: { zip: "02139", miles: 50 } }, private: false });
+    expect(made.status).toBe(201);
+    expect(made.json.criteria).toMatchObject({ conditions: [], healthy: true, near: { zip: "02139" } });
+    const refused = await vol<{ error: string }>("/api/watches", "POST", { name: "Everything", criteria: { conditions: [], terms: [], phases: [], statuses: [], healthy: true }, private: false });
+    expect(refused.status).toBe(400);
   });
 
   it("measures each Member's distance from their own Profile when the Watch has no ZIP code", async () => {

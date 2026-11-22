@@ -79,7 +79,7 @@ export function AlertPage({ id }: { id: string }) {
       <Sorting alert={alert} onChange={setAlert} />
       <div className="callout">
         <Illustration name="clinician" size="xs" />
-        <p className="muted small">Talk to your doctor before contacting a study. The listing's contacts can say whether you might qualify.</p>
+        <p className="muted small">The study team decides who can join. Use the contacts on the listing to ask, and talk to your own doctor first if you have any health concerns.</p>
       </div>
     </article>
   );

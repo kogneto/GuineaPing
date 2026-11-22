@@ -29,18 +29,19 @@ export function WatchEditorPage({ id }: { id?: string }) {
   const [miles, setMiles] = useState<number>(50);
   const [age, setAge] = useState("");
   const [sex, setSex] = useState<Sex | "">("");
-  const [healthy, setHealthy] = useState(false);
+  // New Watches start out for healthy volunteers: that is who GuineaPing is mostly for.
+  const [healthy, setHealthy] = useState(!id);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [preview, setPreview] = useState<Trial[] | null>(null);
-  const [previewNote, setPreviewNote] = useState<string | null>("Type a condition or keyword to see what it finds.");
+  const [previewNote, setPreviewNote] = useState<string | null>("Add a ZIP code, or type a condition or keyword, to see what it finds.");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     api<Profile>("/api/profile").then(setProfile, () => {});
   }, []);
-  const profileHasSomething = !!profile && (profile.zip !== null || profile.birthYear !== null || profile.sex !== null || profile.healthyVolunteer || profile.conditions.length > 0);
+  const profileHasSomething = !!profile && (profile.zip !== null || profile.birthYear !== null || profile.sex !== null || profile.conditions.length > 0);
   /** Copies the Member's Profile into the form. Conditions are only filled in when none are typed yet. */
   const useProfile = () => {
     if (!profile) return;
@@ -50,7 +51,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
     }
     if (profile.birthYear !== null) setAge(String(new Date().getFullYear() - profile.birthYear));
     if (profile.sex) setSex(profile.sex);
-    if (profile.healthyVolunteer) setHealthy(true);
+    setHealthy(profile.healthyVolunteer);
     if (!conditions.trim() && profile.conditions.length) setConditions(profile.conditions.join(", "));
   };
 
@@ -114,9 +115,9 @@ export function WatchEditorPage({ id }: { id?: string }) {
 
   // Recent matches update as the Owner types, so they can see whether the words find the right trials.
   useEffect(() => {
-    if (!criteria.conditions.length && !criteria.terms.length) {
+    if (!criteria.conditions.length && !criteria.terms.length && !(criteria.healthy && criteria.near)) {
       setPreview(null);
-      setPreviewNote("Type a condition or keyword to see what it finds.");
+      setPreviewNote("Add a ZIP code, or type a condition or keyword, to see what it finds.");
       return;
     }
     setPreviewNote(null);
@@ -170,27 +171,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
           )}
           <label>
             Name
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="MS trials" required maxLength={100} />
-          </label>
-          <label>
-            Conditions
-            <input value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="multiple sclerosis, MS" />
-            <span className="hint">Separate several with commas. A trial matching any of them counts.</span>
-          </label>
-          {suggestions.length > 0 && (
-            <div className="suggestions" aria-label="Suggested conditions">
-              <span className="hint">Suggestions:</span>
-              {suggestions.map((x) => (
-                <button type="button" key={x} className="chip" onClick={() => pick(x)}>
-                  {x}
-                </button>
-              ))}
-            </div>
-          )}
-          <label>
-            Keywords <span className="muted">(optional)</span>
-            <input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="ocrelizumab" />
-            <span className="hint">Drug names, treatments, hospitals… also any-of.</span>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Studies near me" required maxLength={100} />
           </label>
           <fieldset>
             <legend>Where</legend>
@@ -210,7 +191,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
                 <input value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" autoComplete="postal-code" maxLength={5} placeholder="02139" className="short" />
               </label>
             </div>
-            <span className="hint">Leave the ZIP code empty for trials anywhere.</span>
+            <span className="hint">Leave the ZIP code empty for trials anywhere. A Watch with no condition or keyword needs one.</span>
           </fieldset>
           <fieldset>
             <legend>Who it's for</legend>
@@ -234,6 +215,26 @@ export function WatchEditorPage({ id }: { id?: string }) {
               Only trials that take healthy volunteers
             </label>
           </fieldset>
+          <label>
+            Conditions <span className="muted">(optional)</span>
+            <input value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="asthma, hay fever" />
+            <span className="hint">Leave empty for any healthy-volunteer study near you. Separate several with commas; a trial matching any of them counts.</span>
+          </label>
+          {suggestions.length > 0 && (
+            <div className="suggestions" aria-label="Suggested conditions">
+              <span className="hint">Suggestions:</span>
+              {suggestions.map((x) => (
+                <button type="button" key={x} className="chip" onClick={() => pick(x)}>
+                  {x}
+                </button>
+              ))}
+            </div>
+          )}
+          <label>
+            Keywords <span className="muted">(optional)</span>
+            <input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="ocrelizumab" />
+            <span className="hint">Drug names, treatments, hospitals… also any-of.</span>
+          </label>
           <fieldset>
             <legend>Phases</legend>
             <span className="hint">Leave all unticked for any phase.</span>

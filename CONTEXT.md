@@ -1,6 +1,6 @@
 # GuineaPing
 
-Alerts a small group of patients and family members when a clinical trial matching something they care about is first posted on ClinicalTrials.gov.
+Alerts a small group of people, mostly healthy volunteers, when a clinical trial they could take part in is first posted on ClinicalTrials.gov. Some Members also watch for trials about a condition they or their family have.
 
 ## Language
 
