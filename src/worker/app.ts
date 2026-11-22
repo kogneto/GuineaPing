@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import type { AlertListItem, Criteria, Device, Trial, WatchInput } from "../shared/api";
-import { fetchJson, findTrials, normalizeCriteria } from "../shared/ctgov";
+import { fetchJson, findTrials, forList, normalizeCriteria } from "../shared/ctgov";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, RECENT_DAYS } from "./check";
 import { pushTest, validKeys, vapidFrom } from "./push";
@@ -104,7 +104,7 @@ app.get("/api/watches/:id/recent", async (c) => {
   const watch = await getWatch(c.env.DB, c.get("me"), c.req.param("id"));
   if (!watch) return c.json({ error: "No such Watch" }, 404);
   try {
-    return c.json(await recentMatches(watch.criteria));
+    return c.json((await recentMatches(watch.criteria)).map(forList));
   } catch {
     return c.json(upstreamError, 502);
   }
@@ -140,7 +140,7 @@ app.post("/api/preview", async (c) => {
   const criteria = await readCriteria(c.env.DB, (await c.req.json().catch(() => null))?.criteria);
   if ("error" in criteria) return c.json(criteria, 400);
   try {
-    return c.json(await recentMatches(criteria));
+    return c.json((await recentMatches(criteria)).map(forList));
   } catch {
     return c.json(upstreamError, 502);
   }
@@ -149,10 +149,11 @@ app.post("/api/preview", async (c) => {
 type AlertRow = { id: string; trial: string; watch_names: string; created_at: string; read_at: string | null };
 type NoteRow = { id: string; message: string; created_at: string; read_at: string | null };
 
-const toAlert = (r: AlertRow): AlertListItem => ({
+/** `full` keeps the eligibility text, for an Alert's own page; the Alert list leaves it out. */
+const toAlert = (r: AlertRow, full = false): AlertListItem => ({
   kind: "alert",
   id: r.id,
-  trial: JSON.parse(r.trial) as Trial,
+  trial: full ? (JSON.parse(r.trial) as Trial) : forList(JSON.parse(r.trial) as Trial),
   watchNames: JSON.parse(r.watch_names) as string[],
   createdAt: r.created_at,
   read: r.read_at !== null,
@@ -166,7 +167,7 @@ app.get("/api/alerts", async (c) => {
     c.env.DB.prepare("SELECT id, message, created_at, read_at FROM notes WHERE member_id = ? ORDER BY created_at DESC LIMIT 200").bind(id),
   ]);
   const items: AlertListItem[] = [
-    ...(alerts!.results as AlertRow[]).map(toAlert),
+    ...(alerts!.results as AlertRow[]).map((r) => toAlert(r)),
     ...(notes!.results as NoteRow[]).map((r): AlertListItem => ({ kind: "note", id: r.id, message: r.message, createdAt: r.created_at, read: r.read_at !== null })),
   ];
   items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -177,7 +178,7 @@ app.get("/api/alerts/:id", async (c) => {
   const row = await c.env.DB.prepare("SELECT id, trial, watch_names, created_at, read_at FROM alerts WHERE id = ? AND member_id = ?")
     .bind(c.req.param("id"), c.get("me").memberId)
     .first<AlertRow>();
-  return row ? c.json(toAlert(row)) : c.json({ error: "No such Alert" }, 404);
+  return row ? c.json(toAlert(row, true)) : c.json({ error: "No such Alert" }, 404);
 });
 
 for (const [path, table] of [["/api/alerts/:id/read", "alerts"], ["/api/notes/:id/read", "notes"]] as const) {

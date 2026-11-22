@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Criteria } from "./api";
 import { buildParams, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
-import { agesText, phaseText } from "./plain";
+import { agesText, criteriaSections, phaseText } from "./plain";
 
 const criteria = (c: Partial<Criteria>): Criteria => withDefaults(c);
 
@@ -121,5 +121,16 @@ describe("plain language", () => {
     expect(agesText("18 Years", "55 Years")).toBe("Ages 18–55");
     expect(agesText("6 Months", "")).toBe("Ages 6 months and up");
     expect(agesText("", "")).toBeNull();
+  });
+
+  it("splits a study's criteria into can-join and can't-join lists, in its own words", () => {
+    const text =
+      "Inclusion Criteria:\n\n* 18 years old and older\n* MFIS score\\>45,\n* Signed consent\n  spanning two lines.\n\nExclusion Criteria:\n\n* Patients with serious unstable disease :\n\n  * recurrent relapses\n  * rapidly ongoing disability\n* Pregnancy";
+    expect(criteriaSections(text)).toEqual([
+      { kind: "include", items: ["18 years old and older", "MFIS score>45", "Signed consent spanning two lines."] },
+      { kind: "exclude", items: ["Patients with serious unstable disease: recurrent relapses; rapidly ongoing disability", "Pregnancy"] },
+    ]);
+    expect(criteriaSections("Adults with asthma.\nNo smokers.")).toEqual([{ kind: "other", items: ["Adults with asthma.", "No smokers."] }]);
+    expect(criteriaSections("")).toEqual([]);
   });
 });

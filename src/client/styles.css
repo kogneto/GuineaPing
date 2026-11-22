@@ -135,6 +135,7 @@ button:disabled { opacity: 0.6; cursor: default; }
 .facts-table dt { color: var(--muted); }
 .facts-table dd { margin: 0; overflow-wrap: anywhere; }
 .summary { white-space: pre-line; }
+.criteria { margin: 0.25rem 0 1rem; padding-left: 1.25rem; display: grid; gap: 0.35rem; overflow-wrap: anywhere; }
 
 .editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 2rem; align-items: start; }
 .editor .preview h2 { margin-top: 0; }

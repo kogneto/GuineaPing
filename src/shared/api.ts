@@ -49,7 +49,18 @@ export type Trial = {
   locations: string[];
   /** The site closest to the Watch's ZIP code, when the Watch has one. */
   nearest?: { place: string; miles: number } | null;
+  /** Who can join, when the study says more than an age range. Absent on Alerts made before this was kept. */
+  eligibility?: Eligibility;
   url: string;
+};
+
+/** The study's own entry criteria: its wording, never rewritten. Kept on Alerts, left out of lists. */
+export type Eligibility = {
+  /** "ALL", "FEMALE" or "MALE", as ClinicalTrials.gov gives it. */
+  sex: string;
+  healthyVolunteers: boolean | null;
+  /** The study's criteria text, cut off at a sensible length. */
+  criteria: string;
 };
 
 export type Me = { memberId: string; email: string };
