@@ -14,6 +14,7 @@ const ART = {
   errorPhone: "/art/scenes/error-phone.webp",
   welcome: "/art/scenes/welcome.webp",
   lost: "/art/scenes/lost.webp",
+  notifications: "/art/scenes/notifications.webp",
 } as const;
 
 export type ArtName = keyof typeof ART;

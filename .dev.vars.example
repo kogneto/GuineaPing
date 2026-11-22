@@ -1,2 +1,6 @@
 # Copy to .dev.vars for local development. Signs you in as dev@localhost (or the X-Dev-Email header) on localhost only.
 DEV_AUTH=true
+# Web Push keys: node scripts/vapid-keys.mjs --append (production: wrangler secret put each)
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_SUBJECT=mailto:you@example.com

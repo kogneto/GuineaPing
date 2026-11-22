@@ -4,6 +4,7 @@ import { ago, api } from "./api";
 import { Illustration } from "./components/Illustration";
 import { AlertPage } from "./pages/AlertPage";
 import { AlertsPage } from "./pages/AlertsPage";
+import { DevicesPage } from "./pages/DevicesPage";
 import { WatchEditorPage } from "./pages/WatchEditorPage";
 import { WatchesPage } from "./pages/WatchesPage";
 import { WatchPage } from "./pages/WatchPage";
@@ -12,6 +13,7 @@ import { Link, usePath } from "./router";
 function route(path: string) {
   let m: RegExpExecArray | null;
   if ((m = /^\/alerts\/([\w-]+)$/.exec(path))) return <AlertPage id={m[1]!} />;
+  if (path === "/devices") return <DevicesPage />;
   if (path === "/watches") return <WatchesPage />;
   if (path === "/watches/new") return <WatchEditorPage />;
   if ((m = /^\/watches\/([\w-]+)\/edit$/.exec(path))) return <WatchEditorPage id={m[1]!} />;
@@ -57,7 +59,7 @@ export function App() {
     );
   }
 
-  const section = path.startsWith("/watches") ? "watches" : "alerts";
+  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/devices") ? "devices" : "alerts";
   return (
     <>
       <header className="top">
@@ -70,6 +72,9 @@ export function App() {
           </Link>
           <Link to="/watches" className={section === "watches" ? "active" : ""}>
             Watches
+          </Link>
+          <Link to="/devices" className={section === "devices" ? "active" : ""}>
+            Devices
           </Link>
         </nav>
         {me && <span className="who">{me.email}</span>}

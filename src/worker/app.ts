@@ -1,8 +1,10 @@
-import { Hono } from "hono";
-import type { AlertListItem, Criteria, Trial, WatchInput } from "../shared/api";
+import { Hono, type Context } from "hono";
+import type { AlertListItem, Criteria, Device, Trial, WatchInput } from "../shared/api";
 import { fetchJson, findTrials, normalizeCriteria } from "../shared/ctgov";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
-import { checkStatus, daysBefore, RECENT_DAYS, runCheck } from "./check";
+import { checkAndPush, checkStatus, daysBefore, RECENT_DAYS } from "./check";
+import { pushTest, validKeys, vapidFrom } from "./push";
+import { isPushEndpoint } from "./webpush";
 import { createWatch, deleteWatch, getWatch, listWatches, parseWatchInput, setFollowing, updateWatch } from "./watches";
 
 export const app = new Hono<AppEnv>();
@@ -152,8 +154,69 @@ for (const [path, table] of [["/api/alerts/:id/read", "alerts"], ["/api/notes/:i
   });
 }
 
-/** Runs a Check on demand during local development; Vite's Cloudflare plugin has no cron trigger. */
+type DeviceRow = { id: string; member_id: string; endpoint: string; p256dh: string; auth: string; label: string; created_at: string; last_sent_at: string | null };
+
+/** The key browsers subscribe with; null until VAPID keys are configured. */
+app.get("/api/push/key", (c) => c.json({ publicKey: vapidFrom(c.env)?.publicKey ?? null }));
+
+/** The signed-in Member's Devices. Endpoints and keys never leave the Worker. */
+app.get("/api/devices", async (c) => {
+  const { results } = await c.env.DB.prepare("SELECT id, label, created_at, last_sent_at, endpoint FROM devices WHERE member_id = ? ORDER BY created_at")
+    .bind(c.get("me").memberId)
+    .all<DeviceRow>();
+  const current = c.req.query("endpoint");
+  return c.json(
+    results.map((d): Device => ({ id: d.id, label: d.label, createdAt: d.created_at, lastSentAt: d.last_sent_at, thisDevice: !!current && d.endpoint === current })),
+  );
+});
+
+/**
+ * Registers this browser as a Device. The endpoint identifies the browser, so registering one that
+ * already exists moves it to the signed-in Member: a shared family iPad gets the Pushes of
+ * whoever turned notifications on last.
+ */
+app.post("/api/devices", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown }; label?: unknown } | null;
+  const endpoint = typeof body?.endpoint === "string" ? body.endpoint : "";
+  if (!isPushEndpoint(endpoint)) return c.json({ error: "That isn't a push service this app can send to" }, 400);
+  if (!validKeys(body?.keys?.p256dh, body?.keys?.auth)) return c.json({ error: "The browser's push keys look wrong" }, 400);
+  const label = (typeof body?.label === "string" && body.label.trim().slice(0, 60)) || "This device";
+  const id = crypto.randomUUID();
+  const row = await c.env.DB.prepare(
+    `INSERT INTO devices (id, member_id, endpoint, p256dh, auth, label, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(endpoint) DO UPDATE SET member_id = excluded.member_id, p256dh = excluded.p256dh, auth = excluded.auth, label = excluded.label
+     RETURNING id, label, created_at, last_sent_at`,
+  )
+    .bind(id, c.get("me").memberId, endpoint, body!.keys!.p256dh, body!.keys!.auth, label, now())
+    .first<DeviceRow>();
+  return c.json({ id: row!.id, label: row!.label, createdAt: row!.created_at, lastSentAt: row!.last_sent_at, thisDevice: true } satisfies Device, 201);
+});
+
+async function ownDevice(c: Context<AppEnv>): Promise<DeviceRow | null> {
+  return c.env.DB.prepare("SELECT * FROM devices WHERE id = ? AND member_id = ?").bind(c.req.param("id"), c.get("me").memberId).first<DeviceRow>();
+}
+
+app.delete("/api/devices/:id", async (c) => {
+  const device = await ownDevice(c);
+  if (!device) return c.json({ error: "No such Device" }, 404);
+  await c.env.DB.prepare("DELETE FROM devices WHERE id = ?").bind(device.id).run();
+  return c.body(null, 204);
+});
+
+app.post("/api/devices/:id/test", async (c) => {
+  const device = await ownDevice(c);
+  if (!device) return c.json({ error: "No such Device" }, 404);
+  const vapid = vapidFrom(c.env);
+  if (!vapid) return c.json({ error: "Push isn't set up on the server yet" }, 503);
+  const outcome = await pushTest(c.env.DB, vapid, device);
+  if (outcome === "sent") return c.json({ ok: true });
+  if (outcome === "gone") return c.json({ error: "This device no longer accepts notifications, so it was removed. Turn them on again to re-add it." }, 410);
+  return c.json({ error: "The push service didn't accept the test. Try again in a minute." }, 502);
+});
+
+/** Runs a Check (and its Pushes) on demand during local development; Vite's Cloudflare plugin has no cron trigger. */
 app.post("/api/dev/check", async (c) => {
   if (!isDevRequest(c)) return c.json({ error: "Not found" }, 404);
-  return c.json(await runCheck(c.env.DB, fetchJson));
+  const { newAlerts, ...result } = await checkAndPush(c.env);
+  return c.json({ ...result, alertsCreated: newAlerts.length });
 });

@@ -16,7 +16,16 @@ export async function createWorkerEnv(): Promise<{ env: Env; dispose: () => Prom
       .filter(Boolean);
     for (const sql of statements) await db.prepare(sql).run();
   }
-  const env: Env = { ...proxy.env, ACCESS_TEAM_DOMAIN: "", ACCESS_AUD: "", DEV_AUTH: "true" };
+  // VAPID keys from RFC 8291's example: test-only, never used for real.
+  const env: Env = {
+    ...proxy.env,
+    ACCESS_TEAM_DOMAIN: "",
+    ACCESS_AUD: "",
+    DEV_AUTH: "true",
+    VAPID_PUBLIC_KEY: "BP4z9KsN6nGRTbVYI_c7VJSPQTBtkgcy27mlmlMoZIIgDll6e3vCYLocInmYWAmS6TlzAC8wEqKK6PBru3jl7A8",
+    VAPID_PRIVATE_KEY: "yfWPiYE-n46HLnH0KqZOF1fJJU3MYrct3AELtAQ-oRw",
+    VAPID_SUBJECT: "mailto:test@example.com",
+  };
   return { env, dispose: () => proxy.dispose() };
 }
 

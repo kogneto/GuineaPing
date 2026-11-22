@@ -3,7 +3,8 @@
  * finds for the first time, and turn that into Alerts, at most one per Member per Trial.
  */
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
-import { findTrials, type FetchJson } from "../shared/ctgov";
+import { fetchJson, findTrials, type FetchJson } from "../shared/ctgov";
+import { pushNewAlerts, vapidFrom, type NewAlert } from "./push";
 
 /**
  * How far before the last successful Check's day to look again. ClinicalTrials.gov refreshes its
@@ -19,7 +20,14 @@ const STALE_MS = 24 * 60 * 60 * 1000;
 export const daysBefore = (iso: string, days: number) =>
   new Date(Date.parse(iso) - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-export type CheckResult = { ok: boolean; watchesChecked: number; alertsCreated: number; error?: string };
+export type CheckResult = {
+  ok: boolean;
+  watchesChecked: number;
+  alertsCreated: number;
+  /** Exactly the Alerts this Check created, for Pushes. */
+  newAlerts: NewAlert[];
+  error?: string;
+};
 
 export async function runCheck(db: D1Database, get: FetchJson, now = new Date().toISOString()): Promise<CheckResult> {
   const last = await db.prepare("SELECT started_at FROM checks WHERE ok = 1 ORDER BY started_at DESC LIMIT 1").first<{ started_at: string }>();
@@ -28,8 +36,8 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
   // Every Watch is asked about, even one nobody follows right now: it must keep recording what it
   // finds, or whoever follows it next would be alerted on Trials posted before they followed.
   const { results: watches } = await db
-    .prepare("SELECT w.id, w.name, w.criteria FROM watches w WHERE w.deleted_at IS NULL")
-    .all<{ id: string; name: string; criteria: string }>();
+    .prepare("SELECT w.id, w.name, w.criteria, w.private FROM watches w WHERE w.deleted_at IS NULL")
+    .all<{ id: string; name: string; criteria: string; private: number }>();
 
   const record = (result: CheckResult) =>
     db
@@ -40,27 +48,27 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
 
   // Ask about every Watch before writing anything: a Check succeeds whole or not at all, so a
   // failure never moves `since` past Trials nobody was told about.
-  const found: { watchId: string; watchName: string; trials: Trial[] }[] = [];
+  const found: { watchId: string; watchName: string; isPrivate: boolean; trials: Trial[] }[] = [];
   try {
     for (const w of watches) {
-      found.push({ watchId: w.id, watchName: w.name, trials: await findTrials(JSON.parse(w.criteria) as Criteria, since, get) });
+      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, trials: await findTrials(JSON.parse(w.criteria) as Criteria, since, get) });
     }
   } catch (err) {
-    const result: CheckResult = { ok: false, watchesChecked: 0, alertsCreated: 0, error: String(err instanceof Error ? err.message : err).slice(0, 500) };
+    const result: CheckResult = { ok: false, watchesChecked: 0, alertsCreated: 0, newAlerts: [], error: String(err instanceof Error ? err.message : err).slice(0, 500) };
     await record(result).run();
     return result;
   }
 
   // Which of those each Watch is seeing for the first time, and who follows it.
-  const firstFinds: { watchId: string; watchName: string; trial: Trial }[] = [];
-  for (const { watchId, watchName, trials } of found) {
+  const firstFinds: { watchId: string; watchName: string; isPrivate: boolean; trial: Trial }[] = [];
+  for (const { watchId, watchName, isPrivate, trials } of found) {
     if (!trials.length) continue;
     const { results: known } = await db
       .prepare("SELECT nct_id FROM watch_trials WHERE watch_id = ?1 AND nct_id IN (SELECT value FROM json_each(?2))")
       .bind(watchId, JSON.stringify(trials.map((t) => t.nctId)))
       .all<{ nct_id: string }>();
     const knownIds = new Set(known.map((k) => k.nct_id));
-    for (const trial of trials) if (!knownIds.has(trial.nctId)) firstFinds.push({ watchId, watchName, trial });
+    for (const trial of trials) if (!knownIds.has(trial.nctId)) firstFinds.push({ watchId, watchName, isPrivate, trial });
   }
 
   const watchIds = [...new Set(firstFinds.map((f) => f.watchId))];
@@ -72,18 +80,19 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
     : { results: [] };
 
   // One Alert per Member per Trial, naming every Watch of theirs that found it.
-  const alerts = new Map<string, { id: string; member_id: string; nct_id: string; trial: string; watchNames: string[] }>();
-  for (const { watchId, watchName, trial } of firstFinds) {
+  const alerts = new Map<string, { id: string; member_id: string; nct_id: string; trial: string; watchNames: string[]; viaPrivate: boolean; parsed: Trial }>();
+  for (const { watchId, watchName, isPrivate, trial } of firstFinds) {
     for (const f of follows) {
       if (f.watch_id !== watchId) continue;
       const key = `${f.member_id} ${trial.nctId}`;
-      const alert = alerts.get(key) ?? { id: crypto.randomUUID(), member_id: f.member_id, nct_id: trial.nctId, trial: JSON.stringify(trial), watchNames: [] };
+      const alert = alerts.get(key) ?? { id: crypto.randomUUID(), member_id: f.member_id, nct_id: trial.nctId, trial: JSON.stringify(trial), watchNames: [], viaPrivate: false, parsed: trial };
       if (!alert.watchNames.includes(watchName)) alert.watchNames.push(watchName);
+      alert.viaPrivate ||= isPrivate;
       alerts.set(key, alert);
     }
   }
 
-  const rows = [...alerts.values()].map((a) => ({ ...a, watch_names: JSON.stringify(a.watchNames) }));
+  const rows = [...alerts.values()].map((a) => ({ id: a.id, member_id: a.member_id, nct_id: a.nct_id, trial: a.trial, watch_names: JSON.stringify(a.watchNames) }));
   const statements: D1PreparedStatement[] = [
     db
       .prepare(
@@ -97,14 +106,39 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
         `INSERT OR IGNORE INTO alerts (id, member_id, nct_id, trial, watch_names, created_at)
          SELECT json_extract(value, '$.id'), json_extract(value, '$.member_id'), json_extract(value, '$.nct_id'),
                 json_extract(value, '$.trial'), json_extract(value, '$.watch_names'), ?1
-         FROM json_each(?2)`,
+         FROM json_each(?2)
+         RETURNING id`,
       )
       .bind(now, JSON.stringify(rows)),
   ];
-  const [, inserted] = await db.batch([...statements]);
-  const result: CheckResult = { ok: true, watchesChecked: watches.length, alertsCreated: inserted?.meta.changes ?? 0 };
+  const [, inserted] = await db.batch<{ id: string }>(statements);
+  const createdIds = new Set((inserted?.results ?? []).map((r) => r.id));
+  const newAlerts: NewAlert[] = [...alerts.values()]
+    .filter((a) => createdIds.has(a.id))
+    .map((a) => ({ id: a.id, memberId: a.member_id, trial: a.parsed, watchNames: a.watchNames, viaPrivateWatch: a.viaPrivate }));
+  const result: CheckResult = { ok: true, watchesChecked: watches.length, alertsCreated: newAlerts.length, newAlerts };
   await record(result).run();
   return result;
+}
+
+/**
+ * A Check followed by its Pushes. Push trouble is logged, never fatal: the Alerts are already in
+ * everyone's Alert list.
+ */
+export async function checkAndPush(env: Env, get: FetchJson = fetchJson, post: typeof fetch = fetch): Promise<CheckResult & { pushes?: { sent: number; gone: number } }> {
+  const result = await runCheck(env.DB, get);
+  const vapid = vapidFrom(env);
+  if (!result.ok || !result.newAlerts.length) return result;
+  if (!vapid) {
+    console.warn("VAPID keys not set; new Alerts are in Alert lists but no Pushes were sent.");
+    return result;
+  }
+  try {
+    return { ...result, pushes: await pushNewAlerts(env.DB, vapid, result.newAlerts, post) };
+  } catch (err) {
+    console.error("Pushing new Alerts failed:", err);
+    return result;
+  }
 }
 
 export async function checkStatus(db: D1Database, now = Date.now()): Promise<CheckStatus> {
