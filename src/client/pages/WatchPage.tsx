@@ -31,7 +31,7 @@ export function WatchPage({ id }: { id: string }) {
     ["Conditions", c.conditions.join(", ")],
     ["Keywords", c.terms.join(", ")],
     ["Where", c.near ? `Within ${c.near.miles} miles of ${c.near.zip}` : "Anywhere"],
-    ["Who", [c.age !== null ? `Age ${c.age}` : "", c.sex === "FEMALE" ? "Female" : c.sex === "MALE" ? "Male" : ""].filter(Boolean).join(", ") || "Anyone"],
+    ["Who", [c.age !== null ? `Age ${c.age}` : "", c.sex === "FEMALE" ? "Female" : c.sex === "MALE" ? "Male" : "", c.healthy ? "Healthy volunteers" : ""].filter(Boolean).join(", ") || "Anyone"],
     ["Phases", c.phases.map((p) => PHASE_LABELS[p]).join(", ") || "Any"],
     ["Status", (c.statuses.length ? c.statuses : (Object.keys(STATUS_LABELS) as (keyof typeof STATUS_LABELS)[])).map((s) => STATUS_LABELS[s]).join(", ")],
   ];

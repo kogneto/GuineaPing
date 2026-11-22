@@ -10,6 +10,10 @@ Alerts a small group of patients and family members when a clinical trial matchi
 A person in the group, allowed in by email address. Every person who uses GuineaPing is a Member. Any Member can invite someone or remove a Member, themselves included; Members can see who the other Members are.
 _Avoid_: User, subscriber, account, patient
 
+**Profile**:
+A few facts a Member gives about themselves: the year they were born, their sex, a ZIP code and how far they would travel, their conditions, and whether they would join as a healthy volunteer. Only that Member sees it. It fills in new Watches for them and is where "near you" is measured from when a Watch has no ZIP code.
+_Avoid_: Account, settings, preferences
+
 **Device**:
 A phone or browser on which a Member has allowed GuineaPing to send push notifications. A Member may have several Devices, or none.
 _Avoid_: Subscription, endpoint, client
@@ -21,7 +25,7 @@ One study registered on ClinicalTrials.gov, identified by its NCT ID.
 _Avoid_: Study, listing, record
 
 **Watch**:
-A named set of search criteria (conditions, keywords, distance from a ZIP code, phases, statuses, age, sex) that Trials are matched against. Every Member can see and follow any Watch that is not a Private watch; only its Owner can change or delete it. Who follows a Watch is never shown.
+A named set of search criteria (conditions, keywords, distance from a ZIP code, phases, statuses, age, sex, healthy volunteers) that Trials are matched against. Every Member can see and follow any Watch that is not a Private watch; only its Owner can change or delete it. Who follows a Watch is never shown.
 _Avoid_: Search, filter, query, subscription, saved search
 
 **Private watch**:

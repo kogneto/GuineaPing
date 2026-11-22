@@ -123,3 +123,8 @@ export function sexText(sex: string): string | null {
 
 /** The words on the buttons a Member sorts their Alerts with. */
 export const MARK_LABELS: Record<Mark, string> = { interested: "Interested", not_for_me: "Not for me" };
+
+/** Orders Trials by their nearest site, closest first; Trials with no measured distance go last. */
+export function byNearest(a: Trial, b: Trial): number {
+  return (a.nearest?.miles ?? Infinity) - (b.nearest?.miles ?? Infinity);
+}

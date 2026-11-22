@@ -22,6 +22,8 @@ export type Criteria = {
   age: number | null;
   /** Only Trials open to this sex; null means anyone. */
   sex: Sex | null;
+  /** Only Trials that take healthy volunteers. */
+  healthy: boolean;
 };
 
 export const DISTANCES = [10, 25, 50, 100, 250] as const;
@@ -61,6 +63,17 @@ export type Eligibility = {
   healthyVolunteers: boolean | null;
   /** The study's criteria text, cut off at a sensible length. */
   criteria: string;
+};
+
+/** A Member's own facts, which only they see. Every field is optional. */
+export type Profile = {
+  birthYear: number | null;
+  sex: Sex | null;
+  /** Where "near you" is, and how far they would travel. */
+  zip: string | null;
+  miles: number | null;
+  healthyVolunteer: boolean;
+  conditions: string[];
 };
 
 export type Me = { memberId: string; email: string };

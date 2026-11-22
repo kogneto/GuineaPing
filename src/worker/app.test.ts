@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AlertItem, AlertListItem, MemberList, Watch } from "../shared/api";
+import type { AlertItem, AlertListItem, MemberList, Profile, Watch } from "../shared/api";
 import { as, createWorkerEnv, study } from "../test/worker-env";
 import { setAllowed } from "./access";
 import { app } from "./app";
@@ -484,5 +484,43 @@ describe("the Cloudflare Access sign-in list", () => {
   it("fails loudly when Cloudflare refuses, and never empties the list", async () => {
     await expect(setAllowed(cfg, "gran@x.org", true, cloudflare([], 403).call)).rejects.toThrow(/403/);
     await expect(setAllowed(cfg, "andy@x.org", false, cloudflare([{ email: { email: "andy@x.org" } }]).call)).rejects.toThrow(/empty/);
+  });
+});
+
+describe("Profiles", () => {
+  const geoStudy = (nctId: string) => ({
+    protocolSection: {
+      identificationModule: { nctId, briefTitle: `Trial ${nctId}` },
+      statusModule: { overallStatus: "RECRUITING", studyFirstPostDateStruct: { date: "2026-11-20" } },
+      contactsLocationsModule: { locations: [{ city: "Boston", state: "Massachusetts", country: "United States", geoPoint: { lat: 42.3584, lon: -71.0598 } }] },
+    },
+  });
+
+  it("keeps a Member's Profile to themselves and checks what goes in", async () => {
+    const mum = as(app, env, `prof${n}@x.org`);
+    expect((await mum<Profile>("/api/profile")).json).toEqual({ birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: false, conditions: [] });
+    const saved = await mum<Profile>("/api/profile", "PUT", { birthYear: "1981", sex: "FEMALE", zip: " 02139 ", healthyVolunteer: true, conditions: [" MS ", "MS", ""] });
+    expect(saved.json).toEqual({ birthYear: 1981, sex: "FEMALE", zip: "02139", miles: 50, healthyVolunteer: true, conditions: ["MS"] });
+    expect((await mum<Profile>("/api/profile")).json).toEqual(saved.json);
+    expect((await as(app, env, `other${n}@x.org`)<Profile>("/api/profile")).json.zip).toBeNull();
+    for (const bad of [{ birthYear: 1700 }, { sex: "ALL" }, { zip: "00000" }, { zip: "02139", miles: 7 }]) {
+      expect((await mum("/api/profile", "PUT", bad)).status, JSON.stringify(bad)).toBe(400);
+    }
+    expect(JSON.stringify((await mum("/api/members")).json)).not.toMatch(/1981|02139/);
+  });
+
+  it("measures each Member's distance from their own Profile when the Watch has no ZIP code", async () => {
+    const near = as(app, env, `near${n}@x.org`);
+    const noProfile = as(app, env, `nowhere${n}@x.org`);
+    await near("/api/profile", "PUT", { zip: "02139", miles: 25 });
+    const cond = `dist${n}`;
+    const { json: watch } = await near<Watch>("/api/watches", "POST", watchBody(cond));
+    await noProfile(`/api/watches/${watch.id}/follow`, "POST");
+    catalog[cond] = [geoStudy("NCT93000001")];
+    await check();
+    expect(((await alertsOf(near))[0] as AlertItem).trial.nearest).toEqual({ place: "Boston, Massachusetts", miles: 2 });
+    expect(((await alertsOf(noProfile))[0] as AlertItem).trial.nearest).toBeUndefined();
+    expect((await near<{ nearest?: object }[]>(`/api/watches/${watch.id}/recent`)).json[0]!.nearest).toEqual({ place: "Boston, Massachusetts", miles: 2 });
+    expect((await noProfile<{ nearest?: object }[]>(`/api/watches/${watch.id}/recent`)).json[0]!.nearest).toBeUndefined();
   });
 });

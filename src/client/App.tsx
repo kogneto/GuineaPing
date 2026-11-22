@@ -6,6 +6,7 @@ import { AlertPage } from "./pages/AlertPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { DevicesPage } from "./pages/DevicesPage";
 import { MembersPage } from "./pages/MembersPage";
+import { ProfilePage } from "./pages/ProfilePage";
 import { WatchEditorPage } from "./pages/WatchEditorPage";
 import { WatchesPage } from "./pages/WatchesPage";
 import { WatchPage } from "./pages/WatchPage";
@@ -16,6 +17,7 @@ function route(path: string) {
   if ((m = /^\/alerts\/([\w-]+)$/.exec(path))) return <AlertPage id={m[1]!} />;
   if (path === "/devices") return <DevicesPage />;
   if (path === "/members") return <MembersPage />;
+  if (path === "/profile") return <ProfilePage />;
   if (path === "/watches") return <WatchesPage />;
   if (path === "/watches/new") return <WatchEditorPage />;
   if ((m = /^\/watches\/([\w-]+)\/edit$/.exec(path))) return <WatchEditorPage id={m[1]!} />;
@@ -94,7 +96,11 @@ export function App() {
             Members
           </Link>
         </nav>
-        {me && <span className="who">{me.email}</span>}
+        {me && (
+          <Link to="/profile" className="who">
+            {me.email}
+          </Link>
+        )}
       </header>
       {status?.stale && (
         <div className="banner" role="status">

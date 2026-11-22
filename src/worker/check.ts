@@ -3,7 +3,8 @@
  * for the first time, and turn that into Alerts, at most one per Member per Trial.
  */
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
-import { fetchJson, findTrials, withDefaults, type FetchJson } from "../shared/ctgov";
+import { fetchJson, findTrials, nearestOf, withDefaults, type FetchJson, type Site } from "../shared/ctgov";
+import { nearByMember } from "./profile";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
 import { runUpdates } from "./updates";
 
@@ -50,12 +51,13 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
   // misses nothing once it works again, and never holds the others back.
   const found: { watchId: string; watchName: string; isPrivate: boolean; trials: Trial[] }[] = [];
   const failed: { id: string; error: string }[] = [];
+  const sites = new Map<string, Site[]>();
   let earliest = daysBefore(now, OVERLAP_DAYS);
   for (const w of watches) {
     const since = daysBefore(w.checked_at ?? w.created_at, OVERLAP_DAYS);
     if (since < earliest) earliest = since;
     try {
-      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, trials: await findTrials(withDefaults(JSON.parse(w.criteria) as Partial<Criteria>), since, get) });
+      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, trials: await findTrials(withDefaults(JSON.parse(w.criteria) as Partial<Criteria>), since, get, { sites }) });
     } catch (err) {
       failed.push({ id: w.id, error: message(err) });
     }
@@ -104,13 +106,22 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
         .all<{ watch_id: string; member_id: string }>()
     : { results: [] };
 
+  // A Watch with no ZIP code says nothing about distance; the Member's own Profile can.
+  const nearOf = await nearByMember(db, follows.map((f) => f.member_id));
+  const forMember = (trial: Trial, memberId: string): Trial => {
+    const near = nearOf.get(memberId);
+    const nearest = !trial.nearest && near ? nearestOf(sites.get(trial.nctId) ?? [], [near]) : null;
+    return nearest ? { ...trial, nearest } : trial;
+  };
+
   // One Alert per Member per Trial, naming every Watch of theirs that found it.
   const alerts = new Map<string, { id: string; member_id: string; nct_id: string; trial: string; watchNames: string[]; viaPrivate: boolean; parsed: Trial }>();
   for (const { watchId, watchName, isPrivate, trial } of firstFinds) {
     for (const f of follows) {
       if (f.watch_id !== watchId) continue;
       const key = `${f.member_id} ${trial.nctId}`;
-      const alert = alerts.get(key) ?? { id: crypto.randomUUID(), member_id: f.member_id, nct_id: trial.nctId, trial: JSON.stringify(trial), watchNames: [], viaPrivate: false, parsed: trial };
+      const mine = forMember(trial, f.member_id);
+      const alert = alerts.get(key) ?? { id: crypto.randomUUID(), member_id: f.member_id, nct_id: trial.nctId, trial: JSON.stringify(mine), watchNames: [], viaPrivate: false, parsed: mine };
       if (!alert.watchNames.includes(watchName)) alert.watchNames.push(watchName);
       alert.viaPrivate ||= isPrivate;
       alerts.set(key, alert);

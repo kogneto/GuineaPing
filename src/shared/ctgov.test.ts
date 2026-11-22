@@ -45,6 +45,8 @@ describe("where and who", () => {
     );
     expect(buildParams(criteria({ conditions: ["x"], sex: "MALE" }), "2026-11-19")["filter.advanced"]).toContain("NOT AREA[Sex]FEMALE");
     expect(buildParams(criteria({ conditions: ["x"] }), "2026-11-19")["filter.geo"]).toBeUndefined();
+    expect(buildParams(criteria({ conditions: ["x"], healthy: true }), "2026-11-19")["filter.advanced"]).toContain("AREA[HealthyVolunteers]true");
+    expect(normalizeCriteria({ conditions: ["x"], healthy: true })).toMatchObject({ healthy: true });
   });
 
   it("validates ZIP codes, distances, ages and sexes", () => {

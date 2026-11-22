@@ -1,5 +1,6 @@
+import { useState } from "react";
 import type { Trial } from "../../shared/api";
-import { keyFacts, locationsText } from "../../shared/plain";
+import { byNearest, keyFacts, locationsText } from "../../shared/plain";
 import { Illustration, type ArtName } from "./Illustration";
 
 /** A Trial's title and plain-language key facts, as in Recent matches and the editor preview. */
@@ -20,6 +21,7 @@ export function TrialCard({ trial }: { trial: Trial }) {
 }
 
 export function TrialList({ trials, empty, art = "breakRoom" }: { trials: Trial[] | null; empty: string; art?: ArtName }) {
+  const [nearestFirst, setNearestFirst] = useState(false);
   if (!trials)
     return (
       <div className="empty compact">
@@ -34,11 +36,29 @@ export function TrialList({ trials, empty, art = "breakRoom" }: { trials: Trial[
         <p className="muted">{empty}</p>
       </div>
     );
+  // Sorting by distance is offered only when there are distances to sort by.
+  const measured = trials.some((t) => t.nearest);
+  const shown = nearestFirst && measured ? [...trials].sort(byNearest) : trials;
   return (
     <div className="stack">
-      {trials.map((t) => (
+      {measured && trials.length > 1 && <SortToggle nearestFirst={nearestFirst} onChange={setNearestFirst} />}
+      {shown.map((t) => (
         <TrialCard key={t.nctId} trial={t} />
       ))}
     </div>
+  );
+}
+
+/** "Newest" or "Nearest": the two orders a list of Trials can be shown in. */
+export function SortToggle({ nearestFirst, onChange }: { nearestFirst: boolean; onChange: (nearest: boolean) => void }) {
+  return (
+    <p className="views">
+      <button type="button" className="chip" aria-pressed={!nearestFirst} onClick={() => onChange(false)}>
+        Newest first
+      </button>
+      <button type="button" className="chip" aria-pressed={nearestFirst} onClick={() => onChange(true)}>
+        Nearest first
+      </button>
+    </p>
   );
 }

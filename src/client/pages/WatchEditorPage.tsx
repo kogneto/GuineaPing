@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { DISTANCES, PHASES, STATUSES, type CriteriaInput, type Phase, type Sex, type Status, type Trial, type Watch } from "../../shared/api";
+import { DISTANCES, PHASES, STATUSES, type CriteriaInput, type Phase, type Profile, type Sex, type Status, type Trial, type Watch } from "../../shared/api";
 import { PHASE_LABELS, STATUS_LABELS } from "../../shared/plain";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
@@ -29,11 +29,30 @@ export function WatchEditorPage({ id }: { id?: string }) {
   const [miles, setMiles] = useState<number>(50);
   const [age, setAge] = useState("");
   const [sex, setSex] = useState<Sex | "">("");
+  const [healthy, setHealthy] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [preview, setPreview] = useState<Trial[] | null>(null);
   const [previewNote, setPreviewNote] = useState<string | null>("Type a condition or keyword to see what it finds.");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api<Profile>("/api/profile").then(setProfile, () => {});
+  }, []);
+  const profileHasSomething = !!profile && (profile.zip !== null || profile.birthYear !== null || profile.sex !== null || profile.healthyVolunteer || profile.conditions.length > 0);
+  /** Copies the Member's Profile into the form. Conditions are only filled in when none are typed yet. */
+  const useProfile = () => {
+    if (!profile) return;
+    if (profile.zip) {
+      setZip(profile.zip);
+      setMiles(profile.miles ?? 50);
+    }
+    if (profile.birthYear !== null) setAge(String(new Date().getFullYear() - profile.birthYear));
+    if (profile.sex) setSex(profile.sex);
+    if (profile.healthyVolunteer) setHealthy(true);
+    if (!conditions.trim() && profile.conditions.length) setConditions(profile.conditions.join(", "));
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -48,6 +67,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
       setMiles(w.criteria.near?.miles ?? 50);
       setAge(w.criteria.age === null ? "" : String(w.criteria.age));
       setSex(w.criteria.sex ?? "");
+      setHealthy(w.criteria.healthy);
       setLoaded(true);
     }, (e: Error) => setError(e.message));
   }, [id]);
@@ -62,6 +82,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
     near: /^\d{5}$/.test(zip.trim()) ? { zip: zip.trim(), miles } : null,
     age: ageNumber,
     sex: sex || null,
+    healthy,
   };
   const key = JSON.stringify(criteria);
 
@@ -140,6 +161,13 @@ export function WatchEditorPage({ id }: { id?: string }) {
       <h1>{id ? "Edit Watch" : "New Watch"}</h1>
       <div className="editor">
         <form onSubmit={save} className="form">
+          {profileHasSomething && (
+            <p className="actions">
+              <button type="button" className="secondary" onClick={useProfile}>
+                Fill in from my profile
+              </button>
+            </p>
+          )}
           <label>
             Name
             <input value={name} onChange={(e) => setName(e.target.value)} placeholder="MS trials" required maxLength={100} />
@@ -201,6 +229,10 @@ export function WatchEditorPage({ id }: { id?: string }) {
               </label>
             </div>
             <span className="hint">Only trials this person could join. Leave empty to see all.</span>
+            <label className="check">
+              <input type="checkbox" checked={healthy} onChange={(e) => setHealthy(e.target.checked)} />
+              Only trials that take healthy volunteers
+            </label>
           </fieldset>
           <fieldset>
             <legend>Phases</legend>

@@ -53,7 +53,7 @@ function anyOf(terms: string[]): string | null {
 
 /** Fills in fields added after a Watch was saved, so older Watches keep working. */
 export function withDefaults(c: Partial<Criteria>): Criteria {
-  return { conditions: [], terms: [], phases: [], statuses: [], near: null, age: null, sex: null, ...c };
+  return { conditions: [], terms: [], phases: [], statuses: [], near: null, age: null, sex: null, healthy: false, ...c };
 }
 
 /**
@@ -92,7 +92,7 @@ export function normalizeCriteria(input: unknown): CriteriaInput | { error: stri
     if (!(SEXES as readonly unknown[]).includes(raw.sex)) return { error: `Unknown sex ${String(raw.sex)}` };
     sex = raw.sex as Sex;
   }
-  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], near, age, sex };
+  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], near, age, sex, healthy: raw.healthy === true };
 }
 
 /**
@@ -108,6 +108,7 @@ function eligibilityFilters(c: Criteria): string[] {
   }
   if (c.sex === "FEMALE") out.push("NOT AREA[Sex]MALE");
   if (c.sex === "MALE") out.push("NOT AREA[Sex]FEMALE");
+  if (c.healthy) out.push("AREA[HealthyVolunteers]true");
   return out;
 }
 
@@ -131,6 +132,29 @@ export function buildParams(criteria: Criteria, since: string): Record<string, s
   return params;
 }
 
+export type Site = { place: string; short: string; lat: number; lon: number };
+
+export type FindOptions = {
+  pageSize?: number;
+  maxPages?: number;
+  /** Where to measure "nearest site" from when the Criteria have no ZIP code of their own. */
+  nearestTo?: Near | null;
+  /** Filled with each found Trial's sites, for callers that measure distances per Member. */
+  sites?: Map<string, Site[]>;
+};
+
+/** The site closest to any of these points, or null when there is none to measure. */
+export function nearestOf(sites: Site[], points: { lat: number; lon: number }[]): { place: string; miles: number } | null {
+  let nearest: { place: string; miles: number } | null = null;
+  for (const site of sites) {
+    for (const point of points) {
+      const miles = Math.round(milesBetween(point, site));
+      if (!nearest || miles < nearest.miles) nearest = { place: site.short, miles };
+    }
+  }
+  return nearest;
+}
+
 /**
  * Every Trial matching `criteria` first posted on or after `since`, newest first, following
  * nextPageToken. Stops after `maxPages` pages so one over-broad Watch can't exhaust a Check.
@@ -139,7 +163,7 @@ export async function findTrials(
   criteria: Criteria,
   since: string,
   get: FetchJson,
-  { pageSize = 100, maxPages = 5 }: { pageSize?: number; maxPages?: number } = {},
+  { pageSize = 100, maxPages = 5, nearestTo = null, sites }: FindOptions = {},
 ): Promise<Trial[]> {
   const base = { ...buildParams(criteria, since), pageSize: String(pageSize) };
   const trials: Trial[] = [];
@@ -148,8 +172,10 @@ export async function findTrials(
     const params = new URLSearchParams(token ? { ...base, pageToken: token } : base);
     const data = (await get(`${API_URL}?${params}`)) as { studies?: unknown[]; nextPageToken?: string };
     for (const study of data.studies ?? []) {
-      const trial = toTrial(study, criteria.near);
-      if (trial) trials.push(trial);
+      const trial = toTrial(study, criteria.near ?? nearestTo);
+      if (!trial) continue;
+      trials.push(trial);
+      sites?.set(trial.nctId, sitesOf(study));
     }
     token = data.nextPageToken;
     if (!token) break;
@@ -223,8 +249,8 @@ export function toTrial(raw: unknown, near?: Near | null): Trial | null {
 }
 
 /** A study site with its coordinates. `place` matches Trial.locations; `short` is how it is named to a Member. */
-export function sitesOf(raw: unknown): { place: string; short: string; lat: number; lon: number }[] {
-  const sites: { place: string; short: string; lat: number; lon: number }[] = [];
+export function sitesOf(raw: unknown): Site[] {
+  const sites: Site[] = [];
   for (const loc of (raw as Study).protocolSection?.contactsLocationsModule?.locations ?? []) {
     const place = [loc.city, loc.state, loc.country].filter(Boolean).join(", ");
     const g = loc.geoPoint;
