@@ -6,6 +6,7 @@ import type { CheckStatus, Criteria, Trial } from "../shared/api";
 import { fetchJson, findTrials, nearestOf, withDefaults, type FetchJson, type Site } from "../shared/ctgov";
 import { nearByMember } from "./profile";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
+import { report } from "./report";
 import { runUpdates } from "./updates";
 
 /**
@@ -172,7 +173,7 @@ export async function checkAndPush(env: Env, get: FetchJson = fetchJson, post: t
   try {
     result.updates = (await runUpdates(env.DB, get)).updated;
   } catch (err) {
-    console.error("Looking for Updates failed:", err);
+    report("Looking for Updates failed", err);
   }
   const vapid = vapidFrom(env);
   if (!vapid) {
@@ -182,7 +183,7 @@ export async function checkAndPush(env: Env, get: FetchJson = fetchJson, post: t
   try {
     return { ...result, pushes: await pushPendingAlerts(env.DB, vapid, post) };
   } catch (err) {
-    console.error("Pushing Alerts failed:", err);
+    report("Pushing Alerts failed", err);
     return result;
   }
 }

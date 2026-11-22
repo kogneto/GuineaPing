@@ -3,6 +3,10 @@
   "name": "guineaping",
   "main": "src/worker/index.ts",
   "compatibility_date": "2026-10-01",
+  // Sentry's SDK needs Node's AsyncLocalStorage.
+  "compatibility_flags": ["nodejs_compat"],
+  // Lets Sentry say which deployed version an error came from.
+  "version_metadata": { "binding": "CF_VERSION_METADATA" },
   // Only the workers.dev address, which Cloudflare Access protects; no per-version preview URLs.
   "workers_dev": true,
   "preview_urls": false,
@@ -31,6 +35,9 @@
     "CF_ACCOUNT_ID": "b2dc3e8a66849473a9c8174a2072db36",
     "ACCESS_APP_ID": "bd296c89-8fa8-44cc-9123-dbd2b1129f96",
     "ACCESS_POLICY_ID": "f10b86d9-7394-4589-82cb-2bbefb6a04c4",
+    // Where errors and failed Checks are reported (Sentry project "guineaping"). A DSN only lets
+    // its holder send events, so it is fine in this file. See src/worker/report.ts for what is sent.
+    "SENTRY_DSN": "https://a19e045986578197544348372ec18676@o4512160331530240.ingest.us.sentry.io/4512477165453312",
     // Only ever "true" in .dev.vars, and even then honoured only on localhost.
     "DEV_AUTH": "false"
   },
