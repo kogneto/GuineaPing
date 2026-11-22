@@ -3,7 +3,7 @@
  * not generated text, so nothing here can misstate a medical fact.
  */
 import type { Mark } from "./api";
-import type { Phase, Status, Trial } from "./api";
+import type { Kind, Phase, Status, Trial } from "./api";
 
 export const PHASE_LABELS: Record<Phase, string> = {
   EARLY_PHASE1: "Early phase 1",
@@ -11,7 +11,7 @@ export const PHASE_LABELS: Record<Phase, string> = {
   PHASE2: "Phase 2",
   PHASE3: "Phase 3",
   PHASE4: "Phase 4",
-  NA: "Not a drug trial",
+  NA: "No phase",
 };
 
 const PHASE_MEANINGS: Record<string, string> = {
@@ -20,7 +20,7 @@ const PHASE_MEANINGS: Record<string, string> = {
   PHASE2: "testing whether it works and is safe in a larger group",
   PHASE3: "comparing it against the usual treatment in many people",
   PHASE4: "studying a treatment that is already approved",
-  NA: "e.g. a device, procedure or behaviour study",
+  NA: "phases are mainly for drug trials",
 };
 
 export const STATUS_LABELS: Record<Status, string> = {
@@ -28,6 +28,78 @@ export const STATUS_LABELS: Record<Status, string> = {
   NOT_YET_RECRUITING: "Not recruiting yet",
   ENROLLING_BY_INVITATION: "By invitation only",
 };
+
+/**
+ * What a study is about, in a few words, for the Watch form and the Alert page. Every kind
+ * ClinicalTrials.gov uses is here; anything newer falls back to its own name.
+ */
+export const KIND_LABELS: Record<Kind | "RADIATION" | "GENETIC" | "COMBINATION_PRODUCT" | "OTHER", string> = {
+  DRUG: "Tests a drug",
+  BIOLOGICAL: "Tests a vaccine or biological",
+  DEVICE: "Tests a device",
+  DIETARY_SUPPLEMENT: "Tests a supplement",
+  BEHAVIORAL: "Behavioural (an app, course or counselling)",
+  PROCEDURE: "Involves a procedure",
+  DIAGNOSTIC_TEST: "Tests a diagnostic",
+  OBSERVATIONAL: "Observation only: nothing is given to you",
+  RADIATION: "Involves radiation",
+  GENETIC: "Genetic (e.g. gene transfer or stem cells)",
+  COMBINATION_PRODUCT: "Tests a drug and device combined",
+  OTHER: "Something else (the listing says what)",
+};
+
+/** One or two words for each kind, for the short line of facts under a Trial's title. */
+const KIND_SHORT: Record<keyof typeof KIND_LABELS, string> = {
+  DRUG: "drug",
+  BIOLOGICAL: "vaccine or biological",
+  DEVICE: "device",
+  DIETARY_SUPPLEMENT: "supplement",
+  BEHAVIORAL: "behavioural",
+  PROCEDURE: "procedure",
+  DIAGNOSTIC_TEST: "diagnostic test",
+  OBSERVATIONAL: "observation only",
+  RADIATION: "radiation",
+  GENETIC: "genetic",
+  COMBINATION_PRODUCT: "drug-device",
+  OTHER: "other",
+};
+
+/** The order kinds are named in: what a volunteer would most want to know first. */
+const KIND_ORDER = Object.keys(KIND_LABELS);
+const rank = (k: string) => (KIND_ORDER.includes(k) ? KIND_ORDER.indexOf(k) : KIND_ORDER.length);
+const fallback = (k: string) => k.toLowerCase().replace(/_/g, " ");
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/** "Tests a drug; Involves a procedure", for the Alert page; null when the listing doesn't say. */
+export function kindText(kinds: string[] | undefined): string | null {
+  if (!kinds?.length) return null;
+  return [...kinds]
+    .sort((a, b) => rank(a) - rank(b))
+    .map((k) => KIND_LABELS[k as keyof typeof KIND_LABELS] ?? capital(fallback(k)))
+    .join("; ");
+}
+
+/**
+ * "Drug study", "Drug and device study", "Drug, device and more", or "Observation only": short
+ * enough for a phone's line of facts. "Other" is left out next to a real kind, as it says nothing.
+ */
+export function kindShort(kinds: string[] | undefined): string | null {
+  if (!kinds?.length) return null;
+  if (kinds.includes("OBSERVATIONAL")) return "Observation only";
+  const named = [...kinds].filter((k) => k !== "OTHER" || kinds.length === 1).sort((a, b) => rank(a) - rank(b));
+  if (named.length === 1 && named[0] === "OTHER") return "Other kind of study";
+  const words = named.map((k) => KIND_SHORT[k as keyof typeof KIND_SHORT] ?? fallback(k));
+  if (words.length === 1) return capital(`${words[0]} study`);
+  if (words.length === 2) return capital(`${words[0]} and ${words[1]} study`);
+  return capital(`${words[0]}, ${words[1]} and more`);
+}
+
+/** "Drug or device studies": the kinds a Watch asks for, in one phrase; null for any kind. */
+export function kindsWanted(kinds: Kind[]): string | null {
+  if (!kinds.length) return null;
+  const words = [...kinds].sort((a, b) => rank(a) - rank(b)).map((k) => (k === "OBSERVATIONAL" ? "observational" : KIND_SHORT[k]));
+  return capital(`${words.join(" or ")} studies`);
+}
 
 /** "Phase 3 (comparing it against the usual treatment in many people)", or "Phase 1/2 (…)" for combined phases. */
 export function phaseText(phases: string[]): string | null {
@@ -75,7 +147,10 @@ export function nearestText(trial: Trial): string | null {
 
 /** The short line of facts shown under a Trial's title. */
 export function keyFacts(trial: Trial): string[] {
-  return [statusText(trial.status), nearestText(trial), phaseText(trial.phases), agesText(trial.minimumAge, trial.maximumAge)].filter(
+  // "No phase" adds nothing once the kind of study is shown, and the line is short on a phone.
+  const noPhase = trial.phases.length === 1 && trial.phases[0] === "NA";
+  const phase = noPhase && trial.kinds?.length ? null : phaseText(trial.phases);
+  return [statusText(trial.status), nearestText(trial), kindShort(trial.kinds), phase, agesText(trial.minimumAge, trial.maximumAge)].filter(
     (s): s is string => !!s,
   );
 }
