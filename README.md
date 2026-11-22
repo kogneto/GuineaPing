@@ -17,10 +17,12 @@ npm test
 
 Vite's Cloudflare plugin doesn't fire cron triggers. Use the **Run a Check now (dev)** link in the footer instead (`POST /api/dev/check`, which only works on localhost). To act as another Member locally, send an `X-Dev-Email` header. Pushes need a real browser that allows notifications on localhost (e.g. Chrome); the Devices page turns them on.
 
-## Deploy (not done yet)
+## Deployment
 
-1. `npx wrangler d1 create guineaping`, then put the returned `database_id` in `wrangler.jsonc`.
-2. `npx wrangler d1 migrations apply guineaping --remote`
-3. Create a Cloudflare Access application for the Worker's hostname, with an email allowlist and one-time PIN. Put its team domain and AUD tag in `ACCESS_TEAM_DOMAIN` / `ACCESS_AUD`.
-4. Web Push keys: run `node scripts/vapid-keys.mjs` (without `--append`) and store each line as a secret with `npx wrangler secret put VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT` (a `mailto:` address push services can contact). If you change the keys later, every Device has to turn notifications on again.
-5. `npm run deploy`
+Live at **https://guineaping.andy-deloose.workers.dev**, behind Cloudflare Access (team `white-brook-3170`, application "GuineaPing", one-time PIN by email, 30-day sessions).
+
+- **Deploy a change:** `npx wrangler d1 migrations apply guineaping --remote` (when there are new migrations), then `npm run deploy`.
+- **Add or remove a Member:** in the Zero Trust dashboard, open Access › Applications › GuineaPing › Policies › Members and add or remove their email (use an **Emails** rule, not "Emails ending in"). Their Member record is created the first time they sign in.
+- **Push keys** are the Worker secrets `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` and `VAPID_SUBJECT`. Replacing them cuts off every Device until it turns notifications on again; `node scripts/vapid-keys.mjs` makes a new set.
+- **If the Access application is ever recreated,** it gets a new AUD tag. Put it in `ACCESS_AUD` in `wrangler.jsonc` and deploy, or every sign-in is refused.
+- **Limits:** on the Workers free plan a Check may make 50 outgoing requests: one per Watch (more for very broad ones) plus one per Push. That's plenty for a small group. A Check that runs out while asking ClinicalTrials.gov fails whole and the next one catches up; Pushes it can't send still leave the Alerts in everyone's Alert list.
