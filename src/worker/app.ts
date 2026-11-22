@@ -1,8 +1,10 @@
 import { Hono, type Context } from "hono";
-import { MARKS, MAX_NOTE_CHARS, type AlertListItem, type Criteria, type Device, type Mark, type Trial, type WatchInput } from "../shared/api";
+import { MARKS, MAX_NOTE_CHARS, type AlertListItem, type Criteria, type Device, type Mark, type MemberList, type Trial, type WatchInput } from "../shared/api";
 import { fetchJson, findTrials, forList, normalizeCriteria } from "../shared/ctgov";
+import { accessFrom, setAllowed } from "./access";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, RECENT_DAYS } from "./check";
+import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
 import { pushPendingAlerts, pushTest, validKeys, vapidFrom } from "./push";
 import { isPushEndpoint } from "./webpush";
 import { createWatch, deleteWatch, getWatch, listWatches, parseWatchInput, setFollowing, updateWatch } from "./watches";
@@ -223,7 +225,7 @@ app.post("/api/alerts/:id/send", async (c) => {
   if (email === me.email) return c.json({ error: "That's your own email address" }, 400);
   const alert = await c.env.DB.prepare("SELECT nct_id, trial FROM alerts WHERE id = ? AND member_id = ?").bind(c.req.param("id"), me.memberId).first<{ nct_id: string; trial: string }>();
   if (!alert) return c.json({ error: "No such Alert" }, 404);
-  const to = await c.env.DB.prepare("SELECT id FROM members WHERE email = ?").bind(email).first<{ id: string }>();
+  const to = await c.env.DB.prepare("SELECT id FROM members WHERE email = ? AND removed_at IS NULL").bind(email).first<{ id: string }>();
   if (!to) return c.json({ error: "No Member has signed in with that email address. Check the spelling." }, 404);
   const created = await c.env.DB.prepare(
     `INSERT OR IGNORE INTO alerts (id, member_id, nct_id, trial, watch_names, via_private, sent_by, created_at) VALUES (?, ?, ?, ?, '[]', 0, ?, ?) RETURNING id`,
@@ -316,6 +318,53 @@ app.post("/api/devices/:id/test", async (c) => {
   if (outcome === "sent") return c.json({ ok: true });
   if (outcome === "gone") return c.json({ error: "This device no longer accepts notifications, so it was removed. Turn them on again to re-add it." }, 410);
   return c.json({ error: "The push service didn't accept the test. Try again in a minute." }, 502);
+});
+
+/** Whether inviting and removing work here: always on localhost, elsewhere once the API token is set. */
+const canChangeMembers = (c: Context<AppEnv>) => isDevRequest(c) || !!accessFrom(c.env);
+
+/** Keeps Cloudflare Access's sign-in list in step. Skipped on localhost, where there is no Access. */
+async function syncAccess(c: Context<AppEnv>, email: string, allowed: boolean) {
+  const cfg = accessFrom(c.env);
+  if (cfg) await setAllowed(cfg, email, allowed);
+}
+
+const accessTrouble = { error: "Couldn't change the sign-in list at Cloudflare just now, so nothing was changed. Please try again in a minute." };
+
+app.get("/api/members", async (c) => c.json({ members: await listMembers(c.env.DB, c.get("me")), canChange: canChangeMembers(c) } satisfies MemberList));
+
+/** Invites someone: they are allowed to sign in, and become a Member. */
+app.post("/api/members", async (c) => {
+  if (!canChangeMembers(c)) return c.json({ error: "Inviting isn't switched on yet" }, 503);
+  const email = String(((await c.req.json().catch(() => null)) as { email?: unknown } | null)?.email ?? "").trim().toLowerCase();
+  if (!looksLikeEmail(email)) return c.json({ error: "Enter a full email address" }, 400);
+  // Sign-in list first: a Member who can't sign in would be worse than no Member.
+  try {
+    await syncAccess(c, email, true);
+  } catch (err) {
+    console.error("Inviting failed:", err);
+    return c.json(accessTrouble, 502);
+  }
+  const outcome = await addMember(c.env.DB, c.get("me"), email, now());
+  return outcome === "already" ? c.json({ error: "They're already a Member" }, 409) : c.json({ ok: true }, 201);
+});
+
+/** Removes a Member, or lets the signed-in Member leave. */
+app.delete("/api/members/:id", async (c) => {
+  if (!canChangeMembers(c)) return c.json({ error: "Removing Members isn't switched on yet" }, 503);
+  const target = await c.env.DB.prepare("SELECT email FROM members WHERE id = ? AND removed_at IS NULL").bind(c.req.param("id")).first<{ email: string }>();
+  if (!target) return c.json({ error: "No such Member" }, 404);
+  const others = await c.env.DB.prepare("SELECT count(*) AS n FROM members WHERE removed_at IS NULL AND id != ?").bind(c.req.param("id")).first<{ n: number }>();
+  if (!others?.n) return c.json({ error: "You're the only Member. Invite someone before you leave, or nobody could get back in." }, 409);
+  // Here first: the Worker refuses them from this moment, whatever Access still remembers.
+  await removeMember(c.env.DB, c.req.param("id"), now());
+  try {
+    await syncAccess(c, target.email, false);
+  } catch (err) {
+    console.error("Taking a removed Member off the sign-in list failed:", err);
+    return c.json({ error: "They're removed and can't use GuineaPing, but Cloudflare's sign-in list couldn't be updated. Take their email off the Members policy in the Cloudflare dashboard." }, 502);
+  }
+  return c.body(null, 204);
 });
 
 /** Runs a Check (and its Pushes) on demand during local development; Vite's Cloudflare plugin has no cron trigger. */

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AlertItem, AlertListItem, Watch } from "../shared/api";
+import type { AlertItem, AlertListItem, MemberList, Watch } from "../shared/api";
 import { as, createWorkerEnv, study } from "../test/worker-env";
+import { setAllowed } from "./access";
 import { app } from "./app";
 import { checkStatus, runCheck } from "./check";
 import { runUpdates } from "./updates";
@@ -397,5 +398,91 @@ describe("Updates", () => {
     changed = [raw("NCT91000003", "RECRUITING")];
     await update();
     expect((await alertsOf(mum))[0]).toMatchObject({ read: true, update: null });
+  });
+});
+
+describe("Members joining and leaving", () => {
+  const members = async (who: ReturnType<typeof as>) => (await who<MemberList>("/api/members")).json.members;
+
+  it("lets any Member invite someone, who can then sign in and is listed", async () => {
+    const mum = as(app, env, `inviter${n}@x.org`);
+    expect((await mum("/api/members", "POST", { email: ` Gran${n}@X.org ` })).status).toBe(201);
+    expect((await mum("/api/members", "POST", { email: `gran${n}@x.org` })).status).toBe(409);
+    expect((await mum("/api/members", "POST", { email: "not an email" })).status).toBe(400);
+    const gran = (await members(mum)).find((m) => m.email === `gran${n}@x.org`);
+    expect(gran).toMatchObject({ invitedBy: `inviter${n}@x.org`, isYou: false });
+    expect((await as(app, env, `gran${n}@x.org`)<{ email: string }>("/api/me")).status).toBe(200);
+  });
+
+  it("passes a leaver's Watches to the longest-standing follower, deletes the ones nobody else follows, and locks them out", async () => {
+    const owner = as(app, env, `leaver${n}@x.org`);
+    const first = as(app, env, `first${n}@x.org`);
+    const second = as(app, env, `second${n}@x.org`);
+    const { json: shared } = await owner<Watch>("/api/watches", "POST", watchBody(`shared${n}`));
+    const { json: lonely } = await owner<Watch>("/api/watches", "POST", watchBody(`lonely${n}`));
+    const { json: secret } = await owner<Watch>("/api/watches", "POST", watchBody(`secret${n}`, { private: true }));
+    await first(`/api/watches/${shared.id}/follow`, "POST");
+    await second(`/api/watches/${shared.id}/follow`, "POST");
+    const leaver = (await members(first)).find((m) => m.email === `leaver${n}@x.org`)!;
+
+    expect((await second(`/api/members/${leaver.id}`, "DELETE")).status).toBe(204);
+
+    expect((await first<Watch>(`/api/watches/${shared.id}`)).json).toMatchObject({ isOwner: true, following: true });
+    expect((await second<Watch>(`/api/watches/${shared.id}`)).json).toMatchObject({ isOwner: false, following: true });
+    expect((await alertsOf(first)).find((i) => i.kind === "note")).toMatchObject({ message: expect.stringContaining(`You are now the Owner of “shared${n} watch”`) });
+    expect((await first(`/api/watches/${lonely.id}`)).status).toBe(404);
+    const gone = await env.DB.prepare("SELECT deleted_at FROM watches WHERE id = ?").bind(secret.id).first<{ deleted_at: string | null }>();
+    expect(gone?.deleted_at).not.toBeNull();
+
+    // Removed: refused even with a valid sign-in, not listed, and no longer alerted.
+    expect((await owner("/api/watches")).status).toBe(403);
+    expect((await members(first)).some((m) => m.id === leaver.id)).toBe(false);
+    catalog[`shared${n}`] = [study("NCT92000001")];
+    await check();
+    const row = await env.DB.prepare("SELECT count(*) AS n FROM alerts WHERE member_id = ?").bind(leaver.id).first<{ n: number }>();
+    expect(row?.n).toBe(0);
+
+    // Invited again, they're back, without their old Watches.
+    await first("/api/members", "POST", { email: `leaver${n}@x.org` });
+    expect((await owner<Watch[]>("/api/watches")).json.some((w) => w.isOwner)).toBe(false);
+  });
+
+  it("lets a Member leave, and refuses to remove someone who isn't there", async () => {
+    const me = as(app, env, `bye${n}@x.org`);
+    const mine = (await members(me)).find((m) => m.isYou)!;
+    expect((await me(`/api/members/${mine.id}`, "DELETE")).status).toBe(204);
+    expect((await me("/api/me")).status).toBe(403);
+    expect((await as(app, env, `other${n}@x.org`)(`/api/members/${mine.id}`, "DELETE")).status).toBe(404);
+  });
+});
+
+describe("the Cloudflare Access sign-in list", () => {
+  const cfg = { accountId: "acct", appId: "app", policyId: "pol", token: "t" };
+  const cloudflare = (include: object[], putStatus = 200) => {
+    const puts: { include: object[]; name: string; session_duration?: string }[] = [];
+    const call = (async (_url: string, init?: RequestInit) => {
+      if (init?.method !== "PUT") return Response.json({ result: { name: "Members", decision: "allow", include, exclude: [], require: [], session_duration: "720h", id: "pol" } });
+      puts.push(JSON.parse(String(init.body)));
+      return new Response("{}", { status: putStatus });
+    }) as typeof fetch;
+    return { puts, call };
+  };
+
+  it("adds and removes one address and leaves every other rule alone", async () => {
+    const existing = [{ email: { email: "Andy@x.org" } }, { email_domain: { domain: "family.example" } }];
+    const add = cloudflare(existing);
+    await setAllowed(cfg, "gran@x.org", true, add.call);
+    expect(add.puts).toEqual([expect.objectContaining({ name: "Members", session_duration: "720h", include: [...existing, { email: { email: "gran@x.org" } }] })]);
+    const remove = cloudflare(existing);
+    await setAllowed(cfg, "andy@x.org", false, remove.call);
+    expect(remove.puts[0]!.include).toEqual([{ email_domain: { domain: "family.example" } }]);
+    const same = cloudflare(existing);
+    await setAllowed(cfg, "andy@x.org", true, same.call);
+    expect(same.puts).toEqual([]);
+  });
+
+  it("fails loudly when Cloudflare refuses, and never empties the list", async () => {
+    await expect(setAllowed(cfg, "gran@x.org", true, cloudflare([], 403).call)).rejects.toThrow(/403/);
+    await expect(setAllowed(cfg, "andy@x.org", false, cloudflare([{ email: { email: "andy@x.org" } }]).call)).rejects.toThrow(/empty/);
   });
 });

@@ -135,6 +135,7 @@ button:disabled { opacity: 0.6; cursor: default; }
 .facts-table dt { color: var(--muted); }
 .facts-table dd { margin: 0; overflow-wrap: anywhere; }
 .summary { white-space: pre-line; }
+.invite { margin-top: 1.5rem; max-width: 28rem; }
 .callout.update { margin-top: 1rem; background: var(--accent-soft); }
 .callout.update .criteria { margin-bottom: 0; }
 .views { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0 0 0.75rem; }

@@ -26,6 +26,11 @@
     // one here and deploy, or every sign-in is refused.
     "ACCESS_TEAM_DOMAIN": "white-brook-3170.cloudflareaccess.com",
     "ACCESS_AUD": "aeba8dff7feda6d22106f2103fd4ac1a843c3837bdc08d5bfdde24bc3a87b2d5",
+    // Which Access policy lists the Members' email addresses, so the app can invite and remove
+    // them. This only works once the CF_ACCESS_TOKEN secret is set (see README).
+    "CF_ACCOUNT_ID": "b2dc3e8a66849473a9c8174a2072db36",
+    "ACCESS_APP_ID": "bd296c89-8fa8-44cc-9123-dbd2b1129f96",
+    "ACCESS_POLICY_ID": "f10b86d9-7394-4589-82cb-2bbefb6a04c4",
     // Only ever "true" in .dev.vars, and even then honoured only on localhost.
     "DEV_AUTH": "false"
   },

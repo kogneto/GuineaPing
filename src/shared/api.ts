@@ -65,6 +65,11 @@ export type Eligibility = {
 
 export type Me = { memberId: string; email: string };
 
+/** A Member as other Members see them: an email address and how they joined. */
+export type MemberItem = { id: string; email: string; since: string; invitedBy: string | null; isYou: boolean };
+/** `canChange` is false until inviting and removing are switched on for this deployment. */
+export type MemberList = { members: MemberItem[]; canChange: boolean };
+
 export type Watch = {
   id: string;
   name: string;
