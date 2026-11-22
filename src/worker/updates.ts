@@ -1,18 +1,19 @@
 /**
  * Updates: telling a Member when a Trial they already have an Alert for changes in a way that
  * matters to them. It starts recruiting, or adds a site within the distance of the Watch that
- * found it. The Alert itself is refreshed and turns unread; there is still one Alert per Trial.
+ * found it, or of their Profile. The Alert itself is refreshed and turns unread; there is still one Alert per Trial.
  */
 import type { Criteria, Near, Trial } from "../shared/api";
 import { findUpdated, milesBetween, sitesOf, toTrial, type FetchJson } from "../shared/ctgov";
 import { daysBefore, OVERLAP_DAYS } from "./check";
+import { nearByMember } from "./profile";
 
 /** Alerts older than this are no longer followed for Updates. */
 const FOLLOW_DAYS = 730;
 /** How many new nearby sites an Update names before saying "and N more". */
 const SITES_NAMED = 2;
 
-type AlertRow = { id: string; nct_id: string; trial: string };
+type AlertRow = { id: string; member_id: string; nct_id: string; trial: string };
 
 /** What changed for one Alert, in the words the Member reads. Empty when nothing worth telling. */
 export function changesFor(old: Trial, fresh: Trial, sites: ReturnType<typeof sitesOf>, nears: Near[]): string[] {
@@ -42,7 +43,7 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
 
   // "Not for me" means exactly that: those Alerts stay quiet.
   const { results: alerts } = await db
-    .prepare("SELECT id, nct_id, trial FROM alerts WHERE (mark IS NULL OR mark != 'not_for_me') AND created_at > ?")
+    .prepare("SELECT id, member_id, nct_id, trial FROM alerts WHERE (mark IS NULL OR mark != 'not_for_me') AND created_at > ?")
     .bind(daysBefore(now, FOLLOW_DAYS))
     .all<AlertRow>();
   const changed = await findUpdated([...new Set(alerts.map((a) => a.nct_id))], since, get);
@@ -67,6 +68,13 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
   for (const p of places) {
     const near = (JSON.parse(p.criteria) as Partial<Criteria>).near;
     if (near) nearsOf.set(p.alert_id, [...(nearsOf.get(p.alert_id) ?? []), near]);
+  }
+
+  // And the Member's own Profile, when it gives a ZIP code.
+  const profileNear = await nearByMember(db, affected.map((a) => a.member_id));
+  for (const a of affected) {
+    const near = profileNear.get(a.member_id);
+    if (near) nearsOf.set(a.id, [...(nearsOf.get(a.id) ?? []), near]);
   }
 
   const statements: D1PreparedStatement[] = [];

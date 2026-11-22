@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import type { AlertListItem, Mark } from "../../shared/api";
-import { MARK_LABELS, keyFacts } from "../../shared/plain";
+import { MARK_LABELS, byNearest, keyFacts } from "../../shared/plain";
 import { ago, api } from "../api";
 import { Illustration } from "../components/Illustration";
+import { SortToggle } from "../components/TrialCard";
 import { Link } from "../router";
 
 /** The Alert list: every Alert and note, newest first. */
@@ -11,6 +12,7 @@ export function AlertsPage() {
   const [error, setError] = useState<string | null>(null);
   // "all" leaves out what the Member marked "Not for me"; that has its own view.
   const [view, setView] = useState<"all" | Mark>("all");
+  const [nearestFirst, setNearestFirst] = useState(false);
 
   useEffect(() => {
     api<AlertListItem[]>("/api/alerts").then(setItems, (e: Error) => setError(e.message));
@@ -26,7 +28,10 @@ export function AlertsPage() {
 
   const counts = { interested: 0, not_for_me: 0 };
   for (const i of items) if (i.kind === "alert" && i.mark) counts[i.mark]++;
-  const shown = items.filter((i) => (view === "all" ? i.kind === "note" || i.mark !== "not_for_me" : i.kind === "alert" && i.mark === view));
+  const inView = items.filter((i) => (view === "all" ? i.kind === "note" || i.mark !== "not_for_me" : i.kind === "alert" && i.mark === view));
+  const measured = inView.some((i) => i.kind === "alert" && i.trial.nearest);
+  // Nearest first is about Trials, so notes step aside while it is on.
+  const shown = nearestFirst && measured ? inView.filter((i) => i.kind === "alert").sort((a, b) => (a.kind === "alert" && b.kind === "alert" ? byNearest(a.trial, b.trial) : 0)) : inView;
   const unread = items.filter((i) => !i.read && (i.kind === "note" || i.mark !== "not_for_me")).length;
   return (
     <>
@@ -52,6 +57,7 @@ export function AlertsPage() {
           ))}
         </p>
       )}
+      {measured && inView.length > 1 && <SortToggle nearestFirst={nearestFirst} onChange={setNearestFirst} />}
       {items.length > 0 && !shown.length && <p className="muted">Nothing here.</p>}
       <ul className="alerts">
         {shown.map((item) =>

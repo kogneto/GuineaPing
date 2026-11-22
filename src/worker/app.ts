@@ -1,10 +1,11 @@
 import { Hono, type Context } from "hono";
-import { MARKS, MAX_NOTE_CHARS, type AlertListItem, type Criteria, type Device, type Mark, type MemberList, type Trial, type WatchInput } from "../shared/api";
+import { MARKS, MAX_NOTE_CHARS, type AlertListItem, type Criteria, type Near, type Device, type Mark, type MemberList, type Trial, type WatchInput } from "../shared/api";
 import { fetchJson, findTrials, forList, normalizeCriteria } from "../shared/ctgov";
 import { accessFrom, setAllowed } from "./access";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, RECENT_DAYS } from "./check";
 import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
+import { getProfile, nearByMember, saveProfile } from "./profile";
 import { pushPendingAlerts, pushTest, validKeys, vapidFrom } from "./push";
 import { isPushEndpoint } from "./webpush";
 import { createWatch, deleteWatch, getWatch, listWatches, parseWatchInput, setFollowing, updateWatch } from "./watches";
@@ -22,10 +23,17 @@ app.use("/api/*", requireMember);
 
 const now = () => new Date().toISOString();
 
-/** Recent matches: newest first, capped for display; `all` pages further, for seeding. */
-function recentMatches(criteria: Criteria, all = false): Promise<Trial[]> {
-  return findTrials(criteria, daysBefore(now(), RECENT_DAYS), fetchJson, all ? { pageSize: 100, maxPages: 10 } : { pageSize: 50, maxPages: 1 });
+/**
+ * Recent matches: newest first, capped for display; `all` pages further, for seeding. `nearestTo`
+ * is where the viewer is, for Criteria that have no ZIP code of their own.
+ */
+async function recentMatches(criteria: Criteria, all = false, nearestTo: Near | null = null): Promise<Trial[]> {
+  const trials = await findTrials(criteria, daysBefore(now(), RECENT_DAYS), fetchJson, { ...(all ? { pageSize: 100, maxPages: 10 } : { pageSize: 50, maxPages: 1 }), nearestTo });
+  return trials.map(forList);
 }
+
+/** Where the signed-in Member's Profile says they are, if it does. */
+const myNear = async (c: Context<AppEnv>) => (await nearByMember(c.env.DB, [c.get("me").memberId])).get(c.get("me").memberId) ?? null;
 
 const upstreamError = { error: "Couldn't reach ClinicalTrials.gov just now. Please try again in a minute." };
 
@@ -106,7 +114,7 @@ app.get("/api/watches/:id/recent", async (c) => {
   const watch = await getWatch(c.env.DB, c.get("me"), c.req.param("id"));
   if (!watch) return c.json({ error: "No such Watch" }, 404);
   try {
-    return c.json((await recentMatches(watch.criteria)).map(forList));
+    return c.json(await recentMatches(watch.criteria, false, await myNear(c)));
   } catch {
     return c.json(upstreamError, 502);
   }
@@ -142,7 +150,7 @@ app.post("/api/preview", async (c) => {
   const criteria = await readCriteria(c.env.DB, (await c.req.json().catch(() => null))?.criteria);
   if ("error" in criteria) return c.json(criteria, 400);
   try {
-    return c.json((await recentMatches(criteria)).map(forList));
+    return c.json(await recentMatches(criteria, false, await myNear(c)));
   } catch {
     return c.json(upstreamError, 502);
   }
@@ -318,6 +326,14 @@ app.post("/api/devices/:id/test", async (c) => {
   if (outcome === "sent") return c.json({ ok: true });
   if (outcome === "gone") return c.json({ error: "This device no longer accepts notifications, so it was removed. Turn them on again to re-add it." }, 410);
   return c.json({ error: "The push service didn't accept the test. Try again in a minute." }, 502);
+});
+
+/** The signed-in Member's own Profile. Nobody else's is ever returned. */
+app.get("/api/profile", async (c) => c.json(await getProfile(c.env.DB, c.get("me").memberId)));
+
+app.put("/api/profile", async (c) => {
+  const saved = await saveProfile(c.env.DB, c.get("me").memberId, await c.req.json().catch(() => null), now());
+  return "error" in saved ? c.json(saved, 400) : c.json(saved);
 });
 
 /** Whether inviting and removing work here: always on localhost, elsewhere once the API token is set. */
