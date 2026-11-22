@@ -69,3 +69,17 @@ _Avoid_: Notification, ping, Alert (an Alert is the record; a Push is how it is 
 **Alert list**:
 Every Alert a Member has received, newest first, each marked read or unread. The record of truth when a push is missed or a Member has no Device.
 _Avoid_: Inbox, feed, history, notifications
+
+### Clinics
+
+**Clinic**:
+A research unit that pays healthy volunteers and advertises its studies on its own website, such as Celerion in Lincoln or Fortrea in Madison. GuineaPing keeps the list of Clinics by hand: name, city, and a link to the Clinic’s own list of studies. Every Member sees the same Clinics, nearest first when their Profile has a ZIP code.
+_Avoid_: Site (a site is one place a Trial runs), facility, CRO, unit
+
+**Opening**:
+One entry on a Clinic’s own list of studies, shown in the Clinic’s own words: what it pays, when, how long the stay is, and who it is for. An Opening is not a Trial and is not tied to one, because Clinics give no NCT ID. It links to its page on the Clinic’s site.
+_Avoid_: Study, listing, Trial, posting
+
+**Clinic read**:
+One look at a Clinic’s list, at most once a day, that records which Openings are there now. Only some Clinics are read. A Clinic whose terms forbid automated tools, or whose site turns them away, is never visited: Members open its list themselves.
+_Avoid_: Scrape, crawl, Check (a Check is of ClinicalTrials.gov)

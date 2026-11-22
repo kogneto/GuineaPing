@@ -4,6 +4,7 @@ import { ago, api, type ApiError } from "./api";
 import { Illustration } from "./components/Illustration";
 import { AlertPage } from "./pages/AlertPage";
 import { AlertsPage } from "./pages/AlertsPage";
+import { ClinicsPage } from "./pages/ClinicsPage";
 import { DevicesPage } from "./pages/DevicesPage";
 import { MembersPage } from "./pages/MembersPage";
 import { ProfilePage } from "./pages/ProfilePage";
@@ -15,6 +16,7 @@ import { Link, usePath } from "./router";
 function route(path: string) {
   let m: RegExpExecArray | null;
   if ((m = /^\/alerts\/([\w-]+)$/.exec(path))) return <AlertPage id={m[1]!} />;
+  if (path === "/clinics") return <ClinicsPage />;
   if (path === "/devices") return <DevicesPage />;
   if (path === "/members") return <MembersPage />;
   if (path === "/profile") return <ProfilePage />;
@@ -75,7 +77,7 @@ export function App() {
     );
   }
 
-  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/devices") ? "devices" : path.startsWith("/members") ? "members" : "alerts";
+  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/clinics") ? "clinics" : path.startsWith("/devices") ? "devices" : path.startsWith("/members") ? "members" : "alerts";
   return (
     <>
       <header className="top">
@@ -88,6 +90,9 @@ export function App() {
           </Link>
           <Link to="/watches" className={section === "watches" ? "active" : ""}>
             Watches
+          </Link>
+          <Link to="/clinics" className={section === "clinics" ? "active" : ""}>
+            Clinics
           </Link>
           <Link to="/devices" className={section === "devices" ? "active" : ""}>
             Devices

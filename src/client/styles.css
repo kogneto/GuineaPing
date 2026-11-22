@@ -128,6 +128,9 @@ button:disabled { opacity: 0.6; cursor: default; }
 .trial p { margin: 0.2rem 0 0; }
 .trial-title { font-weight: 600; text-decoration: none; }
 .where { font-size: 0.9rem; }
+.clinic { margin: 1.5rem 0; }
+.clinic h2 { font-size: 1.1rem; margin: 0; }
+.clinic .title-row + p { margin: 0.2rem 0 0.6rem; }
 .trial-heading { font-size: 1.4rem; }
 
 .facts-table { margin: 1rem 0; display: grid; gap: 0.5rem; }
