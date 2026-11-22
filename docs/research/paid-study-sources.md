@@ -6,17 +6,17 @@ Research for a possible clinic feature. Checked on 2026-11-22. Nothing has been 
 
 **Marks.** Every claim is marked **[V]** (verified: the page or data was read on 2026-11-22 and the source is given) or **[U]** (unverified: from a search-result snippet, a third party, or general knowledge).
 
-**Limits we kept.** We did not log in, submit forms, or accept any cookie or terms banner. Each site got a handful of page requests, not a crawl. "Blocked" means the site refused a plain scripted request (HTTP 403). For blocked sites we opened the page once in an ordinary browser to see what a person sees; we did not get round any challenge. Once a site's terms were found to forbid automated tools, we stopped reading it.
+**Limits we kept.** We did not log in, submit forms, or accept any cookie or terms banner. Each site got a handful of page requests, not a crawl. "Blocked" means the site refused a plain scripted request (HTTP 403). For blocked sites the research assistant opened the page once in a normal browser window that it controls, to see what a person would see; no challenge appeared and none was got round. That is still a tool, not a person. Once a site's terms were found to forbid automated tools, we stopped reading it; for Trialmed and Medpace the list had been read before the terms were.
 
 ## Conclusion
 
 1. **The idea holds for clinic sites, not for volunteer-run sites.** Clinics' own recruitment sites show what ClinicalTrials.gov does not: pay, nights in clinic, visits, and often dates. The volunteer-run sites we expected list clinics, not studies.
-2. **About 25 cities hold the whole market.** Over three years, 24 US cities account for 80% of company-run, single-site Phase 1 healthy-volunteer Trials. A travelling volunteer's map is short: Lincoln NE, Tempe AZ, Madison WI, Miami FL, Austin TX, Baltimore MD, San Antonio TX, New Haven CT, Grayslake IL, Salt Lake City UT and a dozen more.
-3. **Most clinics forbid automated reading.** Of 30 clinic operators checked, 20 publish a public list of studies. Six of those forbid bots or scraping in their terms (ICON, CenExel, PPD/Trialmed, Medpace, Parexel, Syneos), and a seventh operator, K2, refuses all crawlers in robots.txt. Six more block scripts or need JavaScript. Only 8 have a readable list and no rule against it: Altasciences (two sites), Celerion, Fortrea, Orlando Clinical Research Center, Pharmaron, Pfizer New Haven, Novum and TKL Research.
-4. **A clinic listing usually cannot be tied to a Trial.** No clinic listing shows an NCT ID. Clinic study codes are internal: 9 codes from five contract clinics found nothing on ClinicalTrials.gov. The exception is clinics owned by a drug company (Pfizer, AbbVie), whose codes are the sponsor's protocol numbers: 2 of 3 tested matched a Trial.
-5. **ClinicalTrials.gov already covers these clinics better than expected.** Each clinic has as many open Trials naming it as it has clinic listings, or more. US law does not require Phase 1 Trials to be registered, yet most seem to be. About half are posted before the study starts.
+2. **About 25 cities hold most of the market.** Over three years, 24 US cities account for 80% of company-run, single-site Phase 1 healthy-volunteer Trials. A travelling volunteer's map is short: Lincoln NE, Tempe AZ, Madison WI, Miami FL, Austin TX, Baltimore MD, San Antonio TX, New Haven CT, Grayslake IL, Salt Lake City UT and a dozen more.
+3. **Most clinics forbid automated reading.** Of 31 clinic operators checked, 21 publish a public list of studies. Seven of those forbid bots or scraping in their terms (ICON, CenExel, PPD/Trialmed, Medpace, Parexel, Syneos, Dr. Vince), and one more operator, K2, refuses all crawlers in robots.txt. Three block scripts or need JavaScript, and three have lists with no pay shown or nothing listed that day. Only 8 have a readable list and no rule against it: Altasciences (two sites), Celerion, Fortrea, Orlando Clinical Research Center, Pharmaron, Pfizer New Haven, Novum and TKL Research.
+4. **A clinic listing usually cannot be tied to a Trial.** No clinic listing shows an NCT ID. Clinic study codes are internal: 9 codes from five contract clinics found nothing on ClinicalTrials.gov. The exception is clinics owned by a drug company (Pfizer, AbbVie), whose codes are the sponsor's protocol numbers: 3 of 5 tested matched a Trial, though neither of the two codes Pfizer lists today did.
+5. **ClinicalTrials.gov may cover these clinics better than expected.** Each clinic has about as many open Trials naming it as it has clinic listings, or more. We could not confirm they are the same studies. US law does not require Phase 1 Trials to be registered, so some will be missing. Of those that are registered, about half are posted before the study starts.
 6. **Recommended order of work.** First a clinic directory with hand-kept links. Then a "clinic Watch" that alerts when a new Trial names a chosen clinic, and links to the clinic's own page for pay and dates. Reading clinic lists automatically comes last, only for the 8 sources above, and only after asking each for written permission. Section 6 lists ways to get pay and dates without automation.
-7. **Waiting period.** 30 days between studies is the common rule, counted back from the first dose of the next study. A tracker can only be a personal reminder: no registry lets volunteers look themselves up.
+7. **Waiting period.** 30 days between studies is the common rule. A tracker can only be a personal reminder: no registry lets volunteers look themselves up.
 
 ## 1. Which clinics run the most Trials (ClinicalTrials.gov)
 
@@ -53,7 +53,7 @@ To find the dedicated Phase 1 units from data alone, we used a stricter query: t
 | Lenexa KS | 25 | 8 | ICON |
 | Daytona Beach FL | 20 | 7 | Fortrea |
 | Dallas TX | 20 | 4 | Fortrea |
-| Overland Park KS | 19 | 7 | Altasciences (Dr. Vince Clinical Research) |
+| Overland Park KS | 19 | 7 | Dr. Vince Clinical Research; Altasciences |
 | Cypress CA | 17 | 4 | Altasciences |
 | Las Vegas NV | 17 | 7 | PPD, Novum |
 | Brooklyn MD | 12 | 2 | all unnamed |
@@ -67,7 +67,7 @@ These 24 cities hold 80% of the 745; 96 cities appear in all. Smaller units foll
 
 Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide there: every Brooklyn MD Trial is unnamed.
 
-**Which clinics we checked.** Every named operator in the table, plus the next few by count, plus the NIH Clinical Center and the Johns Hopkins Behavioral Pharmacology Research Unit. That is 30 operators. Four Florida operators that ranked high in today's snapshot (Floridian, Genesis, K2, Charter Research) were also checked. Their Trials are mostly kidney or liver impairment studies with matched healthy people, or Alzheimer's studies with a healthy arm [V, Trial titles].
+**Which clinics we checked.** Every named operator in the table, the next few by count, the NIH Clinical Center, the Johns Hopkins Behavioral Pharmacology Research Unit, and four Florida operators that ranked high in today's snapshot (Floridian, Genesis, K2, Charter Research). That is 31 operators in all. The four Florida operators' Trials are mostly kidney or liver impairment studies with matched healthy people, or Alzheimer's studies with a healthy arm [V, Trial titles].
 
 ## 2. Clinic recruitment sites
 
@@ -99,6 +99,7 @@ Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide the
 | **Medpace** (Cincinnati OH) | [medpace.com/study-participants/browse-studies](https://www.medpace.com/study-participants/browse-studies/) [V, browser] | Pay in the title ("Healthy Adults, Age 18-64, $4,150"); "four outpatient visits … plus one separate 6-night stay"; age; BMI | Blocked to scripts. Terms: "any use of data mining, robots, or similar data gathering and extraction tools" ([Terms](https://www.medpace.com/terms-of-use/)) [V] |
 | **Parexel** (Baltimore MD, Glendale CA) | A Salesforce portal, e.g. [Baltimore list](https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US) [V, browser] | "Compensation up to: $24,250"; "1 in-house stay of 16-days/15-nights, and 13 outpatient visits"; age; own code | Needs JavaScript. Terms: "high-volume or automated use of this Website is prohibited" ([Terms](https://www.parexel.com/about-us/trust-and-privacy/terms)) [V] |
 | **Syneos Health** (Miami FL) | [us-participants.syneoshealth.com/en/avalaible-studies](https://www.us-participants.syneoshealth.com/en/avalaible-studies/) [V] (the misspelling is theirs) | "Up to $2,965"; dates; "1 overnight stay (8 nights) and 1 return visit"; age; sex; own code; status | Terms: "data mining, robots, or similar data-gathering or extraction methods" ([Terms](https://www.syneoshealth.com/syneos-health-website-terms-use)) [V] |
+| **Dr. Vince Clinical Research** (Overland Park KS) | [drvince.com/current-studies](https://drvince.com/current-studies/) [V, browser] | Not read after the terms were found | Blocked to scripts. Terms forbid users to "scrape or systematically extract Site content" without permission, while allowing search engines to index it ([Terms](https://drvince.com/terms-and-conditions-of-use/)) [V]. ClinicalTrials.gov gives it the same ZIP code as Altasciences Kansas City; whether the two are linked is unclear |
 | **K2 Medical Research** (Maitland FL) | Not read | – | robots.txt disallows everything, for all crawlers [V] |
 
 ### C. A person can open it; scripts are blocked or it needs JavaScript
@@ -166,25 +167,25 @@ No free site gathers per-study pay, dates and nights across clinics. We found no
 
 **By code: no for contract clinics, yes for drug-company clinics [V].**
 - We searched ClinicalTrials.gov's study ID fields and full text for 9 codes: Fortrea (781236, 783564, 778951, 5109595), Celerion (CA48121, CA52371), Altasciences (N-40700), ICON (0078-2765) and Pharmaron (CHESAPEAKE). None matched the right Trial.
-- Pfizer and AbbVie use the sponsor's own protocol number. C4921001 matched NCT05654181 at the New Haven unit, and M25-776 matched NCT07306754 at Grayslake. A third, C6381001, matched nothing; it may not be registered yet.
+- Pfizer and AbbVie use the sponsor's own protocol number. Of five codes tested, three matched: C4921001 (NCT05654181, New Haven), M25-431 (NCT07425899, Grayslake) and M25-776 (NCT07306754, Grayslake). The two codes on Pfizer's list today, C6381001 and C6508912, matched nothing; they may not be registered yet.
 
 **By unit, age and sex: sometimes [V].** For each clinic listing we counted the open Trials that name the same unit and have the same age range and sex.
 - Fortrea, 6 listings: 3 had exactly one candidate Trial, 2 had none, 1 had four.
 - Celerion Lincoln, 5 listings: 1 had exactly one candidate, 4 had four each. Celerion advertises ages from 19 where the Trial says 18, so even the age needs loosening.
 - A single candidate is still a guess. We could not confirm any of them.
 
-**Coverage: ClinicalTrials.gov is not missing these studies [V].** Open Trials naming the unit, against distinct clinic listings on the day:
+**Coverage: the counts are comparable [V].** Open Trials naming the unit, against distinct clinic listings on the day:
 
 | Unit | Open Trials naming it | Distinct clinic listings |
 |---|---|---|
 | Celerion, Lincoln | 8 | 5 |
 | Fortrea, Madison | 6 | 3 |
 | Fortrea, Daytona Beach | 12 | 4 |
-| Altasciences, Overland Park | 10 | 5 |
+| Altasciences, Overland Park | 5 | 5 |
 | Pharmaron, Baltimore | 4 | 5 |
 | Orlando Clinical Research Center | 18 | 6 |
 
-Clinics advertise only the groups they are filling now, so their lists are shorter. Trials with an unnamed site are not counted and would add to the left column.
+Clinics seem to advertise only the groups they are filling now, so their lists are shorter [U]. Trials with an unnamed site are not counted and would add to the left column. Equal counts do not prove these are the same studies: two Fortrea listings had no candidate Trial at all, and Pfizer's two current codes are not registered.
 
 **The law [V].** Phase 1 drug studies are outside the registration rule: an applicable drug clinical trial is one "other than a phase 1 clinical investigation" ([42 CFR 11.10](https://www.ecfr.gov/current/title-42/part-11/subpart-A/section-11.10)). So registration of these Trials is voluntary, and some studies will never appear.
 
@@ -194,7 +195,7 @@ Clinics advertise only the groups they are filling now, so their lists are short
 - 18% were posted up to two weeks after.
 - 9% were posted 15 to 30 days after, and 25% more than 30 days after.
 
-So an Alert from ClinicalTrials.gov arrives in useful time for about half to two-thirds of these Trials. A clinic also recruits group after group for months, so a late Alert often still helps [U].
+So an Alert from ClinicalTrials.gov arrives in useful time for about half to two-thirds of these Trials. Two limits: this counts only studies that are registered and name their site, and it is measured against the start date, while clinics begin recruiting some weeks earlier [U]. On the other side, a clinic recruits group after group for months, so a late Alert often still helps [U].
 
 ## 5. Waiting periods ("washout") and no-show rules
 
@@ -216,7 +217,7 @@ So an Alert from ClinicalTrials.gov arrives in useful time for about half to two
 - Among the 138 company single-site Trials, 70 state a window: 51 say 30 days or less, 14 say 31 to 90, 5 longer.
 - Where the wording was clear, the window is counted back from the first dose or check-in of the new Trial (35 Trials) more often than from its screening visit (12).
 
-So a tracker should count from the Member's last dose in the old study to the first dose of the new one, default to 30 days, and let the Member change it.
+The two sources count from different points. Clinics count from the end of the previous study (Celerion: "the conclusion of one study"; Altasciences: "the end of study visit"). Trial rules count from the last study drug taken. A tracker should ask the Member for both dates, use the later one, add 30 days by default, and let the Member change the number.
 
 **Registries that detect overlapping enrolment.**
 - **Verified Clinical Trials** ([site](https://verifiedclinicaltrials.com/)) [V]. Commercial. Clinics check each volunteer at screening. It stores "partial identifiers such as initials and date of birth", encrypted, with optional fingerprint or face checks. It claims Phase 1 units among its users in "34+" or "over 50" countries; its pages disagree. It names no clinics and publishes no figures. Its volunteer FAQ offers no way to see your own record.
@@ -231,7 +232,7 @@ So a tracker should count from the Member's last dose in the old study to the fi
 
 The terms forbid a program fetching the clinic's site. They do not stop a person reading it, the clinic telling us, or use of data the clinic publishes elsewhere.
 
-1. **A clinic Watch on ClinicalTrials.gov.** Alert when a new Phase 1 healthy-volunteer Trial names a chosen clinic or city, and link to that clinic's own study list for pay and dates. All of it uses data we may read. Section 4 gives the catch rate: about half to two-thirds in time. Unnamed sites are missed unless the Watch is by city.
+1. **A clinic Watch on ClinicalTrials.gov.** Alert when a new Phase 1 healthy-volunteer Trial names a chosen clinic or city, and link to that clinic's own study list for pay and dates. All of it uses data we may read. Section 4 gives the catch rate and its limits: about half to two-thirds of registered Trials in time. Unnamed sites are missed unless the Watch is by city.
 2. **Let the clinic tell the Member.** Clinics run their own email and text lists, and some have apps (Medpace offers text messages; Clinical Pharmacology of Miami has an app) [V]. The Member signs up with the clinic. GuineaPing only supplies the sign-up links.
 3. **Members share what they read.** A Member who sees a clinic listing enters the link, pay and dates for the group. A person read the page; the app stores what they typed. Shared entries must be the clinic's own words, not a summary.
 4. **Ask for permission.** Clinics pay for referrals (Altasciences LA advertises "up to $1,000 per referral") [V], so a group of willing volunteers is something they want. Known contacts: ptinfo@altasciences.com, study.baltimore@parexel.com, hello@myproscientostudy.com, info@studyscavenger.com [V]; the others have contact forms.
@@ -253,7 +254,7 @@ Ruled out: making a program look like a browser, running requests through Member
 
 **Step 3, reading clinic lists: last, and narrow.**
 - Candidates: the 8 operators in table A. Ask each for written permission first.
-- Not candidates: tables B, C and D.
+- Not candidates without written permission: tables B, C and D.
 - Honour crawl delays; read each list at most once a day. Sitemaps and Fortrea's RSS can show that something changed without re-reading every page.
 - Upkeep: one reader per site. A redesign silently breaks a reader, so each needs a check that it still finds listings. Expect one or two repairs a year [U, estimate].
 - Clinic listings would be a separate thing from Trials, since they cannot be joined, except at drug-company units. The glossary would need a term for them.
