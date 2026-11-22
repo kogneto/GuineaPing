@@ -54,7 +54,6 @@ export const CLINICS: Clinic[] = [
   c("trialmed-las-vegas", "Trialmed (PPD)", "Las Vegas, NV", 36.175, -115.1372, TRIALMED),
   c("medpace", "Medpace", "Cincinnati, OH", 39.1271, -84.5144, "https://www.medpace.com/study-participants/browse-studies/"),
   c("parexel-baltimore", "Parexel", "Baltimore, MD", 39.2904, -76.6122, "https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US"),
-  c("parexel-glendale", "Parexel", "Glendale, CA", 34.1425, -118.2551, "https://www.parexel.com/trials/locations/los-angeles/about-us"),
   c("syneos-miami", "Syneos Health", "Miami, FL", 25.7743, -80.1937, "https://www.us-participants.syneoshealth.com/en/avalaible-studies/"),
   c("dr-vince", "Dr. Vince Clinical Research", "Overland Park, KS", 38.9822, -94.6708, "https://drvince.com/current-studies/"),
   c("qps-miami", "QPS", "South Miami, FL", 25.7076, -80.2934, "https://miamiresearch.com/"),

@@ -1,6 +1,6 @@
 /** Small helpers for pulling a Clinic's own words out of its page. No DOM: Workers have none. */
 
-const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "–", mdash: "—", rsquo: "’", lsquo: "‘" };
+const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", pound: "£", euro: "€", ndash: "–", mdash: "—", rsquo: "’", lsquo: "‘" };
 
 /** The text a reader would see in this piece of HTML, on one line. */
 export function text(html: string): string {

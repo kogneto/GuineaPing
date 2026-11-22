@@ -110,6 +110,16 @@ describe("reading a Clinic's list", () => {
     expect(await readDueSource(env.DB, [source()], serving([opening("a")]), "2026-11-24T09:47:00.000Z", noWait)).toMatchObject({ status: "ok" });
   });
 
+  it("does not call an empty result a good read, even the first time", async () => {
+    expect(await readDueSource(env.DB, [source()], serving([]), DAY1, noWait)).toMatchObject({ status: "nothing found" });
+    expect(await env.DB.prepare("SELECT read_at FROM clinic_sources WHERE source = 'fortrea'").first()).toEqual({ read_at: null });
+  });
+
+  it("treats a challenge page as a no whatever status it comes with", async () => {
+    const challenge: Fetcher = async () => new Response("<html><head><title>Attention Required! | Cloudflare</title></head></html>", { status: 503 });
+    expect(await readDueSource(env.DB, [source()], challenge, DAY1, noWait)).toMatchObject({ status: "refused" });
+  });
+
   it("keeps yesterday's Openings when today's page yields nothing: the page has probably changed", async () => {
     await readDueSource(env.DB, [source()], serving([opening("a")]), DAY1, noWait);
     expect(await readDueSource(env.DB, [source()], serving([]), DAY2, noWait)).toMatchObject({ status: "nothing found" });

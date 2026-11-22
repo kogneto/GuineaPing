@@ -59,6 +59,10 @@ describe("Celerion", () => {
       url: "https://helpresearch.com/medical-study/ca52371-3a-0x0000000000007164",
     });
   });
+  it("leaves out a unit that is not one of the Clinics", () => {
+    const belfast = page("celerion.html").replace(/<div class="field-content">Lincoln<\/div>/, '<div class="field-content">Belfast</div>');
+    expect(celerion.parse([belfast])).toHaveLength(2);
+  });
   it("tells two groups of one study apart", () => {
     expect(new Set(found.map((f) => f.key)).size).toBe(3);
   });

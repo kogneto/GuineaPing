@@ -75,7 +75,8 @@ export async function readDueSource(db: D1Database, sources: Source[], get: Fetc
     } catch (err) {
       return finish({ source: due.id, status: "failed", found: 0, detail: String(err instanceof Error ? err.message : err).slice(0, 100) });
     }
-    const html = res.ok ? await res.text() : "";
+    // Read whatever came back: a challenge page can arrive with any status.
+    const html = await res.text().catch(() => "");
     if ([401, 403, 429].includes(res.status) || looksLikeChallenge(html)) {
       return finish({ source: due.id, status: "refused", found: 0, detail: `answered ${res.status}` });
     }
@@ -92,9 +93,9 @@ export async function readDueSource(db: D1Database, sources: Source[], get: Fetc
   } catch (err) {
     return finish({ source: due.id, status: "failed", found: 0, detail: `parser: ${String(err instanceof Error ? err.message : err).slice(0, 80)}` });
   }
-  const had = await db.prepare("SELECT COUNT(*) AS n FROM clinic_openings WHERE source = ? AND gone_at IS NULL").bind(due.id).first<{ n: number }>();
-  // A list that had entries yesterday and has none today has more likely been redesigned than emptied.
-  if (!found.length && had?.n) return finish({ source: due.id, status: "nothing found", found: 0 });
+  // Every list read had entries when its parser was written, so an empty result more likely means
+  // the page was redesigned than that the Clinic has nothing. Keep what there was and say so.
+  if (!found.length) return finish({ source: due.id, status: "nothing found", found: 0 });
 
   const upsert = db.prepare(
     `INSERT INTO clinic_openings (id, source, clinic_id, title, pay, when_text, stay, who, code, url, first_seen_at, last_seen_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)

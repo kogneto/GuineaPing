@@ -157,7 +157,7 @@ export type Device = { id: string; label: string; createdAt: string; lastSentAt:
 export type Opening = {
   id: string;
   title: string;
-  /** Each of these is the Clinic's wording, untouched; null when its list doesn't say. */
+  /** Each of these is the Clinic's wording, at most with a label such as "Age" put in front; null when its list doesn't say. */
   pay: string | null;
   when: string | null;
   stay: string | null;

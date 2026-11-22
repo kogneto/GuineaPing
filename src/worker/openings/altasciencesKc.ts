@@ -13,7 +13,8 @@ export const altasciencesKc: Source = {
       const title = between(item, /<h2 class="title">/, /<\/h2>/);
       if (!title || /recruitment complete/i.test(title)) continue;
       const url = link(item.slice(item.indexOf("</h2>")), PAGE) ?? PAGE;
-      const dates = [...item.matchAll(/<li class="item">([\s\S]*?)<\/li>/g)].map((m) => text(m[1] ?? "")).filter(Boolean);
+      const dateList = /<ul class="date-list[^"]*"[^>]*>([\s\S]*?)<\/ul>/.exec(item)?.[1] ?? "";
+      const dates = [...dateList.matchAll(/<li class="item">([\s\S]*?)<\/li>/g)].map((m) => text(m[1] ?? "")).filter(Boolean);
       const pay = between(item, /<span class="compensation">/, /<ul\b|<\/div>/);
       const age = between(item, /<span class="age">/, /<\/span>/);
       const sex = between(item, /<span class="gender\b[^"]*">/, /<\/span>/);
@@ -22,7 +23,7 @@ export const altasciencesKc: Source = {
         clinicId: "altasciences-kc",
         title,
         pay: pay && /\d/.test(pay) ? pay.replace(/\$\s+/, "$") : null,
-        when: dates.length ? dates.join("; ") : null,
+        when: dates.some((d) => /\d/.test(d)) ? dates.join("; ") : null,
         stay: between(item, /<span class="nbVisits">/, /<\/span>/),
         who: [sex, age ? `Age ${age}` : null].filter(Boolean).join(", ") || null,
         code: /\(([A-Z]\d+)\)/.exec(title)?.[1] ?? null,
