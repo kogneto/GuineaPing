@@ -16,7 +16,23 @@ export type Criteria = {
   phases: Phase[];
   /** Empty means any of STATUSES. */
   statuses: Status[];
+  /** Only Trials with a site within `miles` of a US ZIP code; null means anywhere. */
+  near: Near | null;
+  /** Only Trials open to someone of this age (years); null means any age. */
+  age: number | null;
+  /** Only Trials open to this sex; null means anyone. */
+  sex: Sex | null;
 };
+
+export const DISTANCES = [10, 25, 50, 100, 250] as const;
+export const SEXES = ["FEMALE", "MALE"] as const;
+export type Sex = (typeof SEXES)[number];
+
+/** A ZIP code and radius. lat/lon are filled in by the server from its ZIP table. */
+export type Near = { zip: string; miles: number; lat: number; lon: number };
+
+/** Criteria as the browser sends them: `near` without coordinates. */
+export type CriteriaInput = Omit<Criteria, "near"> & { near: { zip: string; miles: number } | null };
 
 /** A Trial as GuineaPing stores and shows it. */
 export type Trial = {
@@ -31,6 +47,8 @@ export type Trial = {
   minimumAge: string;
   maximumAge: string;
   locations: string[];
+  /** The site closest to the Watch's ZIP code, when the Watch has one. */
+  nearest?: { place: string; miles: number } | null;
   url: string;
 };
 

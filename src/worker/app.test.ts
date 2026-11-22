@@ -169,6 +169,19 @@ describe("failed Checks", () => {
   });
 });
 
+describe("Where", () => {
+  it("turns a ZIP code into a point, and refuses ZIP codes it doesn't know", async () => {
+    const mum = as(app, env, `zip${n}@x`);
+    const body = (zip: string) => watchBody(`zip${n}`, { criteria: { conditions: [`zip${n}`], terms: [], phases: [], statuses: [], near: { zip, miles: 25 } } });
+    const { status, json } = await mum<Watch>("/api/watches", "POST", body("02139"));
+    expect(status).toBe(201);
+    expect(json.criteria.near).toMatchObject({ zip: "02139", miles: 25, lat: expect.closeTo(42.36, 1), lon: expect.closeTo(-71.1, 1) });
+    const bad = await mum<{ error: string }>("/api/watches", "POST", body("00000"));
+    expect(bad.status).toBe(400);
+    expect(bad.json.error).toMatch(/doesn't know the ZIP code 00000/);
+  });
+});
+
 describe("Owners and Private watches", () => {
   it("lets only the Owner change or delete a Watch", async () => {
     const owner = as(app, env, `o${n}@x`);

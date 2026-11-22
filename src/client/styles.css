@@ -167,3 +167,11 @@ legend { font-weight: 600; padding: 0 0.3rem; }
 .devices li { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.8rem 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .device-name { font-weight: 600; }
 .device-actions { display: flex; gap: 0.5rem; }
+
+/* Watch editor: suggestions, where and who */
+.suggestions { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: -0.6rem; }
+button.chip { min-height: 36px; padding: 0.25rem 0.75rem; font-weight: 500; background: var(--accent-soft); color: var(--text); border-color: var(--line); border-radius: 999px; }
+.inline-fields { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; margin-top: 0.4rem; }
+.inline-fields label { font-weight: 500; }
+.form select { font: inherit; padding: 0.5rem 0.6rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); min-height: 44px; }
+.form input.short { width: 7.5rem; }
