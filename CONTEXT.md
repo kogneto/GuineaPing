@@ -21,11 +21,11 @@ _Avoid_: Subscription, endpoint, client
 ### Trials and Watches
 
 **Trial**:
-One study registered on ClinicalTrials.gov, identified by its NCT ID.
+One study registered on ClinicalTrials.gov, identified by its NCT ID. Each Trial is of one or more kinds: what it tests (a drug, a device, a supplement, a behavioural programme…), or observation only, where nothing is given to the people in it.
 _Avoid_: Study, listing, record
 
 **Watch**:
-A named set of search criteria (conditions, keywords, distance from a ZIP code, phases, statuses, age, sex, healthy volunteers) that Trials are matched against. Every Member can see and follow any Watch that is not a Private watch; only its Owner can change or delete it. Who follows a Watch is never shown.
+A named set of search criteria (conditions, keywords, distance from a ZIP code, kinds of study, phases, statuses, age, sex, healthy volunteers) that Trials are matched against. Every Member can see and follow any Watch that is not a Private watch; only its Owner can change or delete it. Who follows a Watch is never shown.
 _Avoid_: Search, filter, query, subscription, saved search
 
 **Private watch**:

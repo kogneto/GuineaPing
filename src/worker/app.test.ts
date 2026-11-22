@@ -15,6 +15,8 @@ let catalog: Record<string, unknown[]> = {};
 /** What the fake ClinicalTrials.gov says has changed, when asked about Trials by NCT ID. */
 let changed: { protocolSection: { identificationModule: { nctId: string } } }[] = [];
 let failing = false;
+/** The advanced filters the fake ClinicalTrials.gov was asked for, newest last. */
+let asked: string[] = [];
 
 beforeAll(async () => {
   ({ env, dispose } = await createWorkerEnv());
@@ -23,6 +25,7 @@ beforeAll(async () => {
     const params = new URL(String(input instanceof Request ? input.url : input)).searchParams;
     const ids = params.get("filter.ids")?.split(",");
     if (ids) return Response.json({ studies: changed.filter((s) => ids.includes(s.protocolSection.identificationModule.nctId)) });
+    asked.push(params.get("filter.advanced") ?? "");
     const cond = params.get("query.cond") ?? "";
     const studies = Object.entries(catalog)
       .filter(([c]) => cond.includes(`"${c}"`))
@@ -40,6 +43,7 @@ beforeEach(async () => {
   catalog = {};
   changed = [];
   failing = false;
+  asked = [];
   // Each test gets its own Members and Watches; the Check history is shared, so clear it.
   await env.DB.prepare("DELETE FROM checks").run();
   n++;
@@ -53,6 +57,30 @@ const watchBody = (condition: string, extra: object = {}) => ({
 });
 const check = () => runCheck(env.DB, fetchJson);
 const alertsOf = async (who: ReturnType<typeof as>) => (await who<AlertListItem[]>("/api/alerts")).json;
+
+describe("kind of study", () => {
+  it("lets a Watch ask for kinds of study, and shows each Trial's kind on its Alert", async () => {
+    const vol = as(app, env, `kind${n}@x`);
+    const cond = `kind${n}`;
+    const refused = await vol<{ error: string }>("/api/watches", "POST", watchBody(cond, { criteria: { conditions: [cond], kinds: ["PILL"] } }));
+    expect(refused.status).toBe(400);
+    expect(refused.json.error).toBe("Unknown kind of study PILL");
+
+    const made = await vol<Watch>("/api/watches", "POST", watchBody(cond, { criteria: { conditions: [cond], kinds: ["OBSERVATIONAL", "DRUG"] } }));
+    expect(made.status).toBe(201);
+    expect(made.json.criteria.kinds).toEqual(["OBSERVATIONAL", "DRUG"]);
+    expect((await vol<Watch>(`/api/watches/${made.json.id}`)).json.criteria.kinds).toEqual(["OBSERVATIONAL", "DRUG"]);
+
+    const drugStudy = study("NCT80000001");
+    Object.assign(drugStudy.protocolSection, { designModule: { phases: ["PHASE1"], studyType: "INTERVENTIONAL" }, armsInterventionsModule: { interventions: [{ type: "DRUG" }] } });
+    catalog[cond] = [drugStudy];
+    asked = [];
+    await check();
+    expect(asked.some((f) => f.includes("AREA[StudyType]OBSERVATIONAL OR (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG))"))).toBe(true);
+    const [alert] = (await alertsOf(vol)) as AlertItem[];
+    expect(alert?.trial.kinds).toEqual(["DRUG"]);
+  });
+});
 
 describe("sign-in", () => {
   it("turns away anyone Cloudflare Access did not let in", async () => {

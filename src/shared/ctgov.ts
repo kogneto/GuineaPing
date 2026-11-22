@@ -3,7 +3,7 @@
  * Criteria into a query, and a study record into a Trial. Every query form used here was checked
  * against the live API on 2026-11-22.
  */
-import { DISTANCES, PHASES, SEXES, STATUSES, type Criteria, type CriteriaInput, type Near, type Phase, type Sex, type Status, type Trial } from "./api";
+import { DISTANCES, KINDS, PHASES, SEXES, STATUSES, type Criteria, type CriteriaInput, type Kind, type Near, type Phase, type Sex, type Status, type Trial } from "./api";
 
 export const API_URL = "https://clinicaltrials.gov/api/v2/studies";
 const STUDY_URL = "https://clinicaltrials.gov/study/";
@@ -16,6 +16,8 @@ const FIELDS = [
   "StudyFirstPostDate",
   "OverallStatus",
   "Phase",
+  "StudyType",
+  "InterventionType",
   "Condition",
   "LeadSponsorName",
   "MinimumAge",
@@ -53,7 +55,7 @@ function anyOf(terms: string[]): string | null {
 
 /** Fills in fields added after a Watch was saved, so older Watches keep working. */
 export function withDefaults(c: Partial<Criteria>): Criteria {
-  return { conditions: [], terms: [], phases: [], statuses: [], near: null, age: null, sex: null, healthy: false, ...c };
+  return { conditions: [], terms: [], phases: [], statuses: [], kinds: [], near: null, age: null, sex: null, healthy: false, ...c };
 }
 
 /**
@@ -68,10 +70,14 @@ export function normalizeCriteria(input: unknown): CriteriaInput | { error: stri
   const terms = strings(raw.terms);
   const phases = strings(raw.phases);
   const statuses = strings(raw.statuses);
+  const kinds = strings(raw.kinds);
   const badPhase = phases.find((p) => !(PHASES as readonly string[]).includes(p));
   if (badPhase) return { error: `Unknown phase ${badPhase}` };
   const badStatus = statuses.find((s) => !(STATUSES as readonly string[]).includes(s));
   if (badStatus) return { error: `Unknown status ${badStatus}` };
+  // An unknown kind would make ClinicalTrials.gov refuse the whole query, so the Watch would never find anything.
+  const badKind = kinds.find((k) => !(KINDS as readonly string[]).includes(k));
+  if (badKind) return { error: `Unknown kind of study ${badKind}` };
 
   let near: CriteriaInput["near"] = null;
   if (raw.near != null) {
@@ -96,7 +102,7 @@ export function normalizeCriteria(input: unknown): CriteriaInput | { error: stri
   // what a volunteer with no condition wants. Healthy volunteers anywhere would be every such Trial.
   const hasWords = conditions.some(quoteTerm) || terms.some(quoteTerm);
   if (!hasWords && !(healthy && near)) return { error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" };
-  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], near, age, sex, healthy };
+  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], kinds: kinds as Kind[], near, age, sex, healthy };
 }
 
 /**
@@ -116,10 +122,34 @@ function eligibilityFilters(c: Criteria): string[] {
   return out;
 }
 
+/**
+ * The kinds of study asked for, as one filter, or null for any kind. Checked against the live API
+ * on 2026-11-22 (healthy-volunteer Trials still open to joining):
+ * - `AREA[StudyType]OBSERVATIONAL` and `AREA[InterventionType](DRUG OR DEVICE)` both work, the
+ *   latter matching a Trial with any of the types (2,928 drug + 2,057 device − 115 both = 4,870).
+ * - Observational listings can name intervention types too (NCT05044689 is observational with a
+ *   "device"), so the types only count for interventional studies. That keeps the filter in step
+ *   with `kindsOf`, which calls every observational study just that.
+ * - "Observation only or a drug" is
+ *   `(AREA[StudyType]OBSERVATIONAL OR (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG)))`:
+ *   6,324 + 2,928 = 9,252, as the two never overlap.
+ * - A value the API doesn't know gets a 400 for the whole query, hence the check in normalizeCriteria.
+ */
+function kindFilter(kinds: Kind[]): string | null {
+  const types = kinds.filter((k) => k !== "OBSERVATIONAL");
+  const parts: string[] = [];
+  if (kinds.includes("OBSERVATIONAL")) parts.push("AREA[StudyType]OBSERVATIONAL");
+  if (types.length) parts.push(`(AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](${types.join(" OR ")}))`);
+  if (!parts.length) return null;
+  return parts.length > 1 ? `(${parts.join(" OR ")})` : parts[0]!;
+}
+
 /** Query parameters for Trials matching `criteria` first posted on or after `since` (YYYY-MM-DD). */
 export function buildParams(criteria: Criteria, since: string): Record<string, string> {
   const advanced = [`AREA[StudyFirstPostDate]RANGE[${since},MAX]`];
   if (criteria.phases.length) advanced.push(`AREA[Phase](${criteria.phases.join(" OR ")})`);
+  const kinds = kindFilter(criteria.kinds);
+  if (kinds) advanced.push(kinds);
   advanced.push(...eligibilityFilters(criteria));
   const params: Record<string, string> = {
     format: "json",
@@ -192,7 +222,8 @@ type Study = {
     identificationModule?: { nctId?: string; briefTitle?: string };
     descriptionModule?: { briefSummary?: string };
     statusModule?: { overallStatus?: string; studyFirstPostDateStruct?: { date?: string } };
-    designModule?: { phases?: string[] };
+    designModule?: { phases?: string[]; studyType?: string };
+    armsInterventionsModule?: { interventions?: { type?: string }[] };
     conditionsModule?: { conditions?: string[] };
     sponsorCollaboratorsModule?: { leadSponsor?: { name?: string } };
     eligibilityModule?: { minimumAge?: string; maximumAge?: string; sex?: string; healthyVolunteers?: boolean; eligibilityCriteria?: string };
@@ -215,6 +246,17 @@ export function milesBetween(a: { lat: number; lon: number }, b: { lat: number; 
   return 3958.8 * 2 * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/**
+ * What kind of study a listing is: ["OBSERVATIONAL"] when nothing is given to the people in it,
+ * otherwise each intervention type once, in the listing's order. Empty when the listing names none.
+ */
+export function kindsOf(raw: unknown): string[] {
+  const ps = (raw as Study).protocolSection ?? {};
+  if (ps.designModule?.studyType === "OBSERVATIONAL") return ["OBSERVATIONAL"];
+  const types = (ps.armsInterventionsModule?.interventions ?? []).map((i) => i.type).filter((t): t is string => !!t);
+  return [...new Set(types)];
+}
+
 export function toTrial(raw: unknown, near?: Near | null): Trial | null {
   const ps = (raw as Study).protocolSection ?? {};
   const nctId = ps.identificationModule?.nctId ?? "";
@@ -230,6 +272,7 @@ export function toTrial(raw: unknown, near?: Near | null): Trial | null {
       if (!nearest || miles < nearest.miles) nearest = { place: [loc.city, loc.state].filter(Boolean).join(", ") || place, miles };
     }
   }
+  const kinds = kindsOf(raw);
   return {
     nctId,
     title: ps.identificationModule?.briefTitle ?? nctId,
@@ -237,6 +280,7 @@ export function toTrial(raw: unknown, near?: Near | null): Trial | null {
     firstPosted: ps.statusModule?.studyFirstPostDateStruct?.date ?? "",
     status: ps.statusModule?.overallStatus ?? "",
     phases: ps.designModule?.phases ?? [],
+    ...(kinds.length ? { kinds } : {}),
     conditions: ps.conditionsModule?.conditions ?? [],
     sponsor: ps.sponsorCollaboratorsModule?.leadSponsor?.name ?? "",
     minimumAge: ps.eligibilityModule?.minimumAge ?? "",

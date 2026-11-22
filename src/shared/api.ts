@@ -7,6 +7,15 @@ export type Phase = (typeof PHASES)[number];
 export const STATUSES = ["RECRUITING", "NOT_YET_RECRUITING", "ENROLLING_BY_INVITATION"] as const;
 export type Status = (typeof STATUSES)[number];
 
+/**
+ * The kinds of study a Watch may ask for: what is tested, as ClinicalTrials.gov's intervention
+ * types name it, or OBSERVATIONAL for a study that gives nothing and only watches. A Trial can
+ * also be RADIATION, GENETIC, COMBINATION_PRODUCT or OTHER; those are shown but not offered,
+ * as too few healthy-volunteer Trials are of those kinds to be worth a choice.
+ */
+export const KINDS = ["DRUG", "BIOLOGICAL", "DEVICE", "DIETARY_SUPPLEMENT", "BEHAVIORAL", "PROCEDURE", "DIAGNOSTIC_TEST", "OBSERVATIONAL"] as const;
+export type Kind = (typeof KINDS)[number];
+
 export type Criteria = {
   /** Diseases or conditions, OR'ed. */
   conditions: string[];
@@ -16,6 +25,8 @@ export type Criteria = {
   phases: Phase[];
   /** Empty means any of STATUSES. */
   statuses: Status[];
+  /** Empty means any kind of study; several are OR'ed. */
+  kinds: Kind[];
   /** Only Trials with a site within `miles` of a US ZIP code; null means anywhere. */
   near: Near | null;
   /** Only Trials open to someone of this age (years); null means any age. */
@@ -44,6 +55,11 @@ export type Trial = {
   firstPosted: string;
   status: string;
   phases: string[];
+  /**
+   * What kind of study it is: the distinct intervention types (DRUG, DEVICE, …), or just
+   * ["OBSERVATIONAL"]. Absent on Alerts made before this was kept, and when the listing names none.
+   */
+  kinds?: string[];
   conditions: string[];
   sponsor: string;
   minimumAge: string;
