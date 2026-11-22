@@ -37,7 +37,7 @@ A Member's choice to receive Alerts for a Watch, starting from the moment they f
 _Avoid_: Subscribe, join, watch (as a verb)
 
 **Check**:
-One hourly look at ClinicalTrials.gov for Trials first posted since the last successful Check. A failed Check leaves no gap: the next successful one covers it.
+One hourly look at ClinicalTrials.gov, Watch by Watch, for Trials first posted since each Watch was last checked successfully. A Watch that can't be checked leaves no gap: it catches up the next time it can, without holding back the others. A Check fails only when no Watch could be checked.
 _Avoid_: Poll, run, sync, scan
 
 **New trial**:
@@ -55,7 +55,7 @@ One notice to one Member about one New trial, naming every Watch they follow tha
 _Avoid_: Ping, notification, message
 
 **Push**:
-What appears on a Member's Devices when Alerts are created. A Push carries a single Alert, or, when one check produces more than three Alerts for a Member, one Push summarises them all and opens the Alert list.
+What appears on a Member's Devices when Alerts are created. A Push carries a single Alert, or, when a Member has more than three Alerts waiting, one Push summarises them all and opens the Alert list. A Push that reaches none of a Member's Devices is tried again with each Check for a day.
 _Avoid_: Notification, ping, Alert (an Alert is the record; a Push is how it is announced)
 
 **Alert list**:

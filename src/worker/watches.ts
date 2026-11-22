@@ -4,6 +4,7 @@
  */
 import type { Criteria, Me, Trial, Watch, WatchInput } from "../shared/api";
 import { withDefaults } from "../shared/ctgov";
+import { isFailing } from "./check";
 
 type WatchRow = {
   id: string;
@@ -12,11 +13,12 @@ type WatchRow = {
   criteria: string;
   private: number;
   following: number;
+  failing_since: string | null;
 };
 
 const VISIBLE = "w.deleted_at IS NULL AND (w.private = 0 OR w.owner_id = ?1)";
 const SELECT_WATCH = `
-  SELECT w.id, w.owner_id, w.name, w.criteria, w.private,
+  SELECT w.id, w.owner_id, w.name, w.criteria, w.private, w.failing_since,
          EXISTS (SELECT 1 FROM follows f WHERE f.watch_id = w.id AND f.member_id = ?1 AND f.ended_at IS NULL) AS following
   FROM watches w`;
 
@@ -28,6 +30,7 @@ function toWatch(row: WatchRow, me: Me): Watch {
     private: row.private === 1,
     isOwner: row.owner_id === me.memberId,
     following: row.following === 1,
+    failing: isFailing(row.failing_since),
   };
 }
 

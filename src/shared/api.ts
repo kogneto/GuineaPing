@@ -61,6 +61,8 @@ export type Watch = {
   private: boolean;
   isOwner: boolean;
   following: boolean;
+  /** ClinicalTrials.gov hasn't answered for this Watch in over a day, so it may be missing Trials. */
+  failing: boolean;
 };
 
 export type WatchInput = { name: string; criteria: Criteria; private: boolean };

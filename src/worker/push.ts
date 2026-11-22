@@ -43,17 +43,25 @@ export function messagesFor(alerts: NewAlert[]): PushMessage[] {
 
 type DeviceRow = { id: string; member_id: string; endpoint: string; p256dh: string; auth: string };
 
-/** Sends one Member's messages to all their Devices; forgets Devices the push service says are gone. */
+/**
+ * Sends one Member's messages to all their Devices; forgets Devices the push service says are gone.
+ * `settled` is false only when the Member has Devices and none of them got anything: worth retrying.
+ */
 async function deliver(db: D1Database, vapid: Vapid, devices: DeviceRow[], messages: PushMessage[], post: typeof fetch) {
   const jobs = devices.flatMap((d) => messages.map((m) => ({ d, m })));
-  const outcomes = await Promise.allSettled(jobs.map(({ d, m }) => sendPush(d as Subscription & DeviceRow, m, vapid, post)));
+  const outcomes = await Promise.all(
+    jobs.map(({ d, m }) =>
+      sendPush(d as Subscription & DeviceRow, m, vapid, post).catch((err): PushOutcome => {
+        console.error("Push failed:", err);
+        return "failed";
+      }),
+    ),
+  );
   const gone = new Set<string>();
   const sent = new Set<string>();
   outcomes.forEach((o, i) => {
-    const id = jobs[i]!.d.id;
-    if (o.status === "fulfilled" && o.value === "gone") gone.add(id);
-    else if (o.status === "fulfilled" && o.value === "sent") sent.add(id);
-    else if (o.status === "rejected") console.error("Push failed:", o.reason);
+    if (o === "gone") gone.add(jobs[i]!.d.id);
+    else if (o === "sent") sent.add(jobs[i]!.d.id);
   });
   const now = new Date().toISOString();
   const statements = [
@@ -61,28 +69,52 @@ async function deliver(db: D1Database, vapid: Vapid, devices: DeviceRow[], messa
     ...[...sent].filter((id) => !gone.has(id)).map((id) => db.prepare("UPDATE devices SET last_sent_at = ? WHERE id = ?").bind(now, id)),
   ];
   if (statements.length) await db.batch(statements);
-  return { sent: outcomes.filter((o) => o.status === "fulfilled" && o.value === "sent").length, gone: gone.size };
+  return { sent: outcomes.filter((o) => o === "sent").length, gone: gone.size, settled: sent.size > 0 || !outcomes.includes("failed") };
 }
 
-/** Announces a Check's new Alerts: per Member, one Push per Alert, or one summary if there are many. */
-export async function pushNewAlerts(db: D1Database, vapid: Vapid, alerts: NewAlert[], post: typeof fetch = fetch) {
+/** How long an Alert no Device has received keeps being retried. After that it lives in the Alert list only. */
+const RETRY_MS = 24 * 60 * 60 * 1000;
+
+type PendingRow = { id: string; member_id: string; trial: string; watch_names: string; via_private: number };
+
+/**
+ * Announces every Alert not yet pushed: per Member, one Push per Alert, or one summary if there
+ * are many. An Alert is settled once any of the Member's Devices got it, or they have no Device
+ * to send to; otherwise the next Check tries again, for up to a day.
+ */
+export async function pushPendingAlerts(db: D1Database, vapid: Vapid, post: typeof fetch = fetch, now = Date.now()) {
+  const { results: pending } = await db
+    .prepare("SELECT id, member_id, trial, watch_names, via_private FROM alerts WHERE pushed_at IS NULL AND created_at > ? ORDER BY created_at")
+    .bind(new Date(now - RETRY_MS).toISOString())
+    .all<PendingRow>();
   const byMember = new Map<string, NewAlert[]>();
-  for (const a of alerts) byMember.set(a.memberId, [...(byMember.get(a.memberId) ?? []), a]);
+  for (const r of pending) {
+    const alert: NewAlert = { id: r.id, memberId: r.member_id, trial: JSON.parse(r.trial) as Trial, watchNames: JSON.parse(r.watch_names) as string[], viaPrivateWatch: r.via_private === 1 };
+    byMember.set(r.member_id, [...(byMember.get(r.member_id) ?? []), alert]);
+  }
   if (!byMember.size) return { sent: 0, gone: 0 };
   const { results: devices } = await db
     .prepare("SELECT id, member_id, endpoint, p256dh, auth FROM devices WHERE member_id IN (SELECT value FROM json_each(?))")
     .bind(JSON.stringify([...byMember.keys()]))
     .all<DeviceRow>();
   const totals = { sent: 0, gone: 0 };
+  const settled: string[] = [];
   await Promise.all(
     [...byMember].map(async ([memberId, list]) => {
       const mine = devices.filter((d) => d.member_id === memberId);
-      if (!mine.length) return;
-      const r = await deliver(db, vapid, mine, messagesFor(list), post);
+      // No Device: the Alert list is how this Member hears. Pushes aren't saved up for a later Device.
+      const r = mine.length ? await deliver(db, vapid, mine, messagesFor(list), post) : { sent: 0, gone: 0, settled: true };
       totals.sent += r.sent;
       totals.gone += r.gone;
+      if (r.settled) settled.push(...list.map((a) => a.id));
     }),
   );
+  if (settled.length) {
+    await db
+      .prepare("UPDATE alerts SET pushed_at = ?1 WHERE id IN (SELECT value FROM json_each(?2))")
+      .bind(new Date(now).toISOString(), JSON.stringify(settled))
+      .run();
+  }
   return totals;
 }
 
