@@ -7,6 +7,10 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/art/icons/app-icon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/art/icons/app-icon-180.png" />
     <meta name="theme-color" content="#2a6a62" />
+    <!-- use-credentials: behind Cloudflare Access, the manifest fetch needs the sign-in cookie. -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="GuineaPing" />
   </head>
   <body>
     <div id="root"></div>

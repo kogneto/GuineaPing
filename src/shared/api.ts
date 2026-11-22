@@ -69,3 +69,6 @@ export type AlertListItem = AlertItem | NoteItem;
 
 /** When the last successful Check finished; `stale` once Checks have been failing for over a day. */
 export type CheckStatus = { lastCheckedAt: string | null; stale: boolean };
+
+/** A Device as its Member sees it. Push endpoints and keys stay on the server. */
+export type Device = { id: string; label: string; createdAt: string; lastSentAt: string | null; thisDevice: boolean };
