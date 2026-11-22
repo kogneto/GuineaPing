@@ -152,3 +152,35 @@ export type CheckStatus = { lastCheckedAt: string | null; stale: boolean };
 
 /** A Device as its Member sees it. Push endpoints and keys stay on the server. */
 export type Device = { id: string; label: string; createdAt: string; lastSentAt: string | null; thisDevice: boolean };
+
+/** One entry on a Clinic's own list of studies, in the Clinic's own words. Not a Trial. */
+export type Opening = {
+  id: string;
+  title: string;
+  /** Each of these is the Clinic's wording, at most with a label such as "Age" put in front; null when its list doesn't say. */
+  pay: string | null;
+  when: string | null;
+  stay: string | null;
+  who: string | null;
+  code: string | null;
+  /** The entry's own page on the Clinic's site, or the Clinic's list when entries have no page. */
+  url: string;
+  /** The day GuineaPing first saw it (YYYY-MM-DD). */
+  firstSeen: string;
+};
+
+export type ClinicItem = {
+  id: string;
+  name: string;
+  place: string;
+  url: string;
+  /** Miles from the Member's Profile ZIP code; null when they have given none. */
+  miles: number | null;
+  /** False for a Clinic whose site GuineaPing never visits: the Member reads it themselves. */
+  read: boolean;
+  /** When this Clinic's list was last read successfully; null if never, or if it isn't read. */
+  lastReadAt: string | null;
+  /** True when the Clinic's site has refused GuineaPing, so reading has stopped. */
+  refused: boolean;
+  openings: Opening[];
+};
