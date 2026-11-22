@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { AlertListItem, Watch } from "../shared/api";
+import type { AlertItem, AlertListItem, Watch } from "../shared/api";
 import { as, createWorkerEnv, study } from "../test/worker-env";
 import { app } from "./app";
 import { checkStatus, runCheck } from "./check";
@@ -271,5 +271,60 @@ describe("Owners and Private watches", () => {
     catalog[cond]!.push(study("NCT60000002"));
     await check();
     expect((await alertsOf(fan)).filter((i) => i.kind === "alert")).toHaveLength(1);
+  });
+});
+
+describe("sorting and sending Alerts", () => {
+  const withAlert = async (who: ReturnType<typeof as>, cond: string, nct: string, extra: object = {}) => {
+    await who("/api/watches", "POST", watchBody(cond, extra));
+    catalog[cond] = [study(nct, `Trial for ${cond}`)];
+    await check();
+    return (await alertsOf(who)).find((a) => a.kind === "alert" && a.trial.nctId === nct) as AlertItem;
+  };
+
+  it("lets a Member mark an Alert and keep a private note on it", async () => {
+    const mum = as(app, env, `sort${n}@x`);
+    const alert = await withAlert(mum, `sort${n}`, "NCT90000001");
+    expect(alert).toMatchObject({ mark: null, note: "", sentBy: null });
+    const marked = await mum<AlertItem>(`/api/alerts/${alert.id}`, "PUT", { mark: "interested", note: "  Ask Dr Lee  " });
+    expect(marked.json).toMatchObject({ mark: "interested", note: "Ask Dr Lee" });
+    expect((await mum<AlertItem>(`/api/alerts/${alert.id}`, "PUT", { mark: null })).json).toMatchObject({ mark: null, note: "Ask Dr Lee" });
+    expect((await mum(`/api/alerts/${alert.id}`, "PUT", { mark: "maybe" })).status).toBe(400);
+    expect((await as(app, env, `nosy${n}@x`)(`/api/alerts/${alert.id}`, "PUT", { note: "hi" })).status).toBe(404);
+  });
+
+  it("sends an Alert to another Member as an Alert of their own, without the sender's mark or note", async () => {
+    const mum = as(app, env, `from${n}@x`);
+    const dad = as(app, env, `to${n}@x`);
+    await dad("/api/me");
+    const alert = await withAlert(mum, `send${n}`, "NCT90000002", { private: true });
+    await mum(`/api/alerts/${alert.id}`, "PUT", { mark: "interested", note: "private thought" });
+    expect((await mum(`/api/alerts/${alert.id}/send`, "POST", { email: ` TO${n}@X ` })).status).toBe(200);
+    const [got] = (await alertsOf(dad)) as AlertItem[];
+    expect(got).toMatchObject({ kind: "alert", trial: { nctId: "NCT90000002" }, watchNames: [], sentBy: `from${n}@x`, mark: null, note: "", read: false, viaPrivateWatch: false });
+    expect(JSON.stringify(await alertsOf(dad))).not.toMatch(/private thought|send\d+ watch/);
+  });
+
+  it("tells the sender the same thing when the other Member already has the Trial, and leaves them a note", async () => {
+    const mum = as(app, env, `a${n}@x`);
+    const dad = as(app, env, `b${n}@x`);
+    const cond = `both${n}`;
+    const { json: watch } = await mum<Watch>("/api/watches", "POST", watchBody(cond));
+    await dad(`/api/watches/${watch.id}/follow`, "POST");
+    catalog[cond] = [study("NCT90000003", "Shared already")];
+    await check();
+    const [alert] = await alertsOf(mum);
+    expect((await mum<{ ok: boolean }>(`/api/alerts/${alert!.id}/send`, "POST", { email: `b${n}@x` })).json).toEqual({ ok: true });
+    const items = await alertsOf(dad);
+    expect(items.filter((i) => i.kind === "alert")).toHaveLength(1);
+    expect(items.find((i) => i.kind === "note")).toMatchObject({ message: `a${n}@x sent you “Shared already”. It's already in your Alerts.` });
+  });
+
+  it("refuses to send to someone who isn't a Member, to yourself, or an Alert that isn't yours", async () => {
+    const mum = as(app, env, `me${n}@x`);
+    const alert = await withAlert(mum, `mine${n}`, "NCT90000004");
+    expect((await mum(`/api/alerts/${alert.id}/send`, "POST", { email: "stranger@nowhere.example" })).status).toBe(404);
+    expect((await mum(`/api/alerts/${alert.id}/send`, "POST", { email: `me${n}@x` })).status).toBe(400);
+    expect((await as(app, env, `thief${n}@x`)(`/api/alerts/${alert.id}/send`, "POST", { email: `me${n}@x` })).status).toBe(404);
   });
 });

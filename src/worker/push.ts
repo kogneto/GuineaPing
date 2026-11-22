@@ -11,7 +11,7 @@ import { b64url, sendPush, type PushMessage, type PushOutcome, type Subscription
 export const MAX_SEPARATE_PUSHES = 3;
 
 /** An Alert a Check just created, with what its Push needs to say. */
-export type NewAlert = { id: string; memberId: string; trial: Trial; watchNames: string[]; viaPrivateWatch: boolean };
+export type NewAlert = { id: string; memberId: string; trial: Trial; watchNames: string[]; viaPrivateWatch: boolean; sentBy?: string | null };
 
 export function vapidFrom(env: Env): Vapid | null {
   const e = env as Env & Partial<Record<"VAPID_PUBLIC_KEY" | "VAPID_PRIVATE_KEY" | "VAPID_SUBJECT", string>>;
@@ -27,17 +27,19 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…`
  */
 export function messagesFor(alerts: NewAlert[]): PushMessage[] {
   if (alerts.length > MAX_SEPARATE_PUSHES) {
-    return [{ title: `${alerts.length} new trials match your Watches`, body: "Open GuineaPing to see them all.", url: "/", tag: "summary" }];
+    return [{ title: `${alerts.length} new trials for you`, body: "Open GuineaPing to see them all.", url: "/", tag: "summary" }];
   }
   return alerts.map((a) =>
     a.viaPrivateWatch
       ? { title: "New trial for your private Watch", body: "Open GuineaPing to see it.", url: `/alerts/${a.id}`, tag: a.id }
-      : {
-          title: clip(`New trial: ${a.trial.title}`, 120),
-          body: clip([keyFacts(a.trial).join(" · "), `Watch: ${a.watchNames.join(", ")}`].filter(Boolean).join("\n"), 240),
-          url: `/alerts/${a.id}`,
-          tag: a.id,
-        },
+      : a.sentBy
+        ? { title: clip(`${a.sentBy} sent you a trial`, 120), body: clip(a.trial.title, 240), url: `/alerts/${a.id}`, tag: a.id }
+        : {
+            title: clip(`New trial: ${a.trial.title}`, 120),
+            body: clip([keyFacts(a.trial).join(" · "), `Watch: ${a.watchNames.join(", ")}`].filter(Boolean).join("\n"), 240),
+            url: `/alerts/${a.id}`,
+            tag: a.id,
+          },
   );
 }
 
@@ -75,7 +77,7 @@ async function deliver(db: D1Database, vapid: Vapid, devices: DeviceRow[], messa
 /** How long an Alert no Device has received keeps being retried. After that it lives in the Alert list only. */
 const RETRY_MS = 24 * 60 * 60 * 1000;
 
-type PendingRow = { id: string; member_id: string; trial: string; watch_names: string; via_private: number };
+type PendingRow = { id: string; member_id: string; trial: string; watch_names: string; via_private: number; sent_by: string | null };
 
 /**
  * Announces every Alert not yet pushed: per Member, one Push per Alert, or one summary if there
@@ -84,12 +86,12 @@ type PendingRow = { id: string; member_id: string; trial: string; watch_names: s
  */
 export async function pushPendingAlerts(db: D1Database, vapid: Vapid, post: typeof fetch = fetch, now = Date.now()) {
   const { results: pending } = await db
-    .prepare("SELECT id, member_id, trial, watch_names, via_private FROM alerts WHERE pushed_at IS NULL AND created_at > ? ORDER BY created_at")
+    .prepare("SELECT id, member_id, trial, watch_names, via_private, sent_by FROM alerts WHERE pushed_at IS NULL AND created_at > ? ORDER BY created_at")
     .bind(new Date(now - RETRY_MS).toISOString())
     .all<PendingRow>();
   const byMember = new Map<string, NewAlert[]>();
   for (const r of pending) {
-    const alert: NewAlert = { id: r.id, memberId: r.member_id, trial: JSON.parse(r.trial) as Trial, watchNames: JSON.parse(r.watch_names) as string[], viaPrivateWatch: r.via_private === 1 };
+    const alert: NewAlert = { id: r.id, memberId: r.member_id, trial: JSON.parse(r.trial) as Trial, watchNames: JSON.parse(r.watch_names) as string[], viaPrivateWatch: r.via_private === 1, sentBy: r.sent_by };
     byMember.set(r.member_id, [...(byMember.get(r.member_id) ?? []), alert]);
   }
   if (!byMember.size) return { sent: 0, gone: 0 };

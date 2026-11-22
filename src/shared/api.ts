@@ -78,13 +78,26 @@ export type Watch = {
 
 export type WatchInput = { name: string; criteria: Criteria; private: boolean };
 
+export const MARKS = ["interested", "not_for_me"] as const;
+/** How a Member has sorted an Alert. Only they see it. */
+export type Mark = (typeof MARKS)[number];
+export const MAX_NOTE_CHARS = 1000;
+
 export type AlertItem = {
   kind: "alert";
   id: string;
   trial: Trial;
+  /** The Member's Watches that found the Trial; empty when another Member sent it. */
   watchNames: string[];
   createdAt: string;
   read: boolean;
+  mark: Mark | null;
+  /** The Member's own private note on this Trial. */
+  note: string;
+  /** The email of the Member who sent this Alert, when a Watch didn't find it. */
+  sentBy: string | null;
+  /** Found through a Private watch of this Member's. Sending it on shares the Trial, not the Watch. */
+  viaPrivateWatch: boolean;
 };
 
 /** A one-time message in the Alert list, e.g. that a followed Watch is gone. */
