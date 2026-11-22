@@ -74,7 +74,9 @@ export function AlertsPage() {
                 </span>
                 <span className="facts">{keyFacts(item.trial).join(" · ")}</span>
                 <span className="meta">
-                  {item.sentBy ? `Sent by ${item.sentBy}` : item.watchNames.join(", ")} · {ago(item.createdAt)}
+                  {item.update
+                    ? `Updated ${ago(item.update.at)}: ${item.update.changes.join(" · ")}`
+                    : `${item.sentBy ? `Sent by ${item.sentBy}` : item.watchNames.join(", ")} · ${ago(item.createdAt)}`}
                 </span>
               </Link>
             </li>

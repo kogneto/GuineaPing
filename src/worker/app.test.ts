@@ -3,6 +3,7 @@ import type { AlertItem, AlertListItem, Watch } from "../shared/api";
 import { as, createWorkerEnv, study } from "../test/worker-env";
 import { app } from "./app";
 import { checkStatus, runCheck } from "./check";
+import { runUpdates } from "./updates";
 import { fetchJson } from "../shared/ctgov";
 
 let env: Env;
@@ -10,13 +11,18 @@ let dispose: () => Promise<void>;
 
 /** What the fake ClinicalTrials.gov returns, by condition. A thrown value makes it fail. */
 let catalog: Record<string, unknown[]> = {};
+/** What the fake ClinicalTrials.gov says has changed, when asked about Trials by NCT ID. */
+let changed: { protocolSection: { identificationModule: { nctId: string } } }[] = [];
 let failing = false;
 
 beforeAll(async () => {
   ({ env, dispose } = await createWorkerEnv());
   vi.stubGlobal("fetch", async (input: string | URL | Request) => {
     if (failing) return new Response("down", { status: 503 });
-    const cond = new URL(String(input instanceof Request ? input.url : input)).searchParams.get("query.cond") ?? "";
+    const params = new URL(String(input instanceof Request ? input.url : input)).searchParams;
+    const ids = params.get("filter.ids")?.split(",");
+    if (ids) return Response.json({ studies: changed.filter((s) => ids.includes(s.protocolSection.identificationModule.nctId)) });
+    const cond = params.get("query.cond") ?? "";
     const studies = Object.entries(catalog)
       .filter(([c]) => cond.includes(`"${c}"`))
       .flatMap(([, s]) => s);
@@ -31,6 +37,7 @@ afterAll(async () => {
 let n = 0;
 beforeEach(async () => {
   catalog = {};
+  changed = [];
   failing = false;
   // Each test gets its own Members and Watches; the Check history is shared, so clear it.
   await env.DB.prepare("DELETE FROM checks").run();
@@ -326,5 +333,69 @@ describe("sorting and sending Alerts", () => {
     expect((await mum(`/api/alerts/${alert.id}/send`, "POST", { email: "stranger@nowhere.example" })).status).toBe(404);
     expect((await mum(`/api/alerts/${alert.id}/send`, "POST", { email: `me${n}@x` })).status).toBe(400);
     expect((await as(app, env, `thief${n}@x`)(`/api/alerts/${alert.id}/send`, "POST", { email: `me${n}@x` })).status).toBe(404);
+  });
+});
+
+describe("Updates", () => {
+  const raw = (nctId: string, status: string, sites: { city: string; lat: number; lon: number }[] = []) => ({
+    protocolSection: {
+      identificationModule: { nctId, briefTitle: `Trial ${nctId}` },
+      statusModule: { overallStatus: status, studyFirstPostDateStruct: { date: "2026-11-20" } },
+      contactsLocationsModule: { locations: sites.map((s) => ({ city: s.city, state: "Massachusetts", country: "United States", geoPoint: { lat: s.lat, lon: s.lon } })) },
+    },
+  });
+  const boston = { city: "Boston", lat: 42.3584, lon: -71.0598 };
+  const update = () => runUpdates(env.DB, fetchJson);
+
+  it("turns an Alert unread and says so when its Trial starts recruiting, once", async () => {
+    const mum = as(app, env, `upd${n}@x`);
+    const cond = `upd${n}`;
+    await mum("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [raw("NCT91000001", "NOT_YET_RECRUITING")];
+    await check();
+    const [alert] = (await alertsOf(mum)) as AlertItem[];
+    await mum(`/api/alerts/${alert!.id}/read`, "POST");
+
+    // Changed, but not in a way worth telling anyone.
+    changed = [raw("NCT91000001", "NOT_YET_RECRUITING", [boston])];
+    expect(await update()).toEqual({ updated: 0 });
+    expect((await alertsOf(mum))[0]).toMatchObject({ read: true, update: null });
+
+    changed = [raw("NCT91000001", "RECRUITING", [boston])];
+    expect(await update()).toEqual({ updated: 1 });
+    const [after] = (await alertsOf(mum)) as AlertItem[];
+    expect(after).toMatchObject({ id: alert!.id, read: false, update: { changes: ["Now recruiting"] }, trial: { status: "RECRUITING" } });
+    expect(await alertsOf(mum)).toHaveLength(1);
+
+    await mum(`/api/alerts/${alert!.id}/read`, "POST");
+    expect(await update()).toEqual({ updated: 0 });
+    expect((await alertsOf(mum))[0]!.read).toBe(true);
+  });
+
+  it("tells a Member about a new site within their Watch's distance, and not about far ones", async () => {
+    const mum = as(app, env, `site${n}@x`);
+    const cond = `site${n}`;
+    await mum("/api/watches", "POST", { ...watchBody(cond), criteria: { conditions: [cond], terms: [], phases: [], statuses: [], near: { zip: "02139", miles: 25 } } });
+    catalog[cond] = [raw("NCT91000002", "RECRUITING", [boston])];
+    await check();
+    changed = [raw("NCT91000002", "RECRUITING", [boston, { city: "Cambridge", lat: 42.3736, lon: -71.1097 }, { city: "Springfield", lat: 42.1015, lon: -72.5898 }])];
+    expect(await update()).toEqual({ updated: 1 });
+    const [alert] = (await alertsOf(mum)) as AlertItem[];
+    expect(alert!.update!.changes).toEqual(["New site near you: Cambridge, Massachusetts (1 mi)"]);
+    expect(alert!.trial.nearest).toEqual({ place: "Cambridge, Massachusetts", miles: 1 });
+  });
+
+  it("leaves Alerts marked Not for me alone", async () => {
+    const mum = as(app, env, `quietupd${n}@x`);
+    const cond = `quietupd${n}`;
+    await mum("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [raw("NCT91000003", "NOT_YET_RECRUITING")];
+    await check();
+    const [alert] = await alertsOf(mum);
+    await mum(`/api/alerts/${alert!.id}`, "PUT", { mark: "not_for_me" });
+    await mum(`/api/alerts/${alert!.id}/read`, "POST");
+    changed = [raw("NCT91000003", "RECRUITING")];
+    await update();
+    expect((await alertsOf(mum))[0]).toMatchObject({ read: true, update: null });
   });
 });
