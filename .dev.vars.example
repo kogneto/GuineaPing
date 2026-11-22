@@ -1,0 +1,2 @@
+# Copy to .dev.vars for local development. Signs you in as dev@localhost (or the X-Dev-Email header) on localhost only.
+DEV_AUTH=true

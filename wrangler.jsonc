@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "guineaping",
+  "main": "src/worker/index.ts",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "guineaping",
+      // Placeholder until the real database exists: npx wrangler d1 create guineaping
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // The hourly Check, at minute 17 to stay clear of the top-of-hour rush.
+  "triggers": { "crons": ["17 * * * *"] },
+  "vars": {
+    // Cloudflare Access lets Members in; fill these in before deploying.
+    "ACCESS_TEAM_DOMAIN": "",
+    "ACCESS_AUD": "",
+    // Only ever "true" in .dev.vars, and even then honoured only on localhost.
+    "DEV_AUTH": "false"
+  },
+  "observability": { "enabled": true }
+}

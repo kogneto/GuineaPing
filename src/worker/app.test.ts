@@ -1,0 +1,226 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { AlertListItem, Watch } from "../shared/api";
+import { as, createWorkerEnv, study } from "../test/worker-env";
+import { app } from "./app";
+import { checkStatus, runCheck } from "./check";
+import { fetchJson } from "../shared/ctgov";
+
+let env: Env;
+let dispose: () => Promise<void>;
+
+/** What the fake ClinicalTrials.gov returns, by condition. A thrown value makes it fail. */
+let catalog: Record<string, unknown[]> = {};
+let failing = false;
+
+beforeAll(async () => {
+  ({ env, dispose } = await createWorkerEnv());
+  vi.stubGlobal("fetch", async (input: string | URL | Request) => {
+    if (failing) return new Response("down", { status: 503 });
+    const cond = new URL(String(input instanceof Request ? input.url : input)).searchParams.get("query.cond") ?? "";
+    const studies = Object.entries(catalog)
+      .filter(([c]) => cond.includes(`"${c}"`))
+      .flatMap(([, s]) => s);
+    return Response.json({ studies });
+  });
+});
+afterAll(async () => {
+  vi.unstubAllGlobals();
+  await dispose();
+});
+
+let n = 0;
+beforeEach(async () => {
+  catalog = {};
+  failing = false;
+  // Each test gets its own Members and Watches; the Check history is shared, so clear it.
+  await env.DB.prepare("DELETE FROM checks").run();
+  n++;
+});
+
+const watchBody = (condition: string, extra: object = {}) => ({
+  name: `${condition} watch`,
+  criteria: { conditions: [condition], terms: [], phases: [], statuses: [] },
+  private: false,
+  ...extra,
+});
+const check = () => runCheck(env.DB, fetchJson);
+const alertsOf = async (who: ReturnType<typeof as>) => (await who<AlertListItem[]>("/api/alerts")).json;
+
+describe("sign-in", () => {
+  it("turns away anyone Cloudflare Access did not let in", async () => {
+    expect((await app.request("https://guineaping.example/api/watches", {}, env)).status).toBe(401);
+    const forged = await app.request("https://guineaping.example/api/me", { headers: { "X-Dev-Email": "x@y.z" } }, env);
+    expect(forged.status).toBe(401);
+  });
+
+  it("makes every signed-in person a Member", async () => {
+    const me = await as(app, env, `Mum${n}@Example.com`)<{ email: string }>("/api/me");
+    expect(me.json.email).toBe(`mum${n}@example.com`);
+  });
+});
+
+describe("New trials and Alerts", () => {
+  it("never alerts on a Watch's Recent matches, only on what a Check finds later", async () => {
+    const mum = as(app, env, `mum${n}@x`);
+    const cond = `ms${n}`;
+    catalog[cond] = [study("NCT10000001")];
+    expect((await mum("/api/watches", "POST", watchBody(cond))).status).toBe(201);
+
+    await check();
+    expect(await alertsOf(mum)).toEqual([]);
+
+    catalog[cond]!.push(study("NCT10000002", "A new MS trial"));
+    expect(await check()).toMatchObject({ ok: true, alertsCreated: 1 });
+    const [alert] = await alertsOf(mum);
+    expect(alert).toMatchObject({ kind: "alert", read: false, watchNames: [`${cond} watch`], trial: { nctId: "NCT10000002", title: "A new MS trial" } });
+
+    expect(await check()).toMatchObject({ alertsCreated: 0 });
+  });
+
+  it("sends one Alert per Member per Trial, naming every Watch that found it", async () => {
+    const dad = as(app, env, `dad${n}@x`);
+    const [a, b] = [`lung${n}`, `mgh${n}`];
+    await dad("/api/watches", "POST", watchBody(a));
+    await dad("/api/watches", "POST", watchBody(b));
+    catalog[a] = [study("NCT20000001")];
+    catalog[b] = [study("NCT20000001")];
+    await check();
+    const alerts = await alertsOf(dad);
+    expect(alerts).toHaveLength(1);
+    expect((alerts[0] as { watchNames: string[] }).watchNames.sort()).toEqual([`${a} watch`, `${b} watch`]);
+
+    // Found again later by a third Watch: still no second Alert.
+    const c = `third${n}`;
+    await dad("/api/watches", "POST", watchBody(c));
+    catalog[c] = [study("NCT20000001")];
+    await check();
+    expect(await alertsOf(dad)).toHaveLength(1);
+  });
+
+  it("alerts a late follower only on Trials found after they followed", async () => {
+    const owner = as(app, env, `owner${n}@x`);
+    const late = as(app, env, `late${n}@x`);
+    const cond = `asthma${n}`;
+    const { json: watch } = await owner<Watch>("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [study("NCT30000001")];
+    await check();
+
+    expect((await late<Watch>(`/api/watches/${watch.id}/follow`, "POST")).json.following).toBe(true);
+    await check();
+    expect(await alertsOf(late)).toEqual([]);
+
+    catalog[cond]!.push(study("NCT30000002"));
+    await check();
+    expect((await alertsOf(late)).map((a) => a.kind === "alert" && a.trial.nctId)).toEqual(["NCT30000002"]);
+  });
+
+  it("keeps recording finds while nobody follows a Watch, so a later follower isn't alerted on older Trials", async () => {
+    const owner = as(app, env, `quiet${n}@x`);
+    const later = as(app, env, `next${n}@x`);
+    const cond = `quiet${n}`;
+    const { json: watch } = await owner<Watch>("/api/watches", "POST", watchBody(cond));
+    await owner(`/api/watches/${watch.id}/follow`, "DELETE");
+    catalog[cond] = [study("NCT70000001")];
+    await check();
+
+    await later(`/api/watches/${watch.id}/follow`, "POST");
+    await check();
+    expect(await alertsOf(later)).toEqual([]);
+
+    catalog[cond]!.push(study("NCT70000002"));
+    await check();
+    expect((await alertsOf(later)).map((a) => a.kind === "alert" && a.trial.nctId)).toEqual(["NCT70000002"]);
+  });
+
+  it("marks Alerts read", async () => {
+    const mum = as(app, env, `reader${n}@x`);
+    const cond = `read${n}`;
+    await mum("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [study("NCT40000001")];
+    await check();
+    const [alert] = await alertsOf(mum);
+    expect((await mum(`/api/alerts/${alert!.id}/read`, "POST")).status).toBe(204);
+    expect((await alertsOf(mum))[0]!.read).toBe(true);
+    // Nobody else can read or mark it.
+    expect((await as(app, env, `nosy${n}@x`)(`/api/alerts/${alert!.id}`)).status).toBe(404);
+  });
+});
+
+describe("failed Checks", () => {
+  it("records the failure, writes nothing, and catches up next time", async () => {
+    const mum = as(app, env, `fail${n}@x`);
+    const cond = `fail${n}`;
+    await mum("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [study("NCT50000001")];
+    failing = true;
+    expect(await check()).toMatchObject({ ok: false });
+    expect(await alertsOf(mum)).toEqual([]);
+    failing = false;
+    expect(await check()).toMatchObject({ ok: true, alertsCreated: 1 });
+  });
+
+  it("tells everyone once Checks have failed for over a day", async () => {
+    const t = Date.parse("2026-11-22T12:00:00Z");
+    await runCheck(env.DB, fetchJson, new Date(t).toISOString());
+    expect((await checkStatus(env.DB, t + 60_000)).stale).toBe(false);
+    failing = true;
+    await runCheck(env.DB, fetchJson, new Date(t + 3_600_000).toISOString());
+    expect((await checkStatus(env.DB, t + 25 * 3_600_000)).stale).toBe(true);
+  });
+});
+
+describe("Owners and Private watches", () => {
+  it("lets only the Owner change or delete a Watch", async () => {
+    const owner = as(app, env, `o${n}@x`);
+    const other = as(app, env, `p${n}@x`);
+    const { json: watch } = await owner<Watch>("/api/watches", "POST", watchBody(`own${n}`));
+    expect((await other(`/api/watches/${watch.id}`, "PUT", watchBody(`own${n}`, { name: "Mine now" }))).status).toBe(403);
+    expect((await other(`/api/watches/${watch.id}`, "DELETE")).status).toBe(403);
+    expect((await owner<Watch>(`/api/watches/${watch.id}`, "PUT", watchBody(`own${n}`, { name: "Renamed" }))).json.name).toBe("Renamed");
+  });
+
+  it("hides a Private watch from everyone but its Owner, everywhere", async () => {
+    const owner = as(app, env, `priv${n}@x`);
+    const other = as(app, env, `peek${n}@x`);
+    const { json: watch } = await owner<Watch>("/api/watches", "POST", watchBody(`hiv${n}`, { private: true }));
+    expect((await other<Watch[]>("/api/watches")).json.some((w) => w.id === watch.id)).toBe(false);
+    for (const [path, method] of [[`/api/watches/${watch.id}`, "GET"], [`/api/watches/${watch.id}/recent`, "GET"], [`/api/watches/${watch.id}/follow`, "POST"], [`/api/watches/${watch.id}`, "DELETE"]] as const) {
+      expect((await other(path, method)).status, `${method} ${path}`).toBe(404);
+    }
+  });
+
+  it("never reveals who follows a Watch", async () => {
+    const owner = as(app, env, `sec${n}@x`);
+    await owner("/api/watches", "POST", watchBody(`sec${n}`));
+    const body = JSON.stringify((await owner("/api/watches")).json);
+    expect(body).not.toMatch(/follower|member_id|email/i);
+  });
+
+  it("ends other Members' Follows when a Watch is made private or deleted, and tells them once", async () => {
+    const owner = as(app, env, `del${n}@x`);
+    const fan = as(app, env, `fan${n}@x`);
+    const cond = `gone${n}`;
+    const { json: a } = await owner<Watch>("/api/watches", "POST", watchBody(cond));
+    const { json: b } = await owner<Watch>("/api/watches", "POST", watchBody(`${cond}b`));
+    await fan(`/api/watches/${a.id}/follow`, "POST");
+    await fan(`/api/watches/${b.id}/follow`, "POST");
+    catalog[cond] = [study("NCT60000001")];
+    await check();
+
+    await owner(`/api/watches/${a.id}`, "DELETE");
+    await owner(`/api/watches/${b.id}`, "PUT", watchBody(`${cond}b`, { private: true }));
+
+    const items = await alertsOf(fan);
+    expect(items.filter((i) => i.kind === "note").map((i) => i.kind === "note" && i.message)).toEqual([
+      `“${cond}b watch” was made private by its Owner, so you no longer get Alerts for it.`,
+      `“${cond} watch” was deleted by its Owner, so you no longer get Alerts for it.`,
+    ]);
+    // Past Alerts stay.
+    expect(items.some((i) => i.kind === "alert" && i.trial.nctId === "NCT60000001")).toBe(true);
+    expect((await alertsOf(owner)).some((i) => i.kind === "note")).toBe(false);
+
+    catalog[cond]!.push(study("NCT60000002"));
+    await check();
+    expect((await alertsOf(fan)).filter((i) => i.kind === "alert")).toHaveLength(1);
+  });
+});
