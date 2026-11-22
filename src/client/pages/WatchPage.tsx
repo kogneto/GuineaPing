@@ -53,6 +53,12 @@ export function WatchPage({ id }: { id: string }) {
           <p className="muted small">This is a Private watch. Only you can see or follow it.</p>
         </div>
       )}
+      {watch.failing && (
+        <p className="error">
+          GuineaPing hasn't been able to check this Watch for over a day. It keeps trying every hour and will catch up on anything it missed.
+          {watch.isOwner && " If this goes on, try editing its conditions or keywords."}
+        </p>
+      )}
       <dl className="facts-table">
         {rows
           .filter(([, v]) => v)

@@ -64,6 +64,7 @@ export function WatchesPage() {
               </Link>
               {w.private && <span className="tag">Private</span>}
               {w.isOwner && <span className="tag">Yours</span>}
+              {w.failing && <span className="tag">Not checked lately</span>}
               <div className="muted small">{describeCriteria(w)}</div>
             </div>
             <FollowButton watch={w} onChange={replace} />

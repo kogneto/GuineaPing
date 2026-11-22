@@ -146,6 +146,55 @@ describe("Pushes after a Check", () => {
     expect((await mum<Device[]>("/api/devices")).json.map((d) => d.label)).toEqual(["Keys wrong"]);
   });
 
+  it("retries an Alert no Device received, without re-sending to anyone who got it, and keeps Private wording", async () => {
+    const mum = as(app, env, `r1${n}@x`);
+    const dad = as(app, env, `r2${n}@x`);
+    const [cond, secret] = [`retry${n}`, `retrysecret${n}`];
+    const { json: shared } = await mum<Watch>("/api/watches", "POST", watchBody(cond));
+    await mum("/api/watches", "POST", watchBody(secret, { private: true }));
+    await dad(`/api/watches/${shared.id}/follow`, "POST");
+    await addDevice(mum, "mum");
+    await addDevice(dad, "dad");
+    catalog[cond] = [study("NCT85000001", "Shared trial")];
+    catalog[secret] = [study("NCT85000002", "Secret trial")];
+    // Mum's push service is down; Dad's works.
+    const first = pushService((url) => (url.includes("/mum-") ? 503 : 201));
+    // Other tests' Members share the database, so look only at this test's two Devices.
+    const mine = (svc: ReturnType<typeof pushService>) => svc.calls.map((c) => c.url).filter((u) => u === endpoint("mum") || u === endpoint("dad"));
+    expect(await checkAndPush(env, fetchJson, first.post)).toMatchObject({ alertsCreated: 3 });
+    expect(mine(first).sort()).toEqual([endpoint("dad"), endpoint("mum"), endpoint("mum")]);
+
+    const second = pushService();
+    expect(await checkAndPush(env, fetchJson, second.post)).toMatchObject({ alertsCreated: 0 });
+    expect(mine(second)).toEqual([endpoint("mum"), endpoint("mum")]);
+
+    const third = pushService();
+    await checkAndPush(env, fetchJson, third.post);
+    expect(mine(third)).toEqual([]);
+    const flags = await env.DB.prepare("SELECT via_private FROM alerts WHERE nct_id = 'NCT85000002'").first<{ via_private: number }>();
+    expect(flags?.via_private).toBe(1);
+  });
+
+  it("doesn't save Pushes up for a Member with no Device, or retry forever", async () => {
+    const mum = as(app, env, `r3${n}@x`);
+    const cond = `nodevice${n}`;
+    await mum("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [study("NCT86000001")];
+    await checkAndPush(env, fetchJson, pushService().post);
+    await addDevice(mum, "late");
+    const later = pushService();
+    await checkAndPush(env, fetchJson, later.post);
+    expect(later.calls.filter((c) => c.url === endpoint("late"))).toEqual([]);
+
+    // An Alert that keeps failing stops being retried after a day.
+    const { pushPendingAlerts, vapidFrom } = await import("./push");
+    catalog[cond]!.push(study("NCT86000002"));
+    await checkAndPush(env, fetchJson, pushService(() => 503).post);
+    const old = pushService();
+    await pushPendingAlerts(env.DB, vapidFrom(env)!, old.post, Date.now() + 25 * 3_600_000);
+    expect(old.calls.filter((c) => c.url === endpoint("late"))).toEqual([]);
+  });
+
   it("never names a trial found through a Private watch on the lock screen", async () => {
     const { messagesFor } = await import("./push");
     const trial = { nctId: "NCT83000001", title: "HIV vaccine study", summary: "", firstPosted: "", status: "RECRUITING", phases: [], conditions: [], sponsor: "", minimumAge: "", maximumAge: "", locations: [], url: "" };

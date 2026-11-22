@@ -159,6 +159,42 @@ describe("failed Checks", () => {
     expect(await check()).toMatchObject({ ok: true, alertsCreated: 1 });
   });
 
+  it("keeps checking the other Watches when one can't be asked about, and lets that one catch up", async () => {
+    const mum = as(app, env, `part${n}@x`);
+    const [good, bad] = [`good${n}`, `bad${n}`];
+    await mum("/api/watches", "POST", watchBody(good));
+    const { json: badWatch } = await mum<Watch>("/api/watches", "POST", watchBody(bad));
+    catalog[good] = [study("NCT51000001")];
+    catalog[bad] = [study("NCT51000002")];
+    const real = globalThis.fetch;
+    const sinces: string[] = [];
+    vi.stubGlobal("fetch", async (input: string | URL | Request) => {
+      const params = new URL(String(input instanceof Request ? input.url : input)).searchParams;
+      if (params.get("query.cond")?.includes(`"${bad}"`)) {
+        sinces.push(params.get("filter.advanced") ?? "");
+        if (breaking) return new Response("bad query", { status: 400 });
+      }
+      return real(input);
+    });
+    let breaking = true;
+    try {
+      const t = Date.parse("2026-12-01T12:00:00Z");
+      const at = (days: number) => new Date(t + days * 86_400_000).toISOString();
+      expect(await runCheck(env.DB, fetchJson, at(0))).toMatchObject({ ok: true, alertsCreated: 1, watchesFailed: 1 });
+      expect((await alertsOf(mum)).map((a) => a.kind === "alert" && a.trial.nctId)).toEqual(["NCT51000001"]);
+      // Failing for a week: its followers are told, and it still looks back from where it last worked.
+      await runCheck(env.DB, fetchJson, at(7));
+      const row = await env.DB.prepare("SELECT failing_since, check_error FROM watches WHERE id = ?").bind(badWatch.id).first<{ failing_since: string; check_error: string }>();
+      expect(row).toMatchObject({ failing_since: at(0), check_error: expect.stringContaining("400") });
+      breaking = false;
+      expect(await runCheck(env.DB, fetchJson, at(8))).toMatchObject({ ok: true, alertsCreated: 1, watchesFailed: 0 });
+      expect(sinces.at(-1)).toBe(sinces[0]);
+      expect((await mum<Watch>(`/api/watches/${badWatch.id}`)).json.failing).toBe(false);
+    } finally {
+      vi.stubGlobal("fetch", real);
+    }
+  });
+
   it("tells everyone once Checks have failed for over a day", async () => {
     const t = Date.parse("2026-11-22T12:00:00Z");
     await runCheck(env.DB, fetchJson, new Date(t).toISOString());
