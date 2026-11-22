@@ -5,6 +5,7 @@
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
 import { fetchJson, findTrials, withDefaults, type FetchJson } from "../shared/ctgov";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
+import { runUpdates } from "./updates";
 
 /**
  * How far before a Watch's last successful check to look again. ClinicalTrials.gov refreshes its
@@ -150,12 +151,18 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
 }
 
 /**
- * A Check followed by its Pushes: this Check's new Alerts, and any from the last day that no
+ * A Check, then Updates, then Pushes: this Check's new Alerts and Updates, and any from the last day that no
  * Device has received yet. Push trouble is logged, never fatal: the Alerts are already in
  * everyone's Alert list.
  */
-export async function checkAndPush(env: Env, get: FetchJson = fetchJson, post: typeof fetch = fetch): Promise<CheckResult & { pushes?: { sent: number; gone: number } }> {
-  const result = await runCheck(env.DB, get);
+export async function checkAndPush(env: Env, get: FetchJson = fetchJson, post: typeof fetch = fetch): Promise<CheckResult & { updates?: number; pushes?: { sent: number; gone: number } }> {
+  const result: CheckResult & { updates?: number } = await runCheck(env.DB, get);
+  // Updates to Trials Members already have Alerts for. Trouble here never undoes the Check.
+  try {
+    result.updates = (await runUpdates(env.DB, get)).updated;
+  } catch (err) {
+    console.error("Looking for Updates failed:", err);
+  }
   const vapid = vapidFrom(env);
   if (!vapid) {
     if (result.newAlerts.length) console.warn("VAPID keys not set; new Alerts are in Alert lists but no Pushes were sent.");

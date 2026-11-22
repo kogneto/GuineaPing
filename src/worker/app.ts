@@ -146,8 +146,8 @@ app.post("/api/preview", async (c) => {
   }
 });
 
-type AlertRow = { id: string; trial: string; watch_names: string; created_at: string; read_at: string | null; mark: Mark | null; note: string | null; sent_by: string | null; via_private: number };
-const ALERT_COLUMNS = "id, trial, watch_names, created_at, read_at, mark, note, sent_by, via_private";
+type AlertRow = { id: string; trial: string; watch_names: string; created_at: string; read_at: string | null; mark: Mark | null; note: string | null; sent_by: string | null; via_private: number; update_text: string | null; updated_at: string | null };
+const ALERT_COLUMNS = "id, trial, watch_names, created_at, read_at, mark, note, sent_by, via_private, update_text, updated_at";
 type NoteRow = { id: string; message: string; created_at: string; read_at: string | null };
 
 /** `full` keeps the eligibility text, for an Alert's own page; the Alert list leaves it out. */
@@ -161,6 +161,7 @@ const toAlert = (r: AlertRow, full = false): AlertListItem => ({
   mark: r.mark,
   note: r.note ?? "",
   sentBy: r.sent_by,
+  update: r.update_text && r.updated_at ? { at: r.updated_at, changes: JSON.parse(r.update_text) as string[] } : null,
   viaPrivateWatch: r.via_private === 1,
 });
 
@@ -168,14 +169,16 @@ const toAlert = (r: AlertRow, full = false): AlertListItem => ({
 app.get("/api/alerts", async (c) => {
   const id = c.get("me").memberId;
   const [alerts, notes] = await c.env.DB.batch<AlertRow | NoteRow>([
-    c.env.DB.prepare(`SELECT ${ALERT_COLUMNS} FROM alerts WHERE member_id = ? ORDER BY created_at DESC LIMIT 200`).bind(id),
+    c.env.DB.prepare(`SELECT ${ALERT_COLUMNS} FROM alerts WHERE member_id = ? ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 200`).bind(id),
     c.env.DB.prepare("SELECT id, message, created_at, read_at FROM notes WHERE member_id = ? ORDER BY created_at DESC LIMIT 200").bind(id),
   ]);
   const items: AlertListItem[] = [
     ...(alerts!.results as AlertRow[]).map((r) => toAlert(r)),
     ...(notes!.results as NoteRow[]).map((r): AlertListItem => ({ kind: "note", id: r.id, message: r.message, createdAt: r.created_at, read: r.read_at !== null })),
   ];
-  items.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  // An Alert with an Update sits where the Update happened, not where the Alert first did.
+  const when = (i: AlertListItem) => (i.kind === "alert" && i.update ? i.update.at : i.createdAt);
+  items.sort((a, b) => when(b).localeCompare(when(a)));
   return c.json(items.slice(0, 200));
 });
 

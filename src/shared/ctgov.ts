@@ -221,3 +221,42 @@ export function toTrial(raw: unknown, near?: Near | null): Trial | null {
     url: STUDY_URL + nctId,
   };
 }
+
+/** A study site with its coordinates. `place` matches Trial.locations; `short` is how it is named to a Member. */
+export function sitesOf(raw: unknown): { place: string; short: string; lat: number; lon: number }[] {
+  const sites: { place: string; short: string; lat: number; lon: number }[] = [];
+  for (const loc of (raw as Study).protocolSection?.contactsLocationsModule?.locations ?? []) {
+    const place = [loc.city, loc.state, loc.country].filter(Boolean).join(", ");
+    const g = loc.geoPoint;
+    if (place && g && typeof g.lat === "number" && typeof g.lon === "number") {
+      sites.push({ place, short: [loc.city, loc.state].filter(Boolean).join(", ") || place, lat: g.lat, lon: g.lon });
+    }
+  }
+  return sites;
+}
+
+/** How many NCT IDs go in one request. */
+const IDS_PER_REQUEST = 100;
+
+/**
+ * Of the Trials named by `nctIds`, the ones ClinicalTrials.gov changed on or after `since`, as raw
+ * study records keyed by NCT ID. (filter.ids and LastUpdatePostDate checked live on 2026-11-22.)
+ */
+export async function findUpdated(nctIds: string[], since: string, get: FetchJson): Promise<Map<string, unknown>> {
+  const found = new Map<string, unknown>();
+  for (let i = 0; i < nctIds.length; i += IDS_PER_REQUEST) {
+    const params = new URLSearchParams({
+      format: "json",
+      fields: FIELDS,
+      pageSize: String(IDS_PER_REQUEST),
+      "filter.ids": nctIds.slice(i, i + IDS_PER_REQUEST).join(","),
+      "filter.advanced": `AREA[LastUpdatePostDate]RANGE[${since},MAX]`,
+    });
+    const data = (await get(`${API_URL}?${params}`)) as { studies?: unknown[] };
+    for (const study of data.studies ?? []) {
+      const id = (study as Study).protocolSection?.identificationModule?.nctId;
+      if (id) found.set(id, study);
+    }
+  }
+  return found;
+}

@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { MARKS, MAX_NOTE_CHARS, type AlertItem, type Mark } from "../../shared/api";
 import { MARK_LABELS, agesText, criteriaSections, locationsText, phaseText, sexText, statusText, type CriteriaSection } from "../../shared/plain";
-import { api } from "../api";
+import { ago, api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { Link } from "../router";
 
@@ -40,6 +40,20 @@ export function AlertPage({ id }: { id: string }) {
         <h1 className="trial-heading">{t.title}</h1>
       </div>
       <p className="meta">{alert.sentBy ? `Sent to you by ${alert.sentBy}` : `Matched ${alert.watchNames.join(", ")}`}</p>
+      {alert.update && (
+        <div className="callout update">
+          <div>
+            <p>
+              <strong>What changed</strong> <span className="muted small">{ago(alert.update.at)}</span>
+            </p>
+            <ul className="criteria">
+              {alert.update.changes.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
       <dl className="facts-table">
         {facts
           .filter((f): f is [string, string] => !!f[1])

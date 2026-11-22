@@ -8,7 +8,7 @@ export default {
     ctx.waitUntil(
       checkAndPush(env).then((r) => {
         if (!r.ok) console.error("Check failed:", r.error);
-        else console.log(`Check ok: ${r.watchesChecked} Watches, ${r.alertsCreated} Alerts, ${r.pushes?.sent ?? 0} Pushes sent`);
+        else console.log(`Check ok: ${r.watchesChecked} Watches, ${r.alertsCreated} Alerts, ${r.updates ?? 0} Updates, ${r.pushes?.sent ?? 0} Pushes sent`);
       }),
     );
   },

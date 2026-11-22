@@ -96,6 +96,8 @@ export type AlertItem = {
   note: string;
   /** The email of the Member who sent this Alert, when a Watch didn't find it. */
   sentBy: string | null;
+  /** The latest Update: what changed about the Trial since the Alert, and when. */
+  update: { at: string; changes: string[] } | null;
   /** Found through a Private watch of this Member's. Sending it on shares the Trial, not the Watch. */
   viaPrivateWatch: boolean;
 };
