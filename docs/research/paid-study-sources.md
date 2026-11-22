@@ -15,7 +15,7 @@ Research for a possible clinic feature. Checked on 2026-11-22. Nothing has been 
 3. **Most clinics forbid automated reading.** Of 31 clinic operators checked, 21 publish a public list of studies. Seven of those forbid bots or scraping in their terms (ICON, CenExel, PPD/Trialmed, Medpace, Parexel, Syneos, Dr. Vince), and one more operator, K2, refuses all crawlers in robots.txt. Three block scripts or need JavaScript, and three have lists with no pay shown or nothing listed that day. Only 8 have a readable list and no rule against it: Altasciences (two sites), Celerion, Fortrea, Orlando Clinical Research Center, Pharmaron, Pfizer New Haven, Novum and TKL Research.
 4. **A clinic listing usually cannot be tied to a Trial.** No clinic listing shows an NCT ID. Clinic study codes are internal: 9 codes from five contract clinics found nothing on ClinicalTrials.gov. The exception is clinics owned by a drug company (Pfizer, AbbVie), whose codes are the sponsor's protocol numbers: 3 of 5 tested matched a Trial, though neither of the two codes Pfizer lists today did.
 5. **ClinicalTrials.gov may cover these clinics better than expected.** Each clinic has about as many open Trials naming it as it has clinic listings, or more. We could not confirm they are the same studies. US law does not require Phase 1 Trials to be registered, so some will be missing. Of those that are registered, about half are posted before the study starts.
-6. **Recommended order of work.** First a clinic directory with hand-kept links. Then a "clinic Watch" that alerts when a new Trial names a chosen clinic, and links to the clinic's own page for pay and dates. Reading clinic lists automatically comes last, only for the 8 sources above, and only after asking each for written permission. Section 6 lists ways to get pay and dates without automation.
+6. **Recommended order of work.** First a clinic directory with hand-kept links. Then a "clinic Watch" that alerts when a new Trial names a chosen clinic, and links to the clinic's own page for pay and dates. Reading clinic lists automatically comes last, and only for the 8 sources above. The owner has decided (2026-11-22) to go ahead with those 8 without asking first; see section 7. Section 6 lists ways to get pay and dates without automation.
 7. **Waiting period.** 30 days between studies is the common rule. A tracker can only be a personal reminder: no registry lets volunteers look themselves up.
 
 ## 1. Which clinics run the most Trials (ClinicalTrials.gov)
@@ -253,9 +253,12 @@ Ruled out: making a program look like a browser, running requests through Member
 **Step 2, washout tracker.** A personal reminder as described in section 5. It cannot check any registry.
 
 **Step 3, reading clinic lists: last, and narrow.**
-- Candidates: the 8 operators in table A. Ask each for written permission first.
+- Candidates: the 8 operators in table A.
+- **Decision (owner, 2026-11-22): assume permission for these 8.** The reasons given: GuineaPing is a private group, it is not a paid app, and building it does not need the collected listings. This is the owner's judgement, not something the clinics have said. It fits these 8 because their sites are silent on automated reading.
+- It does not stretch to table B. Those sites say no in writing, and their terms make no exception for free or private use. They stay out unless a clinic agrees.
+- Conditions that keep the assumption reasonable: send a User-Agent that names GuineaPing and gives a contact address; follow robots.txt and crawl delays; read each list at most once a day; show the clinic's own words with a link back to its page; keep listings inside the Member group; stop at once if a clinic blocks the reader or asks. Pfizer's terms limit copying to "noncommercial individual reference", so for Pfizer show a link and the headline facts only.
 - Not candidates without written permission: tables B, C and D.
-- Honour crawl delays; read each list at most once a day. Sitemaps and Fortrea's RSS can show that something changed without re-reading every page.
+- Sitemaps and Fortrea's RSS can show that something changed without re-reading every page.
 - Upkeep: one reader per site. A redesign silently breaks a reader, so each needs a check that it still finds listings. Expect one or two repairs a year [U, estimate].
 - Clinic listings would be a separate thing from Trials, since they cannot be joined, except at drug-company units. The glossary would need a term for them.
 
