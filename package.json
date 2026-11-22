@@ -12,6 +12,7 @@
     "cf-typegen": "wrangler types --strict-vars=false"
   },
   "dependencies": {
+    "@sentry/cloudflare": "^11.16.0",
     "hono": "^4.13.13",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

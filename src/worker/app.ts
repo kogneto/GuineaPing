@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/cloudflare";
 import { Hono, type Context } from "hono";
 import { MARKS, MAX_NOTE_CHARS, type AlertListItem, type Criteria, type Near, type Device, type Mark, type MemberList, type Trial, type WatchInput } from "../shared/api";
 import { fetchJson, findTrials, forList, normalizeCriteria } from "../shared/ctgov";
@@ -7,6 +8,7 @@ import { checkAndPush, checkStatus, daysBefore, RECENT_DAYS } from "./check";
 import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
 import { getProfile, nearByMember, saveProfile } from "./profile";
 import { pushPendingAlerts, pushTest, validKeys, vapidFrom } from "./push";
+import { report } from "./report";
 import { isPushEndpoint } from "./webpush";
 import { createWatch, deleteWatch, getWatch, listWatches, parseWatchInput, setFollowing, updateWatch } from "./watches";
 
@@ -15,6 +17,13 @@ export const app = new Hono<AppEnv>();
 app.use("*", async (c, next) => {
   await next();
   c.header("X-Robots-Tag", "noindex, nofollow");
+});
+
+// Hono turns a thrown error into a 500 by itself, which would hide it from Sentry.
+app.onError((err, c) => {
+  console.error(err);
+  Sentry.captureException(err);
+  return c.json({ error: "Something went wrong on our side. Please try again." }, 500);
 });
 
 app.get("/api/health", (c) => c.json({ ok: true }));
@@ -249,7 +258,7 @@ app.post("/api/alerts/:id/send", async (c) => {
   // Push it now rather than with the next Check. If that fails, the next Check retries.
   const vapid = vapidFrom(c.env);
   if (created && vapid) {
-    const pushing = pushPendingAlerts(c.env.DB, vapid).catch((err) => console.error("Pushing a sent Alert failed:", err));
+    const pushing = pushPendingAlerts(c.env.DB, vapid).catch((err) => report("Pushing a sent Alert failed", err));
     try {
       c.executionCtx.waitUntil(pushing);
     } catch {
@@ -358,7 +367,7 @@ app.post("/api/members", async (c) => {
   try {
     await syncAccess(c, email, true);
   } catch (err) {
-    console.error("Inviting failed:", err);
+    report("Inviting failed", err);
     return c.json(accessTrouble, 502);
   }
   const outcome = await addMember(c.env.DB, c.get("me"), email, now());
@@ -377,7 +386,7 @@ app.delete("/api/members/:id", async (c) => {
   try {
     await syncAccess(c, target.email, false);
   } catch (err) {
-    console.error("Taking a removed Member off the sign-in list failed:", err);
+    report("Taking a removed Member off the sign-in list failed", err);
     return c.json({ error: "They're removed and can't use GuineaPing, but Cloudflare's sign-in list couldn't be updated. Take their email off the Members policy in the Cloudflare dashboard." }, 502);
   }
   return c.body(null, 204);
