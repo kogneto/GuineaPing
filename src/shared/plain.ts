@@ -98,7 +98,9 @@ export function kindShort(kinds: string[] | undefined): string | null {
 export function kindsWanted(kinds: Kind[]): string | null {
   if (!kinds.length) return null;
   const words = [...kinds].sort((a, b) => rank(a) - rank(b)).map((k) => (k === "OBSERVATIONAL" ? "observational" : KIND_SHORT[k]));
-  return capital(`${words.join(" or ")} studies`);
+  // "Drug, device or observational": commas keep three or more readable.
+  const list = words.length > 1 ? `${words.slice(0, -1).join(", ")} or ${words[words.length - 1]}` : words[0];
+  return capital(`${list} studies`);
 }
 
 /** "Phase 3 (comparing it against the usual treatment in many people)", or "Phase 1/2 (…)" for combined phases. */

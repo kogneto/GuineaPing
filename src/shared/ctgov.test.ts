@@ -87,6 +87,7 @@ describe("kind of study", () => {
     expect(kindText(["OBSERVATIONAL"])).toBe("Observation only: nothing is given to you");
     expect(kindText(["SOMETHING_NEW"])).toBe("Something new");
     expect(kindsWanted(["DEVICE", "DRUG"])).toBe("Drug or device studies");
+    expect(kindsWanted(["OBSERVATIONAL", "DEVICE", "DRUG"])).toBe("Drug, device or observational studies");
     expect(kindsWanted([])).toBeNull();
   });
 
