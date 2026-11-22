@@ -3,3 +3,6 @@ dist/
 .wrangler/
 .dev.vars*
 !.dev.vars.example
+
+# Full-size art originals; the app ships the optimised copies in public/art (see art/PROMPTS.md)
+art/source/
