@@ -8,10 +8,10 @@ export const STATUSES = ["RECRUITING", "NOT_YET_RECRUITING", "ENROLLING_BY_INVIT
 export type Status = (typeof STATUSES)[number];
 
 /**
- * The kinds of study a Watch may ask for: what is tested, as ClinicalTrials.gov's intervention
- * types name it, or OBSERVATIONAL for a study that gives nothing and only watches. A Trial can
- * also be RADIATION, GENETIC, COMBINATION_PRODUCT or OTHER; those are shown but not offered,
- * as too few healthy-volunteer Trials are of those kinds to be worth a choice.
+ * The kinds of study a Watch can ask for. OBSERVATIONAL is a study that only observes the people
+ * in it; the others are what an interventional study tests, named as ClinicalTrials.gov names
+ * its intervention types. Listings use four more types (RADIATION, GENETIC, COMBINATION_PRODUCT,
+ * OTHER): a Trial shows those, but they are too rare or too vague to be worth a choice here.
  */
 export const KINDS = ["DRUG", "BIOLOGICAL", "DEVICE", "DIETARY_SUPPLEMENT", "BEHAVIORAL", "PROCEDURE", "DIAGNOSTIC_TEST", "OBSERVATIONAL"] as const;
 export type Kind = (typeof KINDS)[number];
@@ -25,7 +25,7 @@ export type Criteria = {
   phases: Phase[];
   /** Empty means any of STATUSES. */
   statuses: Status[];
-  /** Empty means any kind of study; several are OR'ed. */
+  /** Only Trials of one of these kinds; empty means any kind. */
   kinds: Kind[];
   /** Only Trials with a site within `miles` of a US ZIP code; null means anywhere. */
   near: Near | null;
@@ -56,8 +56,8 @@ export type Trial = {
   status: string;
   phases: string[];
   /**
-   * What kind of study it is: the distinct intervention types (DRUG, DEVICE, …), or just
-   * ["OBSERVATIONAL"]. Absent on Alerts made before this was kept, and when the listing names none.
+   * The kinds of study this is: ["OBSERVATIONAL"], or the intervention types its listing names,
+   * each once. Left out when the listing names none, and on Alerts made before this was kept.
    */
   kinds?: string[];
   conditions: string[];

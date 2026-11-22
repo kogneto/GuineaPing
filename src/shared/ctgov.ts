@@ -75,7 +75,8 @@ export function normalizeCriteria(input: unknown): CriteriaInput | { error: stri
   if (badPhase) return { error: `Unknown phase ${badPhase}` };
   const badStatus = statuses.find((s) => !(STATUSES as readonly string[]).includes(s));
   if (badStatus) return { error: `Unknown status ${badStatus}` };
-  // An unknown kind would make ClinicalTrials.gov refuse the whole query, so the Watch would never find anything.
+  // ClinicalTrials.gov answers 400 to a query naming a type it doesn't know, so a bad value saved
+  // here would stop the Watch finding anything at all.
   const badKind = kinds.find((k) => !(KINDS as readonly string[]).includes(k));
   if (badKind) return { error: `Unknown kind of study ${badKind}` };
 
@@ -123,33 +124,34 @@ function eligibilityFilters(c: Criteria): string[] {
 }
 
 /**
- * The kinds of study asked for, as one filter, or null for any kind. Checked against the live API
- * on 2026-11-22 (healthy-volunteer Trials still open to joining):
- * - `AREA[StudyType]OBSERVATIONAL` and `AREA[InterventionType](DRUG OR DEVICE)` both work, the
- *   latter matching a Trial with any of the types (2,928 drug + 2,057 device − 115 both = 4,870).
- * - Observational listings can name intervention types too (NCT05044689 is observational with a
- *   "device"), so the types only count for interventional studies. That keeps the filter in step
- *   with `kindsOf`, which calls every observational study just that.
- * - "Observation only or a drug" is
- *   `(AREA[StudyType]OBSERVATIONAL OR (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG)))`:
- *   6,324 + 2,928 = 9,252, as the two never overlap.
- * - A value the API doesn't know gets a 400 for the whole query, hence the check in normalizeCriteria.
+ * "One of these kinds of study", as ClinicalTrials.gov's search understands it. Checked against
+ * the live API on 2026-11-22, among healthy-volunteer Trials someone could still join:
+ * - `AREA[InterventionType](DRUG OR DEVICE)` finds Trials with either type: 4,870, which is the
+ *   2,928 with a drug plus the 2,057 with a device, less the 115 with both.
+ * - An observational listing may name intervention types as well (NCT05044689 names a device),
+ *   and `kindsOf` calls such a Trial observational and nothing else. So a type only counts
+ *   when the study is interventional; otherwise a Watch for devices would find Trials that are
+ *   then shown as "observation only".
+ * - Observational joins the types with OR:
+ *   `(AREA[StudyType]OBSERVATIONAL OR (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG)))`
+ *   finds 9,252, the 6,324 observational plus the 2,928 drug Trials, which never overlap.
  */
-function kindFilter(kinds: Kind[]): string | null {
+function kindsFilter(kinds: Kind[]): string | null {
   const types = kinds.filter((k) => k !== "OBSERVATIONAL");
-  const parts: string[] = [];
-  if (kinds.includes("OBSERVATIONAL")) parts.push("AREA[StudyType]OBSERVATIONAL");
-  if (types.length) parts.push(`(AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](${types.join(" OR ")}))`);
-  if (!parts.length) return null;
-  return parts.length > 1 ? `(${parts.join(" OR ")})` : parts[0]!;
+  const either = [
+    kinds.length > types.length ? "AREA[StudyType]OBSERVATIONAL" : null,
+    types.length ? `(AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](${types.join(" OR ")}))` : null,
+  ].filter((part): part is string => part !== null);
+  if (either.length === 2) return `(${either.join(" OR ")})`;
+  return either[0] ?? null;
 }
 
 /** Query parameters for Trials matching `criteria` first posted on or after `since` (YYYY-MM-DD). */
 export function buildParams(criteria: Criteria, since: string): Record<string, string> {
   const advanced = [`AREA[StudyFirstPostDate]RANGE[${since},MAX]`];
   if (criteria.phases.length) advanced.push(`AREA[Phase](${criteria.phases.join(" OR ")})`);
-  const kinds = kindFilter(criteria.kinds);
-  if (kinds) advanced.push(kinds);
+  const ofKinds = kindsFilter(criteria.kinds);
+  if (ofKinds) advanced.push(ofKinds);
   advanced.push(...eligibilityFilters(criteria));
   const params: Record<string, string> = {
     format: "json",
@@ -247,14 +249,17 @@ export function milesBetween(a: { lat: number; lon: number }, b: { lat: number; 
 }
 
 /**
- * What kind of study a listing is: ["OBSERVATIONAL"] when nothing is given to the people in it,
- * otherwise each intervention type once, in the listing's order. Empty when the listing names none.
+ * The kinds of study a listing is. An observational study is only ever that, whatever
+ * intervention types it also names; any other study is each type it names, once, in its own order.
  */
 export function kindsOf(raw: unknown): string[] {
   const ps = (raw as Study).protocolSection ?? {};
   if (ps.designModule?.studyType === "OBSERVATIONAL") return ["OBSERVATIONAL"];
-  const types = (ps.armsInterventionsModule?.interventions ?? []).map((i) => i.type).filter((t): t is string => !!t);
-  return [...new Set(types)];
+  const kinds: string[] = [];
+  for (const { type } of ps.armsInterventionsModule?.interventions ?? []) {
+    if (type && !kinds.includes(type)) kinds.push(type);
+  }
+  return kinds;
 }
 
 export function toTrial(raw: unknown, near?: Near | null): Trial | null {
@@ -280,6 +285,7 @@ export function toTrial(raw: unknown, near?: Near | null): Trial | null {
     firstPosted: ps.statusModule?.studyFirstPostDateStruct?.date ?? "",
     status: ps.statusModule?.overallStatus ?? "",
     phases: ps.designModule?.phases ?? [],
+    // Left out when empty, so a Trial with no kind looks the same as one stored before kinds were kept.
     ...(kinds.length ? { kinds } : {}),
     conditions: ps.conditionsModule?.conditions ?? [],
     sponsor: ps.sponsorCollaboratorsModule?.leadSponsor?.name ?? "",

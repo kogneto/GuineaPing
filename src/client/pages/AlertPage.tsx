@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { MARKS, MAX_NOTE_CHARS, type AlertItem, type Mark } from "../../shared/api";
-import { MARK_LABELS, agesText, criteriaSections, kindText, locationsText, phaseText, sexText, statusText, type CriteriaSection } from "../../shared/plain";
+import { MARK_LABELS, agesText, criteriaSections, kindsText, locationsText, phaseText, sexText, statusText, type CriteriaSection } from "../../shared/plain";
 import { ago, api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { Link } from "../router";
@@ -21,7 +21,7 @@ export function AlertPage({ id }: { id: string }) {
   const t = alert.trial;
   const facts: [string, string | null][] = [
     ["Status", statusText(t.status)],
-    ["Kind of study", kindText(t.kinds)],
+    ["Kind of study", kindsText(t.kinds)],
     ["Phase", phaseText(t.phases)],
     ["Who can join", [agesText(t.minimumAge, t.maximumAge), sexText(t.eligibility?.sex ?? ""), t.eligibility?.healthyVolunteers ? "Healthy volunteers welcome" : null].filter(Boolean).join(" · ") || null],
     ["Where", locationsText(t.locations, 8)],

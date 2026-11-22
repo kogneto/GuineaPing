@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DISTANCES, KINDS, PHASES, STATUSES, type CriteriaInput, type Kind, type Phase, type Profile, type Sex, type Status, type Trial, type Watch } from "../../shared/api";
-import { KIND_LABELS, PHASE_LABELS, STATUS_LABELS } from "../../shared/plain";
+import { PHASE_LABELS, STATUS_LABELS, kindLabel } from "../../shared/plain";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { TrialList } from "../components/TrialCard";
@@ -240,19 +240,19 @@ export function WatchEditorPage({ id }: { id?: string }) {
           </label>
           <fieldset>
             <legend>Kind of study</legend>
-            <span className="hint">Leave all unticked for any kind. A trial of any ticked kind counts.</span>
+            <span className="hint">Leave all unticked for any kind. Tick several to see trials of any of them.</span>
             <div className="checks">
               {KINDS.map((k) => (
                 <label key={k} className="check">
                   <input type="checkbox" checked={kinds.includes(k)} onChange={() => setKinds(toggle(kinds, k))} />
-                  {KIND_LABELS[k]}
+                  {kindLabel(k)}
                 </label>
               ))}
             </div>
           </fieldset>
           <fieldset>
             <legend>Phases</legend>
-            <span className="hint">Leave all unticked for any phase. Observation-only studies have no phase.</span>
+            <span className="hint">Leave all unticked for any phase. Observation-only studies have no phase, so ticking one leaves them out.</span>
             <div className="checks">
               {PHASES.map((p) => (
                 <label key={p} className="check">
