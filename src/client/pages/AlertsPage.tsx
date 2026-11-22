@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { AlertListItem } from "../../shared/api";
-import { keyFacts } from "../../shared/plain";
+import type { AlertListItem, Mark } from "../../shared/api";
+import { MARK_LABELS, keyFacts } from "../../shared/plain";
 import { ago, api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { Link } from "../router";
@@ -9,6 +9,8 @@ import { Link } from "../router";
 export function AlertsPage() {
   const [items, setItems] = useState<AlertListItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // "all" leaves out what the Member marked "Not for me"; that has its own view.
+  const [view, setView] = useState<"all" | Mark>("all");
 
   useEffect(() => {
     api<AlertListItem[]>("/api/alerts").then(setItems, (e: Error) => setError(e.message));
@@ -22,7 +24,10 @@ export function AlertsPage() {
   if (error) return <p className="error">{error}</p>;
   if (!items) return <p className="muted">Loading…</p>;
 
-  const unread = items.filter((i) => !i.read).length;
+  const counts = { interested: 0, not_for_me: 0 };
+  for (const i of items) if (i.kind === "alert" && i.mark) counts[i.mark]++;
+  const shown = items.filter((i) => (view === "all" ? i.kind === "note" || i.mark !== "not_for_me" : i.kind === "alert" && i.mark === view));
+  const unread = items.filter((i) => !i.read && (i.kind === "note" || i.mark !== "not_for_me")).length;
   return (
     <>
       <div className="heading-row">
@@ -38,8 +43,18 @@ export function AlertsPage() {
           </p>
         </div>
       )}
+      {(counts.interested > 0 || counts.not_for_me > 0) && (
+        <p className="views">
+          {(["all", "interested", "not_for_me"] as const).map((v) => (
+            <button key={v} className="chip" aria-pressed={view === v} onClick={() => setView(v)}>
+              {v === "all" ? "All" : `${MARK_LABELS[v]} (${counts[v]})`}
+            </button>
+          ))}
+        </p>
+      )}
+      {items.length > 0 && !shown.length && <p className="muted">Nothing here.</p>}
       <ul className="alerts">
-        {items.map((item) =>
+        {shown.map((item) =>
           item.kind === "note" ? (
             <li key={item.id} className={`note ${item.read ? "read" : ""}`}>
               <Illustration name="goodbye" size="xs" />
@@ -53,10 +68,13 @@ export function AlertsPage() {
           ) : (
             <li key={item.id} className={item.read ? "read" : "unread"}>
               <Link to={`/alerts/${item.id}`} className="alert-link">
-                <span className="alert-title">{item.trial.title}</span>
+                <span className="alert-title">
+                  {item.trial.title}
+                  {item.mark === "interested" && <span className="tag">Interested</span>}
+                </span>
                 <span className="facts">{keyFacts(item.trial).join(" · ")}</span>
                 <span className="meta">
-                  {item.watchNames.join(", ")} · {ago(item.createdAt)}
+                  {item.sentBy ? `Sent by ${item.sentBy}` : item.watchNames.join(", ")} · {ago(item.createdAt)}
                 </span>
               </Link>
             </li>

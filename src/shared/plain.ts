@@ -2,6 +2,7 @@
  * Key facts about a Trial in plain words, for patients and family members. Hand-written rules,
  * not generated text, so nothing here can misstate a medical fact.
  */
+import type { Mark } from "./api";
 import type { Phase, Status, Trial } from "./api";
 
 export const PHASE_LABELS: Record<Phase, string> = {
@@ -119,3 +120,6 @@ export function criteriaSections(text: string): CriteriaSection[] {
 export function sexText(sex: string): string | null {
   return sex === "FEMALE" ? "Women only" : sex === "MALE" ? "Men only" : null;
 }
+
+/** The words on the buttons a Member sorts their Alerts with. */
+export const MARK_LABELS: Record<Mark, string> = { interested: "Interested", not_for_me: "Not for me" };

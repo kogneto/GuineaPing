@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import type { AlertItem } from "../../shared/api";
-import { agesText, criteriaSections, locationsText, phaseText, sexText, statusText, type CriteriaSection } from "../../shared/plain";
+import { useEffect, useState, type FormEvent } from "react";
+import { MARKS, MAX_NOTE_CHARS, type AlertItem, type Mark } from "../../shared/api";
+import { MARK_LABELS, agesText, criteriaSections, locationsText, phaseText, sexText, statusText, type CriteriaSection } from "../../shared/plain";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { Link } from "../router";
@@ -39,7 +39,7 @@ export function AlertPage({ id }: { id: string }) {
         {!alert.read && <Illustration name="match" size="xs" />}
         <h1 className="trial-heading">{t.title}</h1>
       </div>
-      <p className="meta">Matched {alert.watchNames.join(", ")}</p>
+      <p className="meta">{alert.sentBy ? `Sent to you by ${alert.sentBy}` : `Matched ${alert.watchNames.join(", ")}`}</p>
       <dl className="facts-table">
         {facts
           .filter((f): f is [string, string] => !!f[1])
@@ -62,6 +62,7 @@ export function AlertPage({ id }: { id: string }) {
           Open {t.nctId} on ClinicalTrials.gov
         </a>
       </p>
+      <Sorting alert={alert} onChange={setAlert} />
       <div className="callout">
         <Illustration name="clinician" size="xs" />
         <p className="muted small">Talk to your doctor before contacting a study. The listing's contacts can say whether you might qualify.</p>
@@ -108,6 +109,83 @@ function WhoCanJoin({ text, url }: { text: string; url: string }) {
         <button className="link" onClick={() => setOpen(true)}>
           Show all ({hidden} more)
         </button>
+      )}
+    </section>
+  );
+}
+
+/** The Member's own sorting of this Alert, a private note, and sending it to another Member. */
+function Sorting({ alert, onChange }: { alert: AlertItem; onChange: (a: AlertItem) => void }) {
+  const [note, setNote] = useState(alert.note);
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+
+  const run = async (work: () => Promise<string | void>) => {
+    setBusy(true);
+    setMessage(null);
+    try {
+      const text = await work();
+      if (text) setMessage({ kind: "ok", text });
+    } catch (e) {
+      setMessage({ kind: "error", text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const mark = (m: Mark) => run(async () => onChange(await api<AlertItem>(`/api/alerts/${alert.id}`, "PUT", { mark: alert.mark === m ? null : m })));
+  const saveNote = () =>
+    run(async () => {
+      onChange(await api<AlertItem>(`/api/alerts/${alert.id}`, "PUT", { note }));
+      return "Note saved.";
+    });
+  const send = (e: FormEvent) => {
+    e.preventDefault();
+    return run(async () => {
+      await api(`/api/alerts/${alert.id}/send`, "POST", { email });
+      const to = email.trim();
+      setEmail("");
+      return `Sent to ${to}.`;
+    });
+  };
+
+  return (
+    <section className="sorting">
+      <h2>Keep track</h2>
+      <p className="actions">
+        {MARKS.map((m) => (
+          <button key={m} className={alert.mark === m ? "" : "secondary"} aria-pressed={alert.mark === m} disabled={busy} onClick={() => mark(m)}>
+            {MARK_LABELS[m]}
+          </button>
+        ))}
+      </p>
+      <label>
+        Your note <span className="hint">Only you see this.</span>
+        <textarea value={note} maxLength={MAX_NOTE_CHARS} rows={3} onChange={(e) => setNote(e.target.value)} />
+      </label>
+      {note !== alert.note && (
+        <p className="actions">
+          <button disabled={busy} onClick={saveNote}>
+            Save note
+          </button>
+        </p>
+      )}
+      <form onSubmit={send}>
+        <label>
+          Send to another Member
+          <input type="email" value={email} placeholder="their email address" autoComplete="off" onChange={(e) => setEmail(e.target.value)} />
+        </label>
+        {alert.viaPrivateWatch && <p className="muted small">This came from your Private watch. Sending shares the trial, not the Watch.</p>}
+        <p className="actions">
+          <button className="secondary" disabled={busy || !email.trim()}>
+            Send
+          </button>
+        </p>
+      </form>
+      {message && (
+        <p className={message.kind === "error" ? "error" : "muted"} role="status">
+          {message.text}
+        </p>
       )}
     </section>
   );
