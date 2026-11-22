@@ -15,8 +15,8 @@ let catalog: Record<string, unknown[]> = {};
 /** What the fake ClinicalTrials.gov says has changed, when asked about Trials by NCT ID. */
 let changed: { protocolSection: { identificationModule: { nctId: string } } }[] = [];
 let failing = false;
-/** The advanced filters the fake ClinicalTrials.gov was asked for, newest last. */
-let asked: string[] = [];
+/** Every `filter.advanced` the fake ClinicalTrials.gov has been sent since the test began. */
+let filtersSent: string[] = [];
 
 beforeAll(async () => {
   ({ env, dispose } = await createWorkerEnv());
@@ -25,7 +25,7 @@ beforeAll(async () => {
     const params = new URL(String(input instanceof Request ? input.url : input)).searchParams;
     const ids = params.get("filter.ids")?.split(",");
     if (ids) return Response.json({ studies: changed.filter((s) => ids.includes(s.protocolSection.identificationModule.nctId)) });
-    asked.push(params.get("filter.advanced") ?? "");
+    filtersSent.push(params.get("filter.advanced") ?? "");
     const cond = params.get("query.cond") ?? "";
     const studies = Object.entries(catalog)
       .filter(([c]) => cond.includes(`"${c}"`))
@@ -43,7 +43,7 @@ beforeEach(async () => {
   catalog = {};
   changed = [];
   failing = false;
-  asked = [];
+  filtersSent = [];
   // Each test gets its own Members and Watches; the Check history is shared, so clear it.
   await env.DB.prepare("DELETE FROM checks").run();
   n++;
@@ -57,30 +57,6 @@ const watchBody = (condition: string, extra: object = {}) => ({
 });
 const check = () => runCheck(env.DB, fetchJson);
 const alertsOf = async (who: ReturnType<typeof as>) => (await who<AlertListItem[]>("/api/alerts")).json;
-
-describe("kind of study", () => {
-  it("lets a Watch ask for kinds of study, and shows each Trial's kind on its Alert", async () => {
-    const vol = as(app, env, `kind${n}@x`);
-    const cond = `kind${n}`;
-    const refused = await vol<{ error: string }>("/api/watches", "POST", watchBody(cond, { criteria: { conditions: [cond], kinds: ["PILL"] } }));
-    expect(refused.status).toBe(400);
-    expect(refused.json.error).toBe("Unknown kind of study PILL");
-
-    const made = await vol<Watch>("/api/watches", "POST", watchBody(cond, { criteria: { conditions: [cond], kinds: ["OBSERVATIONAL", "DRUG"] } }));
-    expect(made.status).toBe(201);
-    expect(made.json.criteria.kinds).toEqual(["OBSERVATIONAL", "DRUG"]);
-    expect((await vol<Watch>(`/api/watches/${made.json.id}`)).json.criteria.kinds).toEqual(["OBSERVATIONAL", "DRUG"]);
-
-    const drugStudy = study("NCT80000001");
-    Object.assign(drugStudy.protocolSection, { designModule: { phases: ["PHASE1"], studyType: "INTERVENTIONAL" }, armsInterventionsModule: { interventions: [{ type: "DRUG" }] } });
-    catalog[cond] = [drugStudy];
-    asked = [];
-    await check();
-    expect(asked.some((f) => f.includes("AREA[StudyType]OBSERVATIONAL OR (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG))"))).toBe(true);
-    const [alert] = (await alertsOf(vol)) as AlertItem[];
-    expect(alert?.trial.kinds).toEqual(["DRUG"]);
-  });
-});
 
 describe("sign-in", () => {
   it("turns away anyone Cloudflare Access did not let in", async () => {
@@ -559,5 +535,71 @@ describe("Profiles", () => {
     expect(((await alertsOf(noProfile))[0] as AlertItem).trial.nearest).toBeUndefined();
     expect((await near<{ nearest?: object }[]>(`/api/watches/${watch.id}/recent`)).json[0]!.nearest).toEqual({ place: "Boston, Massachusetts", miles: 2 });
     expect((await noProfile<{ nearest?: object }[]>(`/api/watches/${watch.id}/recent`)).json[0]!.nearest).toBeUndefined();
+  });
+});
+
+describe("kind of study", () => {
+  /** A study as the fake ClinicalTrials.gov returns it, of the given type and intervention types. */
+  const studyOfKind = (nctId: string, studyType: string, ...types: string[]) => {
+    const s = study(nctId);
+    return { protocolSection: { ...s.protocolSection, designModule: { ...s.protocolSection.designModule, studyType }, armsInterventionsModule: { interventions: types.map((type) => ({ type })) } } };
+  };
+  const criteriaOf = (cond: string, kinds?: unknown) => ({ conditions: [cond], terms: [], phases: [], statuses: [], ...(kinds === undefined ? {} : { kinds }) });
+
+  it("saves the kinds a Watch asks for, and searches ClinicalTrials.gov for only those", async () => {
+    const vol = as(app, env, `kinds${n}@x`);
+    const cond = `kinds${n}`;
+    const made = await vol<Watch>("/api/watches", "POST", watchBody(cond, { criteria: criteriaOf(cond, ["DRUG", "OBSERVATIONAL"]) }));
+    expect(made.status).toBe(201);
+    expect((await vol<Watch>(`/api/watches/${made.json.id}`)).json.criteria.kinds).toEqual(["DRUG", "OBSERVATIONAL"]);
+
+    filtersSent = [];
+    await check();
+    const wanted = "(AREA[StudyType]OBSERVATIONAL OR (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG)))";
+    expect(filtersSent.filter((f) => f.includes(wanted))).toHaveLength(1);
+
+    // Editing the Watch back to any kind stops the narrowing.
+    await vol(`/api/watches/${made.json.id}`, "PUT", watchBody(cond, { criteria: criteriaOf(cond, []) }));
+    filtersSent = [];
+    await check();
+    expect(filtersSent.some((f) => f.includes("InterventionType") || f.includes("StudyType"))).toBe(false);
+  });
+
+  it("treats a Watch saved without kinds as taking any kind", async () => {
+    const vol = as(app, env, `anykind${n}@x`);
+    const cond = `anykind${n}`;
+    const made = await vol<Watch>("/api/watches", "POST", watchBody(cond));
+    expect(made.json.criteria.kinds).toEqual([]);
+    await check();
+    expect(filtersSent.some((f) => f.includes("InterventionType") || f.includes("StudyType"))).toBe(false);
+  });
+
+  it("refuses a kind of study it doesn't offer, on a new Watch and in a preview", async () => {
+    const vol = as(app, env, `badkind${n}@x`);
+    const cond = `badkind${n}`;
+    const refused = await vol<{ error: string }>("/api/watches", "POST", watchBody(cond, { criteria: criteriaOf(cond, ["SURGERY"]) }));
+    expect(refused.status).toBe(400);
+    expect(refused.json.error).toBe("Unknown kind of study SURGERY");
+    expect((await vol("/api/preview", "POST", { criteria: criteriaOf(cond, ["SURGERY"]) })).status).toBe(400);
+    expect(filtersSent).toEqual([]);
+  });
+
+  it("shows what kind each Trial is in Recent matches and on its Alert", async () => {
+    const vol = as(app, env, `shown${n}@x`);
+    const cond = `shown${n}`;
+    catalog[cond] = [studyOfKind("NCT81000001", "OBSERVATIONAL", "DEVICE")];
+    const watch = (await vol<Watch>("/api/watches", "POST", watchBody(cond))).json;
+    const [recent] = (await vol<{ nctId: string; kinds?: string[] }[]>(`/api/watches/${watch.id}/recent`)).json;
+    expect(recent).toMatchObject({ nctId: "NCT81000001", kinds: ["OBSERVATIONAL"] });
+
+    await check();
+    catalog[cond]!.push(studyOfKind("NCT81000002", "INTERVENTIONAL", "DRUG", "DRUG", "PROCEDURE"), study("NCT81000003"));
+    await check();
+    const alerts = (await alertsOf(vol)) as AlertItem[];
+    const kindsByTrial = Object.fromEntries(alerts.map((a) => [a.trial.nctId, a.trial.kinds]));
+    expect(kindsByTrial).toEqual({ NCT81000002: ["DRUG", "PROCEDURE"], NCT81000003: undefined });
+    // The Alert's own page gets the same Trial.
+    const drugAlert = alerts.find((a) => a.trial.nctId === "NCT81000002")!;
+    expect((await vol<AlertItem>(`/api/alerts/${drugAlert.id}`)).json.trial.kinds).toEqual(["DRUG", "PROCEDURE"]);
   });
 });

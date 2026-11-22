@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Trial, Watch } from "../../shared/api";
-import { KIND_LABELS, PHASE_LABELS, STATUS_LABELS } from "../../shared/plain";
+import { PHASE_LABELS, STATUS_LABELS, kindLabel } from "../../shared/plain";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { TrialList } from "../components/TrialCard";
@@ -32,7 +32,7 @@ export function WatchPage({ id }: { id: string }) {
     ["Keywords", c.terms.join(", ")],
     ["Where", c.near ? `Within ${c.near.miles} miles of ${c.near.zip}` : "Anywhere"],
     ["Who", [c.age !== null ? `Age ${c.age}` : "", c.sex === "FEMALE" ? "Female" : c.sex === "MALE" ? "Male" : "", c.healthy ? "Healthy volunteers" : ""].filter(Boolean).join(", ") || "Anyone"],
-    ["Kind of study", c.kinds.map((k) => KIND_LABELS[k]).join("; ") || "Any"],
+    ["Kind of study", c.kinds.map(kindLabel).join("; ") || "Any"],
     ["Phases", c.phases.map((p) => PHASE_LABELS[p]).join(", ") || "Any"],
     ["Status", (c.statuses.length ? c.statuses : (Object.keys(STATUS_LABELS) as (keyof typeof STATUS_LABELS)[])).map((s) => STATUS_LABELS[s]).join(", ")],
   ];

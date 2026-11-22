@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Watch } from "../../shared/api";
-import { kindsWanted } from "../../shared/plain";
+import { kindsAsked } from "../../shared/plain";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { Link } from "../router";
@@ -8,7 +8,7 @@ import { Link } from "../router";
 export function describeCriteria(w: Watch): string {
   const c = w.criteria;
   const who = [c.healthy ? "Healthy volunteers" : "", c.near ? `within ${c.near.miles} miles of ${c.near.zip}` : ""].filter(Boolean).join(" ");
-  return [[...c.conditions, ...c.terms].join(", "), who, kindsWanted(c.kinds)].filter(Boolean).join(" · ");
+  return [[...c.conditions, ...c.terms].join(", "), who, kindsAsked(c.kinds)].filter(Boolean).join(" · ");
 }
 
 export function FollowButton({ watch, onChange }: { watch: Watch; onChange: (w: Watch) => void }) {

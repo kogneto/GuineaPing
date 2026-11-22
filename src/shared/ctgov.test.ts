@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import type { Criteria, Trial } from "./api";
+import { KINDS, type Criteria, type Trial } from "./api";
 import { buildParams, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
-import { agesText, criteriaSections, keyFacts, kindShort, kindText, kindsWanted, phaseText } from "./plain";
+import { agesText, criteriaSections, keyFacts, kindFact, kindLabel, kindsAsked, kindsText, phaseText } from "./plain";
 
 const criteria = (c: Partial<Criteria>): Criteria => withDefaults(c);
 
@@ -39,67 +39,6 @@ describe("query building", () => {
     expect(normalizeCriteria({ conditions: [], near: { zip: "02139", miles: 50 } })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
     expect(normalizeCriteria({ conditions: ["MS"], phases: ["PHASE9"] })).toEqual({ error: "Unknown phase PHASE9" });
     expect(normalizeCriteria({ conditions: [" MS ", "MS"], statuses: ["RECRUITING"] })).toEqual(criteria({ conditions: ["MS"], statuses: ["RECRUITING"] }));
-  });
-});
-
-describe("kind of study", () => {
-  const advanced = (c: Partial<Criteria>) => buildParams(criteria({ conditions: ["MS"], ...c }), "2026-11-19")["filter.advanced"];
-
-  it("asks for any of the ticked kinds, counting intervention types only for interventional studies", () => {
-    expect(advanced({ kinds: ["DRUG", "DEVICE"] })).toBe(
-      "AREA[StudyFirstPostDate]RANGE[2026-11-19,MAX] AND (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG OR DEVICE))",
-    );
-    expect(advanced({ kinds: ["OBSERVATIONAL"] })).toBe("AREA[StudyFirstPostDate]RANGE[2026-11-19,MAX] AND AREA[StudyType]OBSERVATIONAL");
-    expect(advanced({ kinds: ["OBSERVATIONAL", "DRUG"] })).toBe(
-      "AREA[StudyFirstPostDate]RANGE[2026-11-19,MAX] AND (AREA[StudyType]OBSERVATIONAL OR (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG)))",
-    );
-  });
-
-  it("asks for any kind when none is ticked, including on Watches saved before kinds existed", () => {
-    const old = withDefaults({ conditions: ["MS"], terms: [], phases: [], statuses: [] });
-    expect(old.kinds).toEqual([]);
-    expect(buildParams(old, "2026-11-19")["filter.advanced"]).toBe("AREA[StudyFirstPostDate]RANGE[2026-11-19,MAX]");
-  });
-
-  it("keeps known kinds once each, refuses unknown ones, and doesn't let a kind alone narrow a Watch", () => {
-    expect(normalizeCriteria({ conditions: ["MS"], kinds: ["DRUG", " DRUG "] })).toMatchObject({ kinds: ["DRUG"] });
-    expect(normalizeCriteria({ conditions: ["MS"], kinds: ["PILL"] })).toEqual({ error: "Unknown kind of study PILL" });
-    expect(normalizeCriteria({ conditions: [], kinds: ["DRUG"] })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
-  });
-
-  it("keeps each intervention type once, or only 'observational' for a study that gives nothing", () => {
-    const listing = (designModule: object, interventions?: object[]) =>
-      toTrial({ protocolSection: { identificationModule: { nctId: "NCT12345678" }, designModule, ...(interventions ? { armsInterventionsModule: { interventions } } : {}) } });
-    expect(listing({ studyType: "INTERVENTIONAL" }, [{ type: "DRUG" }, { type: "PROCEDURE" }, { type: "DRUG" }])?.kinds).toEqual(["DRUG", "PROCEDURE"]);
-    expect(listing({ studyType: "OBSERVATIONAL" }, [{ type: "DEVICE" }])?.kinds).toEqual(["OBSERVATIONAL"]);
-    expect(listing({ studyType: "INTERVENTIONAL" })).not.toHaveProperty("kinds");
-  });
-
-  it("says what kind of study it is in plain words", () => {
-    expect(kindShort(["DRUG"])).toBe("Drug study");
-    expect(kindShort(["PROCEDURE", "DRUG"])).toBe("Drug and procedure study");
-    expect(kindShort(["BEHAVIORAL", "DRUG", "RADIATION"])).toBe("Drug, behavioural and more");
-    expect(kindShort(["DEVICE", "OTHER"])).toBe("Device study");
-    expect(kindShort(["OTHER"])).toBe("Other kind of study");
-    expect(kindShort(["OBSERVATIONAL"])).toBe("Observation only");
-    expect(kindShort(undefined)).toBeNull();
-    expect(kindText(["PROCEDURE", "DRUG"])).toBe("Tests a drug; Involves a procedure");
-    expect(kindText(["OBSERVATIONAL"])).toBe("Observation only: nothing is given to you");
-    expect(kindText(["SOMETHING_NEW"])).toBe("Something new");
-    expect(kindsWanted(["DEVICE", "DRUG"])).toBe("Drug or device studies");
-    expect(kindsWanted(["OBSERVATIONAL", "DEVICE", "DRUG"])).toBe("Drug, device or observational studies");
-    expect(kindsWanted([])).toBeNull();
-  });
-
-  it("puts the kind in a Trial's line of facts, and shows older Trials without one as before", () => {
-    const trial: Trial = {
-      nctId: "NCT12345678", title: "", summary: "", firstPosted: "", status: "RECRUITING", phases: ["NA"], conditions: [], sponsor: "",
-      minimumAge: "18 Years", maximumAge: "", locations: [], url: "",
-    };
-    expect(keyFacts(trial)).toEqual(["Recruiting now", "No phase (phases are mainly for drug trials)", "Ages 18 and up"]);
-    // A drug study with no phase shouldn't also say "no phase": the kind says more, in fewer words.
-    expect(keyFacts({ ...trial, kinds: ["DRUG"] })).toEqual(["Recruiting now", "Drug study", "Ages 18 and up"]);
-    expect(keyFacts({ ...trial, phases: ["PHASE1"], kinds: ["DRUG"] })).toEqual(["Recruiting now", "Drug study", "Phase 1 (first tests of safety and dose in a small group)", "Ages 18 and up"]);
   });
 });
 
@@ -204,5 +143,126 @@ describe("plain language", () => {
     ]);
     expect(criteriaSections("Adults with asthma.\nNo smokers.")).toEqual([{ kind: "other", items: ["Adults with asthma.", "No smokers."] }]);
     expect(criteriaSections("")).toEqual([]);
+  });
+});
+
+describe("kind of study", () => {
+  const SINCE = "AREA[StudyFirstPostDate]RANGE[2026-11-19,MAX]";
+  const filterFor = (c: Partial<Criteria>) => buildParams(criteria({ conditions: ["MS"], ...c }), "2026-11-19")["filter.advanced"];
+  /** A study record as ClinicalTrials.gov sends it, with only the parts that say what kind it is. */
+  const listing = (studyType: string | undefined, ...types: string[]) => ({
+    protocolSection: {
+      identificationModule: { nctId: "NCT12345678" },
+      designModule: studyType ? { studyType } : {},
+      ...(types.length ? { armsInterventionsModule: { interventions: types.map((type) => ({ type })) } } : {}),
+    },
+  });
+
+  it("leaves the query alone when a Watch takes any kind, as every Watch saved before kinds did", () => {
+    expect(filterFor({ kinds: [] })).toBe(SINCE);
+    const savedBefore = withDefaults({ conditions: ["MS"], terms: [], phases: [], statuses: [], near: null, age: null, sex: null, healthy: false });
+    expect(savedBefore.kinds).toEqual([]);
+    expect(buildParams(savedBefore, "2026-11-19")["filter.advanced"]).toBe(SINCE);
+  });
+
+  it("asks for interventional studies of any ticked type", () => {
+    expect(filterFor({ kinds: ["DRUG"] })).toBe(`${SINCE} AND (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG))`);
+    expect(filterFor({ kinds: ["DEVICE", "DIETARY_SUPPLEMENT"] })).toBe(
+      `${SINCE} AND (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DEVICE OR DIETARY_SUPPLEMENT))`,
+    );
+  });
+
+  it("asks for observational studies by study type, alone or alongside the ticked types", () => {
+    expect(filterFor({ kinds: ["OBSERVATIONAL"] })).toBe(`${SINCE} AND AREA[StudyType]OBSERVATIONAL`);
+    expect(filterFor({ kinds: ["DRUG", "OBSERVATIONAL", "DEVICE"] })).toBe(
+      `${SINCE} AND (AREA[StudyType]OBSERVATIONAL OR (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG OR DEVICE)))`,
+    );
+  });
+
+  it("narrows by kind together with phase and who can join", () => {
+    expect(filterFor({ kinds: ["DRUG"], phases: ["PHASE1"], healthy: true })).toBe(
+      `${SINCE} AND AREA[Phase](PHASE1) AND (AREA[StudyType]INTERVENTIONAL AND AREA[InterventionType](DRUG)) AND AREA[HealthyVolunteers]true`,
+    );
+  });
+
+  it("accepts every kind the Watch form offers, once each, and nothing else", () => {
+    expect(normalizeCriteria({ conditions: ["MS"], kinds: [...KINDS, "DRUG"] })).toMatchObject({ kinds: [...KINDS] });
+    expect(normalizeCriteria({ conditions: ["MS"] })).toMatchObject({ kinds: [] });
+    // RADIATION is a real type, but not one a Watch may ask for.
+    expect(normalizeCriteria({ conditions: ["MS"], kinds: ["RADIATION"] })).toEqual({ error: "Unknown kind of study RADIATION" });
+    expect(normalizeCriteria({ conditions: ["MS"], kinds: ["drug) OR AREA[Phase](NA"] })).toHaveProperty("error");
+  });
+
+  it("still needs words or a place: a kind alone would match far too much", () => {
+    expect(normalizeCriteria({ conditions: [], kinds: ["DRUG"] })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
+  });
+
+  it("reads a Trial's kinds from its listing", () => {
+    expect(toTrial(listing("INTERVENTIONAL", "DRUG", "OTHER", "DRUG", "PROCEDURE"))?.kinds).toEqual(["DRUG", "OTHER", "PROCEDURE"]);
+    // An observational study is only that, even when its listing names something like a device.
+    expect(toTrial(listing("OBSERVATIONAL", "DEVICE"))?.kinds).toEqual(["OBSERVATIONAL"]);
+    expect(toTrial(listing("OBSERVATIONAL"))?.kinds).toEqual(["OBSERVATIONAL"]);
+  });
+
+  it("gives a Trial no kinds at all when its listing names none", () => {
+    expect(toTrial(listing("INTERVENTIONAL"))).not.toHaveProperty("kinds");
+    expect(toTrial(listing(undefined))).not.toHaveProperty("kinds");
+  });
+
+  it("names each kind in plain words, and a kind it has never heard of by its own name", () => {
+    expect(kindLabel("DRUG")).toBe("Tests a drug");
+    expect(kindLabel("OBSERVATIONAL")).toBe("Observation only: nothing is given to you");
+    expect(kindLabel("LIGHT_THERAPY")).toBe("Light therapy");
+    for (const kind of KINDS) expect(kindLabel(kind)).not.toMatch(/[A-Z]{2}|_/);
+  });
+
+  it("lists all of a Trial's kinds on its Alert page, in the same order every time", () => {
+    expect(kindsText(["PROCEDURE", "OTHER", "DRUG"])).toBe("Tests a drug; Involves a procedure; Something else: see the listing");
+    expect(kindsText(["OBSERVATIONAL"])).toBe("Observation only: nothing is given to you");
+    expect(kindsText([])).toBeNull();
+    expect(kindsText(undefined)).toBeNull();
+  });
+
+  it("keeps the kind short enough for the line of facts", () => {
+    expect(kindFact(["DEVICE"])).toBe("Device study");
+    expect(kindFact(["BEHAVIORAL", "DRUG"])).toBe("Drug + behavioural study");
+    expect(kindFact(["DEVICE", "BIOLOGICAL"])).toBe("Vaccine or biological + device study");
+    expect(kindFact(["RADIATION", "PROCEDURE", "DRUG", "DEVICE"])).toBe("Drug + device + more");
+    expect(kindFact(["OBSERVATIONAL"])).toBe("Observation only");
+    expect(kindFact(["LIGHT_THERAPY"])).toBe("Light therapy study");
+    // "Other" says nothing a volunteer can use.
+    expect(kindFact(["OTHER", "DIETARY_SUPPLEMENT"])).toBe("Supplement study");
+    expect(kindFact(["OTHER"])).toBeNull();
+    expect(kindFact(undefined)).toBeNull();
+  });
+
+  it("says in one phrase which kinds a Watch asks for", () => {
+    expect(kindsAsked(["DRUG"])).toBe("Drug studies");
+    expect(kindsAsked(["OBSERVATIONAL", "DRUG"])).toBe("Drug or observational studies");
+    expect(kindsAsked(["OBSERVATIONAL", "DEVICE", "DRUG"])).toBe("Drug, device or observational studies");
+    expect(kindsAsked([])).toBeNull();
+  });
+
+  describe("in a Trial's line of facts", () => {
+    const trial = (extra: Partial<Trial>): Trial => ({
+      nctId: "NCT12345678", title: "T", summary: "", firstPosted: "2026-11-20", status: "RECRUITING", phases: [], conditions: [], sponsor: "",
+      minimumAge: "18 Years", maximumAge: "65 Years", locations: [], url: "", ...extra,
+    });
+
+    it("comes after the status and before the phase", () => {
+      expect(keyFacts(trial({ kinds: ["DRUG"], phases: ["PHASE1"] }))).toEqual([
+        "Recruiting now", "Drug study", "Phase 1 (first tests of safety and dose in a small group)", "Ages 18–65",
+      ]);
+      expect(keyFacts(trial({ kinds: ["OBSERVATIONAL"] }))).toEqual(["Recruiting now", "Observation only", "Ages 18–65"]);
+    });
+
+    it("stands in for 'no phase', which is only said when there is no kind to show", () => {
+      expect(keyFacts(trial({ kinds: ["DRUG"], phases: ["NA"] }))).toEqual(["Recruiting now", "Drug study", "Ages 18–65"]);
+      expect(keyFacts(trial({ kinds: ["OTHER"], phases: ["NA"] }))).toEqual(["Recruiting now", "No phase (not every study is run in phases)", "Ages 18–65"]);
+    });
+
+    it("is absent for a Trial stored before kinds were kept, whose other facts read as they did", () => {
+      expect(keyFacts(trial({ phases: ["PHASE2"] }))).toEqual(["Recruiting now", "Phase 2 (testing whether it works and is safe in a larger group)", "Ages 18–65"]);
+    });
   });
 });

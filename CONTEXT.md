@@ -21,7 +21,7 @@ _Avoid_: Subscription, endpoint, client
 ### Trials and Watches
 
 **Trial**:
-One study registered on ClinicalTrials.gov, identified by its NCT ID. Each Trial is of one or more kinds: what it tests (a drug, a device, a supplement, a behavioural programme…), or observation only, where nothing is given to the people in it.
+One study registered on ClinicalTrials.gov, identified by its NCT ID. Every Trial has a kind: either it only observes the people in it, or it tests something on them, such as a drug, a device, a supplement or a behavioural programme, and it may test more than one.
 _Avoid_: Study, listing, record
 
 **Watch**:
