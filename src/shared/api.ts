@@ -206,5 +206,7 @@ export type ClinicItem = {
   lastReadAt: string | null;
   /** True when the Clinic's site has refused GuineaPing, so reading has stopped. */
   refused: boolean;
+  /** Whether this Member asked for a Push when this Clinic's list shows a new Opening. */
+  pushNew: boolean;
   openings: Opening[];
 };

@@ -20,7 +20,7 @@ export function vapidFrom(env: Env): Vapid | null {
   return { publicKey: e.VAPID_PUBLIC_KEY, privateKey: e.VAPID_PRIVATE_KEY, subject: e.VAPID_SUBJECT };
 }
 
-const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+export const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
 /**
  * The words on the lock screen. A trial found through a Private watch is never named there, since
@@ -53,13 +53,13 @@ export function messagesFor(alerts: NewAlert[]): PushMessage[] {
  */
 export const NOTE_MESSAGE: PushMessage = { title: "A note for you in GuineaPing", body: "Open GuineaPing to read it.", url: "/", tag: "note" };
 
-type DeviceRow = { id: string; member_id: string; endpoint: string; p256dh: string; auth: string };
+export type DeviceRow = { id: string; member_id: string; endpoint: string; p256dh: string; auth: string };
 
 /**
  * Sends one Member's messages to all their Devices; forgets Devices the push service says are gone.
  * `settled` is false only when the Member has Devices and none of them got anything: worth retrying.
  */
-async function deliver(db: D1Database, vapid: Vapid, devices: DeviceRow[], messages: PushMessage[], post: typeof fetch) {
+export async function deliver(db: D1Database, vapid: Vapid, devices: DeviceRow[], messages: PushMessage[], post: typeof fetch) {
   const jobs = devices.flatMap((d) => messages.map((m) => ({ d, m })));
   const outcomes = await Promise.all(
     jobs.map(({ d, m }) =>

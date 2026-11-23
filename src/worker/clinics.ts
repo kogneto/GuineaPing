@@ -1,6 +1,7 @@
 /**
- * The Clinics page: every Clinic GuineaPing knows, with the Openings read from those it reads, and
- * which of them the Member has set aside. Marks are each Member's own: every query is by member_id,
+ * The Clinics page: every Clinic GuineaPing knows, with the Openings read from those it reads,
+ * which of them the Member has set aside, and where they asked for a Push about new ones. Marks
+ * and Push choices are each Member's own: every query is by member_id,
  * and the study an Opening belongs to is always worked out here from the stored entry.
  */
 import type { ClinicItem, Near, Opening } from "../shared/api";
@@ -12,18 +13,20 @@ type Row = { id: string; source: string; clinic_id: string; title: string; pay: 
 type MarkRow = { kind: "round" | "study"; key: string; seen: string | null };
 
 /** A study at one Clinic. One source can list several Clinics (Fortrea's four cities), and "Not for me" in one city says nothing about another. */
-const studyKey = (r: { source: string; clinic_id: string; code: string | null }) => {
+export const studyKey = (r: { source: string; clinic_id: string; code: string | null }) => {
   const study = studyOf(r.source, r.code);
   return study ? `${r.clinic_id}:${study}` : null;
 };
 const seenOf = (r: { code: string | null; when_text: string | null; first_seen_at: string }) => roundSeen({ code: r.code, when: r.when_text, firstSeen: r.first_seen_at.slice(0, 10) });
 
 export async function listClinics(db: D1Database, near: Near | null, memberId: string): Promise<ClinicItem[]> {
-  const [openings, sources, marks] = await db.batch([
+  const [openings, sources, marks, pushes] = await db.batch([
     db.prepare("SELECT id, source, clinic_id, title, pay, when_text, stay, who, code, url, first_seen_at FROM clinic_openings WHERE gone_at IS NULL ORDER BY first_seen_at DESC, title"),
     db.prepare("SELECT source, read_at, refused_at FROM clinic_sources"),
     db.prepare("SELECT kind, key, seen FROM opening_marks WHERE member_id = ?").bind(memberId),
+    db.prepare("SELECT clinic_id FROM clinic_pushes WHERE member_id = ?").bind(memberId),
   ]);
+  const pushed = new Set(((pushes?.results ?? []) as { clinic_id: string }[]).map((p) => p.clinic_id));
   const studies = new Set<string>();
   const rounds = new Map<string, string | null>();
   for (const m of (marks?.results ?? []) as MarkRow[]) {
@@ -51,10 +54,24 @@ export async function listClinics(db: D1Database, near: Near | null, memberId: s
       read: clinic.source !== null,
       lastReadAt: s?.read_at ?? null,
       refused: !!s?.refused_at,
+      pushNew: pushed.has(clinic.id),
       openings: byClinic.get(clinic.id) ?? [],
     };
   });
   return items.sort((a, b) => (a.miles ?? 0) - (b.miles ?? 0) || a.name.localeCompare(b.name) || a.place.localeCompare(b.place));
+}
+
+/** Turns a Member's Push for new Openings at one Clinic on or off. Only a Clinic that is read can have one. */
+export async function setClinicPush(db: D1Database, memberId: string, clinicId: unknown, on: unknown, now: string): Promise<{ ok: true } | { error: string; status: 400 | 404 }> {
+  const clinic = CLINICS.find((c) => c.id === clinicId);
+  if (!clinic) return { error: "No such Clinic", status: 404 };
+  if (typeof on !== "boolean") return { error: "Say whether the Push is on or off", status: 400 };
+  if (on && !clinic.source) return { error: "GuineaPing doesn't read this Clinic's list, so it can't tell you about new Openings there.", status: 400 };
+  await (on
+    ? db.prepare("INSERT INTO clinic_pushes (member_id, clinic_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").bind(memberId, clinic.id, now)
+    : db.prepare("DELETE FROM clinic_pushes WHERE member_id = ? AND clinic_id = ?").bind(memberId, clinic.id)
+  ).run();
+  return { ok: true };
 }
 
 /**

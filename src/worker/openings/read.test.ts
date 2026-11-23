@@ -2,7 +2,9 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { ClinicItem } from "../../shared/api";
 import { as, createWorkerEnv } from "../../test/worker-env";
 import { app } from "../app";
-import { plainFetch, readDueSource, type Fetcher } from "./read";
+import { b64url } from "../webpush";
+import { openingMessages, pushNewOpenings } from "./announce";
+import { plainFetch, readDueSource, type Fetcher, type FreshOpening } from "./read";
 import type { Found, Source } from "./types";
 
 let env: Env;
@@ -13,7 +15,7 @@ beforeAll(async () => {
 });
 afterAll(() => dispose());
 beforeEach(async () => {
-  await env.DB.batch([env.DB.prepare("DELETE FROM clinic_openings"), env.DB.prepare("DELETE FROM clinic_sources"), env.DB.prepare("DELETE FROM opening_marks")]);
+  await env.DB.batch([env.DB.prepare("DELETE FROM clinic_openings"), env.DB.prepare("DELETE FROM clinic_sources"), env.DB.prepare("DELETE FROM opening_marks"), env.DB.prepare("DELETE FROM clinic_pushes")]);
 });
 
 const PAGE = "https://www.fortreaclinicaltrials.com/en-us/clinical-research/browse-studies";
@@ -39,23 +41,151 @@ const serving =
   };
 const noWait = async () => {};
 const DAY1 = "2026-11-22T09:47:00.000Z";
+const SAME_HOUR = "2026-11-22T10:41:00.000Z";
+const NEXT_HOUR = "2026-11-22T10:45:00.000Z";
 const LATER_DAY1 = "2026-11-22T20:47:00.000Z";
 const DAY2 = "2026-11-23T09:47:00.000Z";
 const current = async () => (await env.DB.prepare("SELECT id FROM clinic_openings WHERE gone_at IS NULL ORDER BY id").all<{ id: string }>()).results.map((r) => r.id);
 
+describe("what a read calls new", () => {
+  const at = (h: number) => `2026-11-22T${String(h).padStart(2, "0")}:47:00.000Z`;
+  const read = async (h: number, entries: Found[]) => (await readDueSource(env.DB, [source()], serving(entries), at(h), noWait))!.fresh.map((f) => f.id);
+
+  it("calls nothing new on a source's first good read, even after a failed one", async () => {
+    const down: Fetcher = async () => new Response("down", { status: 503 });
+    await readDueSource(env.DB, [source()], down, at(1), noWait);
+    expect(await read(2, [opening("a"), opening("b")])).toEqual([]);
+  });
+
+  it("calls an entry new when the list did not have it before", async () => {
+    await read(1, [opening("a")]);
+    expect(await read(2, [opening("a"), opening("b")])).toEqual(["fortrea:b"]);
+    expect(await read(3, [opening("a"), opening("b")])).toEqual([]);
+  });
+
+  it("calls an entry new when it had gone and is back", async () => {
+    await read(1, [opening("a"), opening("b")]);
+    await read(2, [opening("b")]);
+    expect(await read(3, [opening("a"), opening("b")])).toEqual(["fortrea:a"]);
+  });
+
+  it("calls an entry new when its page stays but the group or the dates change", async () => {
+    await read(1, [opening("a", { code: "780798 G5", when: "12/01/2026" }), opening("b", { when: "12/01/2026" })]);
+    expect(await read(2, [opening("a", { code: "780798 G6", when: "12/01/2026" }), opening("b", { when: "12/01/2026" })])).toEqual(["fortrea:a"]);
+    expect(await read(3, [opening("a", { code: "780798 G6", when: "12/01/2026" }), opening("b", { when: "12/30/2026" })])).toEqual(["fortrea:b"]);
+  });
+
+  it("counts an entry that is new as first seen then, so the page shows it as new too", async () => {
+    await read(1, [opening("a", { code: "780798 G5" }), opening("b")]);
+    await read(2, [opening("a", { code: "780798 G6" }), opening("b")]);
+    const { results } = await env.DB.prepare("SELECT id, first_seen_at FROM clinic_openings ORDER BY id").all();
+    expect(results).toEqual([
+      { id: "fortrea:a", first_seen_at: at(2) },
+      { id: "fortrea:b", first_seen_at: at(1) },
+    ]);
+  });
+
+  it("does not call an entry new for a change of pay or wording, or for losing its dates", async () => {
+    await read(1, [opening("a", { when: "12/01/2026" })]);
+    expect(await read(2, [opening("a", { when: null, pay: "$2,000", title: "Reworded" })])).toEqual([]);
+  });
+});
+
+describe("Pushes for new Openings", () => {
+  let n = 0;
+  beforeEach(() => void n++);
+  const fresh = (key: string, over: Partial<Found> = {}): FreshOpening => ({ ...opening(key, over), id: `fortrea:${key}` });
+  const vapid = () => {
+    const e = env as Env & { VAPID_PUBLIC_KEY: string; VAPID_PRIVATE_KEY: string; VAPID_SUBJECT: string };
+    return { publicKey: e.VAPID_PUBLIC_KEY, privateKey: e.VAPID_PRIVATE_KEY, subject: e.VAPID_SUBJECT };
+  };
+  /** A Member with one Device, and the push service's record of what reached it. */
+  async function memberWithDevice(name: string) {
+    const who = as(app, env, `${name}${n}@x`);
+    const pair = (await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"])) as CryptoKeyPair;
+    const keys = { p256dh: b64url.encode((await crypto.subtle.exportKey("raw", pair.publicKey)) as ArrayBuffer), auth: b64url.encode(crypto.getRandomValues(new Uint8Array(16))) };
+    const endpoint = `https://fcm.googleapis.com/fcm/send/${name}-${n}`;
+    expect((await who("/api/devices", "POST", { endpoint, keys, label: "Phone" })).status).toBe(201);
+    return { who, endpoint };
+  }
+  function pushService() {
+    const calls: string[] = [];
+    const post = (async (url: string) => {
+      calls.push(url);
+      return new Response(null, { status: 201 });
+    }) as typeof fetch;
+    return { calls, post };
+  }
+
+  it("go only to Members who asked about that Clinic", async () => {
+    const ann = await memberWithDevice("ann");
+    const bob = await memberWithDevice("bob");
+    const cat = await memberWithDevice("cat");
+    expect((await ann.who("/api/clinics/push", "POST", { id: "fortrea-madison", on: true })).status).toBe(200);
+    await bob.who("/api/clinics/push", "POST", { id: "fortrea-dallas", on: true });
+    const service = pushService();
+    const r = await pushNewOpenings(env.DB, vapid(), "fortrea", [fresh("a")], service.post);
+    expect(r.sent).toBe(1);
+    expect(service.calls).toEqual([ann.endpoint]);
+    expect(cat.endpoint).not.toBe(ann.endpoint);
+  });
+
+  it("stop when the Member turns them off, and show on the Clinics page meanwhile", async () => {
+    const ann = await memberWithDevice("off");
+    await ann.who("/api/clinics/push", "POST", { id: "fortrea-madison", on: true });
+    const chosen = async () => (await ann.who<ClinicItem[]>("/api/clinics")).json.filter((c) => c.pushNew).map((c) => c.id);
+    expect(await chosen()).toEqual(["fortrea-madison"]);
+    await ann.who("/api/clinics/push", "POST", { id: "fortrea-madison", on: false });
+    expect(await chosen()).toEqual([]);
+    const service = pushService();
+    await pushNewOpenings(env.DB, vapid(), "fortrea", [fresh("a")], service.post);
+    expect(service.calls).toEqual([]);
+  });
+
+  it("leave out a study the Member marked Not for me", async () => {
+    const ann = await memberWithDevice("nfm");
+    await ann.who("/api/clinics/push", "POST", { id: "fortrea-madison", on: true });
+    await readDueSource(env.DB, [source()], serving([opening("a", { code: "780798 G5" })]), DAY1, noWait);
+    expect((await ann.who("/api/openings/mark", "POST", { id: "fortrea:a", mark: "not_for_me" })).status).toBe(200);
+    const service = pushService();
+    await pushNewOpenings(env.DB, vapid(), "fortrea", [fresh("a", { code: "780798 G6" })], service.post);
+    expect(service.calls).toEqual([]);
+    await pushNewOpenings(env.DB, vapid(), "fortrea", [fresh("b", { code: "781111 G1" })], service.post);
+    expect(service.calls).toEqual([ann.endpoint]);
+  });
+
+  it("can't be asked for at a Clinic that isn't read, or one that doesn't exist", async () => {
+    const ann = as(app, env, `ask${n}@x`);
+    const linkOnly = (await ann<ClinicItem[]>("/api/clinics")).json.find((c) => !c.read)!;
+    expect((await ann("/api/clinics/push", "POST", { id: linkOnly.id, on: true })).status).toBe(400);
+    expect((await ann("/api/clinics/push", "POST", { id: "nowhere", on: true })).status).toBe(404);
+    expect((await ann("/api/clinics/push", "POST", { id: "fortrea-madison" })).status).toBe(400);
+  });
+
+  it("name the Clinic and give the entry in its own words", () => {
+    expect(openingMessages([fresh("a", { clinicId: "fortrea-daytona", title: "Healthy Men & Women Needed!", pay: "$5,100", when: "12/30/2026", stay: "2 stays of 4 nights" })])).toEqual([
+      { title: "New at Fortrea, Daytona Beach, FL", body: "Healthy Men & Women Needed! · $5,100 · 12/30/2026 · 2 stays of 4 nights", url: "/clinics", tag: "fortrea:a" },
+    ]);
+  });
+
+  it("become one Push when there are more than three at once", () => {
+    expect(openingMessages(["a", "b", "c", "d"].map((k) => fresh(k)))).toEqual([{ title: "4 new Openings at Clinics you chose", body: "Open GuineaPing to see them.", url: "/clinics", tag: "openings" }]);
+  });
+});
+
 describe("reading a Clinic's list", () => {
   it("stores what it finds and reports it", async () => {
     const r = await readDueSource(env.DB, [source()], serving([opening("a"), opening("b")]), DAY1, noWait);
-    expect(r).toEqual({ source: "fortrea", status: "ok", found: 2 });
+    expect(r).toEqual({ source: "fortrea", status: "ok", found: 2, fresh: [], statusChanged: true });
     expect(await current()).toEqual(["fortrea:a", "fortrea:b"]);
   });
 
-  it("reads a source at most once a day, however often it is asked", async () => {
+  it("reads a source at most once an hour, however often it is asked", async () => {
     const calls: string[] = [];
     await readDueSource(env.DB, [source()], serving([opening("a")], calls), DAY1, noWait);
-    expect(await readDueSource(env.DB, [source()], serving([opening("a")], calls), LATER_DAY1, noWait)).toBeNull();
+    expect(await readDueSource(env.DB, [source()], serving([opening("a")], calls), SAME_HOUR, noWait)).toBeNull();
     expect(calls).toHaveLength(1);
-    expect(await readDueSource(env.DB, [source()], serving([opening("a")], calls), DAY2, noWait)).toMatchObject({ status: "ok" });
+    expect(await readDueSource(env.DB, [source()], serving([opening("a")], calls), NEXT_HOUR, noWait)).toMatchObject({ status: "ok" });
     expect(calls).toHaveLength(2);
   });
 
@@ -63,8 +193,8 @@ describe("reading a Clinic's list", () => {
     const calls: string[] = [];
     const two = [source("fortrea"), source("celerion", ["https://helpresearch.com/studies"])];
     expect((await readDueSource(env.DB, two, serving([], calls), DAY1, noWait))?.source).toBe("fortrea");
-    expect((await readDueSource(env.DB, two, serving([], calls), LATER_DAY1, noWait))?.source).toBe("celerion");
-    expect(await readDueSource(env.DB, two, serving([], calls), LATER_DAY1, noWait)).toBeNull();
+    expect((await readDueSource(env.DB, two, serving([], calls), "2026-11-22T09:53:00.000Z", noWait))?.source).toBe("celerion");
+    expect(await readDueSource(env.DB, two, serving([], calls), "2026-11-22T09:59:00.000Z", noWait)).toBeNull();
     expect(calls).toEqual([PAGE, "https://helpresearch.com/studies"]);
   });
 
@@ -100,6 +230,16 @@ describe("reading a Clinic's list", () => {
       waits.push(ms);
     });
     expect(waits).toEqual([3000]);
+  });
+
+  it("says a lasting problem has changed only when it starts and when it ends", async () => {
+    const down: Fetcher = async () => new Response("down", { status: 503 });
+    const at = (h: number) => `2026-11-22T${String(h).padStart(2, "0")}:47:00.000Z`;
+    expect(await readDueSource(env.DB, [source()], serving([opening("a")]), at(1), noWait)).toMatchObject({ status: "ok", statusChanged: true });
+    expect(await readDueSource(env.DB, [source()], serving([opening("a")]), at(2), noWait)).toMatchObject({ status: "ok", statusChanged: false });
+    expect(await readDueSource(env.DB, [source()], down, at(3), noWait)).toMatchObject({ status: "failed", statusChanged: true });
+    expect(await readDueSource(env.DB, [source()], down, at(4), noWait)).toMatchObject({ status: "failed", statusChanged: false });
+    expect(await readDueSource(env.DB, [source()], serving([opening("a")]), at(5), noWait)).toMatchObject({ status: "ok", statusChanged: true });
   });
 
   it("tries again the next day after an ordinary failure, keeping what it had", async () => {
