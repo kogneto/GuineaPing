@@ -121,6 +121,12 @@ export type Watch = {
   following: boolean;
   /** ClinicalTrials.gov hasn't answered for this Watch in over a day, so it may be missing Trials. */
   failing: boolean;
+  /**
+   * What the Watch can alert on. "all": every Trial it matched was recorded, so any Trial that
+   * comes to match is new to it, however long ago it was posted. "recent": it matches too many to
+   * record, so only newly posted Trials are new. Null: not worked out yet; the next Check does.
+   */
+  knows: "all" | "recent" | null;
 };
 
 export type WatchInput = { name: string; criteria: Criteria; private: boolean };

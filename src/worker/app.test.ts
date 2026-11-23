@@ -796,6 +796,26 @@ describe("Trials that come to match later", () => {
     expect((await check()).alertsCreated).toBe(0);
   });
 
+  it("tells whoever can see a Watch what it can alert on", async () => {
+    const owner = as(app, env, `says${n}@x`);
+    const other = as(app, env, `says-other${n}@x`);
+    catalog[`narrow${n}`] = [study("NCT95050001")];
+    const narrow = await owner<Watch>("/api/watches", "POST", watchBody(`narrow${n}`));
+    expect(narrow.json.knows).toBe("all");
+    expect((await other<Watch>(`/api/watches/${narrow.json.id}`)).json.knows).toBe("all");
+
+    tooBroad = [`wide${n}`];
+    const wide = await owner<Watch>("/api/watches", "POST", watchBody(`wide${n}`));
+    expect(wide.json.knows).toBe("recent");
+    expect((await owner<Watch[]>("/api/watches")).json.find((w) => w.id === wide.json.id)?.knows).toBe("recent");
+
+    // A Watch made before this was kept: not worked out until its next Check.
+    await env.DB.prepare("UPDATE watches SET knows = NULL WHERE id = ?").bind(narrow.json.id).run();
+    expect((await owner<Watch>(`/api/watches/${narrow.json.id}`)).json.knows).toBeNull();
+    await check();
+    expect((await owner<Watch>(`/api/watches/${narrow.json.id}`)).json.knows).toBe("all");
+  });
+
   it("keeps looking only at newly posted Trials for a Watch that matches too many to record", async () => {
     const vol = as(app, env, `broad${n}@x`);
     const cond = `broad${n}`;

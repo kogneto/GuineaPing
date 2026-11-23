@@ -7,6 +7,13 @@ import { TrialList } from "../components/TrialCard";
 import { Link, navigate } from "../router";
 import { FollowButton } from "./WatchesPage";
 
+/** What a Watch sends Alerts for, which depends on whether it could record every Trial it matches. */
+const ALERTS_ON = {
+  all: "This Watch alerts on any trial that starts to match from now on, including one posted long ago that changes, such as adding a site or reopening.",
+  recent: "This Watch matches more than 1,000 trials, so it alerts only on newly posted ones. An older trial that changes and starts to match is missed; narrow the Watch to catch those.",
+  unknown: "It alerts on newly posted trials. At the next hourly check GuineaPing works out whether it can also catch older trials that change.",
+};
+
 export function WatchPage({ id }: { id: string }) {
   const [watch, setWatch] = useState<Watch | null>(null);
   const [recent, setRecent] = useState<Trial[] | null>(null);
@@ -70,7 +77,7 @@ export function WatchPage({ id }: { id: string }) {
         </p>
       )}
       <h2>Recent matches</h2>
-      <p className="muted small">Trials first posted in the last 30 days. These don't send Alerts; only trials that start to match from now on do, including older ones that change.</p>
+      <p className="muted small">Trials first posted in the last 30 days. These don't send Alerts. {ALERTS_ON[watch.knows ?? "unknown"]}</p>
       {recentError ? <p className="error">{recentError}</p> : <TrialList trials={recent} empty="Nothing posted in the last 30 days matches. Still watching for new ones." art="lookout" />}
     </>
   );
