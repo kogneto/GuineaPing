@@ -19,7 +19,7 @@ A study a Member took part in, as they wrote it down: the day it ended, the day 
 _Avoid_: Participation, enrolment, history
 
 **Waiting period**:
-The days a Member waits after a Past study before joining another: from the later of the day it ended and the day of the last dose, 30 days unless the Member says otherwise. It is the Member's own reminder, worked out from what they typed. GuineaPing checks no registry, and each study sets its own rule. When it ends the Member is told once, in their Alert list.
+The days a Member waits after a Past study before joining another: from the later of the day it ended and the day of the last dose, 30 days unless the Member says otherwise. It is the Member's own reminder, worked out from what they typed. GuineaPing checks no registry, and each study sets its own rule. When it ends the Member is told once: a line in their Alert list, and a Push that says only that there is a note to read.
 _Avoid_: Washout (the clinics' word; say it once when explaining), cooldown, lockout
 
 **Device**:
@@ -83,7 +83,7 @@ News about a Trial a Member already has an Alert for: it has started recruiting,
 _Avoid_: Change alert, second Alert, re-alert
 
 **Push**:
-What appears on a Member's Devices when Alerts are created or get an Update. A Push carries a single Alert, or, when a Member has more than three Alerts waiting, one Push summarises them all and opens the Alert list. A Push that reaches none of a Member's Devices is tried again with each Check for a day.
+What appears on a Member's Devices when Alerts are created or get an Update, or when a Waiting period ends. A Push carries a single Alert, or, when a Member has more than three Alerts waiting, one Push summarises them all and opens the Alert list. The Push for an ended Waiting period names no study, Clinic or waiting: it says there is a note to read, and is never counted as an Alert. A Push that reaches none of a Member's Devices is tried again with each Check for a day.
 _Avoid_: Notification, ping, Alert (an Alert is the record; a Push is how it is announced)
 
 **Alert list**:

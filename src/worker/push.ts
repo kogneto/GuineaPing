@@ -3,7 +3,7 @@
  * truth, so nothing here can fail a Check; a Push that doesn't arrive just means the Member sees
  * the Alert next time they open the app.
  */
-import { alertsToPush, settlePushed } from "./alerts";
+import { alertsToPush, notesToPush, settleNotesPushed, settlePushed } from "./alerts";
 import type { Trial } from "../shared/api";
 import { keyFacts } from "../shared/plain";
 import { b64url, sendPush, type PushMessage, type PushOutcome, type Subscription, type Vapid } from "./webpush";
@@ -46,6 +46,13 @@ export function messagesFor(alerts: NewAlert[]): PushMessage[] {
   );
 }
 
+/**
+ * The words for a note in the Alert list that is announced, such as a waiting period ending. They
+ * say only that there is a note: what it is about could tell whoever glances at the phone that
+ * the Member takes part in studies. One Push covers however many notes are waiting.
+ */
+export const NOTE_MESSAGE: PushMessage = { title: "A note for you in GuineaPing", body: "Open GuineaPing to read it.", url: "/", tag: "note" };
+
 type DeviceRow = { id: string; member_id: string; endpoint: string; p256dh: string; auth: string };
 
 /**
@@ -82,14 +89,16 @@ const RETRY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Announces every Alert not yet pushed: per Member, one Push per Alert, or one summary if there
- * are many. An Alert is settled once any of the Member's Devices got it, or they have no Device
- * to send to; otherwise the next Check tries again, for up to a day.
+ * are many; and one more Push when notes written to be announced are waiting, which never counts
+ * as an Alert. Each is settled once any of the Member's Devices got it, or they have no Device to
+ * send to; otherwise the next Check tries again, for up to a day.
  */
 export async function pushPendingAlerts(db: D1Database, vapid: Vapid, post: typeof fetch = fetch, now = Date.now()) {
-  const byMember = new Map<string, NewAlert[]>();
-  for (const alert of await alertsToPush(db, new Date(now - RETRY_MS).toISOString())) {
-    byMember.set(alert.memberId, [...(byMember.get(alert.memberId) ?? []), alert]);
-  }
+  const since = new Date(now - RETRY_MS).toISOString();
+  const byMember = new Map<string, { alerts: NewAlert[]; notes: string[] }>();
+  const of = (memberId: string) => byMember.get(memberId) ?? byMember.set(memberId, { alerts: [], notes: [] }).get(memberId)!;
+  for (const alert of await alertsToPush(db, since)) of(alert.memberId).alerts.push(alert);
+  for (const note of await notesToPush(db, since)) of(note.memberId).notes.push(note.id);
   if (!byMember.size) return { sent: 0, gone: 0 };
   const { results: devices } = await db
     .prepare("SELECT id, member_id, endpoint, p256dh, auth FROM devices WHERE member_id IN (SELECT value FROM json_each(?))")
@@ -97,17 +106,23 @@ export async function pushPendingAlerts(db: D1Database, vapid: Vapid, post: type
     .all<DeviceRow>();
   const totals = { sent: 0, gone: 0 };
   const settled: string[] = [];
+  const settledNotes: string[] = [];
   await Promise.all(
-    [...byMember].map(async ([memberId, list]) => {
+    [...byMember].map(async ([memberId, { alerts, notes }]) => {
       const mine = devices.filter((d) => d.member_id === memberId);
+      const messages = [...messagesFor(alerts), ...(notes.length ? [NOTE_MESSAGE] : [])];
       // No Device: the Alert list is how this Member hears. Pushes aren't saved up for a later Device.
-      const r = mine.length ? await deliver(db, vapid, mine, messagesFor(list), post) : { sent: 0, gone: 0, settled: true };
+      const r = mine.length ? await deliver(db, vapid, mine, messages, post) : { sent: 0, gone: 0, settled: true };
       totals.sent += r.sent;
       totals.gone += r.gone;
-      if (r.settled) settled.push(...list.map((a) => a.id));
+      if (r.settled) {
+        settled.push(...alerts.map((a) => a.id));
+        settledNotes.push(...notes);
+      }
     }),
   );
   await settlePushed(db, settled, new Date(now).toISOString());
+  await settleNotesPushed(db, settledNotes, new Date(now).toISOString());
   return totals;
 }
 

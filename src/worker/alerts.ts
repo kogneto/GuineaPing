@@ -5,7 +5,8 @@
  *   told which ones were really created);
  * - an Alert is pushed until a Device gets it, and an Update makes it unread and pushed again;
  * - an Alert marked "Not for me" gets no Updates;
- * - an Alert is only ever read, sorted or sent by its own Member.
+ * - an Alert is only ever read, sorted or sent by its own Member;
+ * - a note in the Alert list is pushed only when it was written to be announced.
  * A Check, Updates and Pushes each keep their own logic and ask this module to store the result.
  */
 import { MARKS, MAX_NOTE_CHARS, type AlertItem, type AlertListItem, type Mark, type Me, type Trial } from "../shared/api";
@@ -181,6 +182,24 @@ export async function alertsToPush(db: D1Database, since: string): Promise<NewAl
     sentBy: r.sent_by,
     changes: r.update_text ? (JSON.parse(r.update_text) as string[]) : null,
   }));
+}
+
+/** A note in a Member's Alert list that is also announced on their Devices. */
+export type NoteToPush = { id: string; memberId: string };
+
+/** Every announced note no Device has received yet, written since `since`. */
+export async function notesToPush(db: D1Database, since: string): Promise<NoteToPush[]> {
+  const { results } = await db
+    .prepare("SELECT id, member_id FROM notes WHERE announce = 1 AND pushed_at IS NULL AND created_at > ? ORDER BY created_at")
+    .bind(since)
+    .all<{ id: string; member_id: string }>();
+  return results.map((r) => ({ id: r.id, memberId: r.member_id }));
+}
+
+/** Records that these notes have been pushed, or have nobody to be pushed to: they are not tried again. */
+export async function settleNotesPushed(db: D1Database, ids: string[], now: string): Promise<void> {
+  if (!ids.length) return;
+  await db.prepare("UPDATE notes SET pushed_at = ?1 WHERE id IN (SELECT value FROM json_each(?2))").bind(now, JSON.stringify(ids)).run();
 }
 
 /** Records that these Alerts have been pushed, or have nobody to be pushed to: they are not tried again. */
