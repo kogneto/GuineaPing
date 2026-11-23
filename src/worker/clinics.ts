@@ -20,12 +20,14 @@ export const studyKey = (r: { source: string; clinic_id: string; code: string | 
 const seenOf = (r: { code: string | null; when_text: string | null; first_seen_at: string }) => roundSeen({ code: r.code, when: r.when_text, firstSeen: r.first_seen_at.slice(0, 10) });
 
 export async function listClinics(db: D1Database, near: Near | null, memberId: string): Promise<ClinicItem[]> {
-  const [openings, sources, marks, pushes] = await db.batch([
+  const [openings, sources, marks, pushes, off] = await db.batch([
     db.prepare("SELECT id, source, clinic_id, title, pay, when_text, stay, who, code, url, first_seen_at FROM clinic_openings WHERE gone_at IS NULL ORDER BY first_seen_at DESC, title"),
     db.prepare("SELECT source, read_at, refused_at FROM clinic_sources"),
     db.prepare("SELECT kind, key, seen FROM opening_marks WHERE member_id = ?").bind(memberId),
     db.prepare("SELECT clinic_id FROM clinic_pushes WHERE member_id = ?").bind(memberId),
+    db.prepare("SELECT clinic_id FROM clinics_off_list WHERE member_id = ?").bind(memberId),
   ]);
+  const offList = new Set(((off?.results ?? []) as { clinic_id: string }[]).map((p) => p.clinic_id));
   const pushed = new Set(((pushes?.results ?? []) as { clinic_id: string }[]).map((p) => p.clinic_id));
   const studies = new Set<string>();
   const rounds = new Map<string, string | null>();
@@ -55,6 +57,7 @@ export async function listClinics(db: D1Database, near: Near | null, memberId: s
       lastReadAt: s?.read_at ?? null,
       refused: !!s?.refused_at,
       pushNew: pushed.has(clinic.id),
+      offList: offList.has(clinic.id),
       openings: byClinic.get(clinic.id) ?? [],
     };
   });
@@ -67,10 +70,33 @@ export async function setClinicPush(db: D1Database, memberId: string, clinicId: 
   if (!clinic) return { error: "No such Clinic", status: 404 };
   if (typeof on !== "boolean") return { error: "Say whether the Push is on or off", status: 400 };
   if (on && !clinic.source) return { error: "GuineaPing doesn't read this Clinic's list, so it can't tell you about new Openings there.", status: 400 };
+  if (on && (await db.prepare("SELECT 1 FROM clinics_off_list WHERE member_id = ? AND clinic_id = ?").bind(memberId, clinic.id).first())) {
+    return { error: "You took this Clinic off your list. Put it back first.", status: 400 };
+  }
   await (on
     ? db.prepare("INSERT INTO clinic_pushes (member_id, clinic_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").bind(memberId, clinic.id, now)
     : db.prepare("DELETE FROM clinic_pushes WHERE member_id = ? AND clinic_id = ?").bind(memberId, clinic.id)
   ).run();
+  return { ok: true };
+}
+
+/**
+ * Takes a Clinic off a Member's own list, or puts it back. Off the list means they asked not to
+ * hear about it, so their Push for new Openings there is turned off too, and stays off when the
+ * Clinic is put back.
+ */
+export async function setClinicOffList(db: D1Database, memberId: string, clinicId: unknown, off: unknown, now: string): Promise<{ ok: true } | { error: string; status: 400 | 404 }> {
+  const clinic = CLINICS.find((c) => c.id === clinicId);
+  if (!clinic) return { error: "No such Clinic", status: 404 };
+  if (typeof off !== "boolean") return { error: "Say whether the Clinic is off your list or on it", status: 400 };
+  await db.batch(
+    off
+      ? [
+          db.prepare("INSERT INTO clinics_off_list (member_id, clinic_id, created_at) VALUES (?, ?, ?) ON CONFLICT DO NOTHING").bind(memberId, clinic.id, now),
+          db.prepare("DELETE FROM clinic_pushes WHERE member_id = ? AND clinic_id = ?").bind(memberId, clinic.id),
+        ]
+      : [db.prepare("DELETE FROM clinics_off_list WHERE member_id = ? AND clinic_id = ?").bind(memberId, clinic.id)],
+  );
   return { ok: true };
 }
 

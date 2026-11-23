@@ -62,7 +62,9 @@ function OpeningCard({ opening, onMark, clinic }: { opening: Opening; onMark: Se
   );
 }
 
-function ClinicSection({ clinic, onMark, onPush }: { clinic: ClinicItem; onMark: SetAside; onPush: (clinic: ClinicItem, on: boolean) => void }) {
+type ClinicActions = { onPush: (clinic: ClinicItem, on: boolean) => void; onOffList: (clinic: ClinicItem, off: boolean) => void };
+
+function ClinicSection({ clinic, onMark, onPush, onOffList }: { clinic: ClinicItem; onMark: SetAside } & ClinicActions) {
   const [showAside, setShowAside] = useState(false);
   const listed = clinic.openings.filter((o) => !o.mark);
   const aside = clinic.openings.filter((o) => o.mark);
@@ -119,6 +121,11 @@ function ClinicSection({ clinic, onMark, onPush }: { clinic: ClinicItem; onMark:
         </div>
       )}
       {clinic.read && !clinic.refused && clinic.lastReadAt && !clinic.openings.length && <p className="muted small">Nothing on its list right now.</p>}
+      <p className="actions small">
+        <button type="button" className="link" onClick={() => onOffList(clinic, true)}>
+          Take off my list
+        </button>
+      </p>
     </section>
   );
 }
@@ -167,6 +174,7 @@ export function ClinicsPage() {
   const [error, setError] = useState<string | null>(null);
   const [onlyOpenings, setOnlyOpenings] = useState(false);
   const [markError, setMarkError] = useState<string | null>(null);
+  const [showOff, setShowOff] = useState(false);
 
   useEffect(() => {
     api<ClinicItem[]>("/api/clinics").then(setClinics, (e: Error) => setError(e.message));
@@ -186,6 +194,13 @@ export function ClinicsPage() {
       .then(setClinics, (e: Error) => setMarkError(e.message));
   };
 
+  const setOffList = (clinic: ClinicItem, off: boolean) => {
+    setMarkError(null);
+    api("/api/clinics/off-list", "POST", { id: clinic.id, off })
+      .then(() => api<ClinicItem[]>("/api/clinics"))
+      .then(setClinics, (e: Error) => setMarkError(e.message));
+  };
+
   if (error) return <p className="error">{error}</p>;
   if (!clinics)
     return (
@@ -195,7 +210,9 @@ export function ClinicsPage() {
       </div>
     );
   const measured = clinics.some((c) => c.miles !== null);
-  const shown = onlyOpenings ? clinics.filter((c) => c.openings.length) : clinics;
+  const mine = clinics.filter((c) => !c.offList);
+  const off = clinics.filter((c) => c.offList);
+  const shown = onlyOpenings ? mine.filter((c) => c.openings.length) : mine;
   return (
     <>
       <h1>Clinics</h1>
@@ -229,14 +246,38 @@ export function ClinicsPage() {
       )}
       {view !== "clinics" && <p className="muted small">{VIEWS.find((v) => v.view === view)!.says}</p>}
       {markError && <p className="error">{markError}</p>}
-      {view === "clinics" ? shown.map((c) => <ClinicSection key={c.id} clinic={c} onMark={setAside} onPush={setPush} />) : <AllOpenings clinics={clinics} by={view} onMark={setAside} />}
-      {view === "clinics" && !shown.length && <p className="muted">No Clinic's list has been read yet.</p>}
+      {view === "clinics" ? shown.map((c) => <ClinicSection key={c.id} clinic={c} onMark={setAside} onPush={setPush} onOffList={setOffList} />) : <AllOpenings clinics={mine} by={view} onMark={setAside} />}
+      {view === "clinics" && !shown.length && <p className="muted">{mine.length ? "No Clinic's list has been read yet." : "You have taken every Clinic off your list."}</p>}
+      {off.length > 0 && (
+        <p className="muted small">
+          {off.length === 1 ? "1 Clinic" : `${off.length} Clinics`} taken off your list.{" "}
+          <button type="button" className="link" onClick={() => setShowOff(!showOff)}>
+            {showOff ? "Hide" : "Show"}
+          </button>
+        </p>
+      )}
+      {showOff && off.length > 0 && (
+        <ul className="off-list">
+          {off.map((c) => (
+            <li key={c.id}>
+              {c.name} <span className="muted">· {c.place}</span>{" "}
+              <button type="button" className="link" onClick={() => setOffList(c, false)}>
+                Put back
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <p className="muted small">
         "Watch for Trials" starts a Watch that sends an Alert when a new Trial on ClinicalTrials.gov names that Clinic. It works for every Clinic here, because it never visits the Clinic's site.
       </p>
       <p className="muted small">
         Set a listing aside when it isn't one you'd take. "Not this time" is for a reason that will change, such as the dates: the listing shows again if the Clinic lists the study again. "Not for me" is for a
         reason that won't: that study stays set aside at that Clinic, later groups too. Only you see what you set aside, and you can always show it and put it back.
+      </p>
+      <p className="muted small">
+        "Take off my list" removes a Clinic from this page for you alone, for instance one too far to travel to. Its Openings leave the pay and newest lists, and your Push for it is turned off. Clinics you took off are
+        counted at the bottom, where you can put them back.
       </p>
       <p className="muted small">GuineaPing reads only some Clinics' lists, once an hour. A list can change sooner than that, so check the Clinic's own page before you plan around it. Tick "Push me new Openings here" under a Clinic to hear on your Devices when its list shows a new one, or new dates or a new group for one it had. That Push names the Clinic and gives the study's title, pay, dates and stay.</p>
     </>

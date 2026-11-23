@@ -7,7 +7,7 @@ import { accessFrom, setAllowed } from "./access";
 import { getAlert, listAlerts, markRead, sendAlert, sortAlert } from "./alerts";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, knownMatches, RECENT_DAYS, type Known } from "./check";
-import { listClinics, markOpening, setClinicPush } from "./clinics";
+import { listClinics, markOpening, setClinicOffList, setClinicPush } from "./clinics";
 import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
 import { plainFetch, readDueSource } from "./openings/read";
 import { SOURCES } from "./openings/sources";
@@ -358,6 +358,13 @@ app.post("/api/openings/mark", async (c) => {
 app.post("/api/clinics/push", async (c) => {
   const body = (await c.req.json().catch(() => null)) as { id?: unknown; on?: unknown } | null;
   const done = await setClinicPush(c.env.DB, c.get("me").memberId, body?.id, body?.on, now());
+  return "error" in done ? c.json({ error: done.error }, done.status) : c.json(done);
+});
+
+/** Takes one Clinic off the signed-in Member's own list, or puts it back. */
+app.post("/api/clinics/off-list", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { id?: unknown; off?: unknown } | null;
+  const done = await setClinicOffList(c.env.DB, c.get("me").memberId, body?.id, body?.off, now());
   return "error" in done ? c.json({ error: done.error }, done.status) : c.json(done);
 });
 
