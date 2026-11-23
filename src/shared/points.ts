@@ -21,11 +21,23 @@ const MENTIONS: Record<Topic, RegExp> = {
   // A weight with a number and a unit, not "weight loss" or a dose in mg/kg.
   weight: /\bweigh(t|s|ing)?\b[^.;]*?\d+(\.\d+)?\s*(kg|kilograms?|lbs?|pounds)\b(?!\s*\/)/i,
   nicotine: /\bsmok|\bnicotine|\btobacco|\bcigar|\bvap(e|es|ing)\b|\bcotinine/i,
-  donation: /\bdonat(e|ed|es|ing|ion|ions)\b/i,
-  // Having recently taken part in another study, or taken another study's drug.
-  study:
-    /\b(another|other|any|previous|prior)\s+(investigational|experimental|clinical|interventional|research)?\s*(study|studies|trial|trials)\b|\binvestigational\s+(drug|product|medicinal product|agent|device|medication|therapy|vaccine)|\bparticipat\w*\s+in\s+(a|an|another|any|other)\b[^.;]*\b(study|studies|trial|trials)\b/i,
+  // Giving blood, plasma or platelets. Not eggs, sperm, breast milk or stem cells, which the
+  // lines about contraception and donor studies speak of.
+  donation: /\b(blood|plasma|platelets?)\b[^.;]{0,80}\bdonat(e|ed|es|ing|ion|ions)\b|\bdonat(e|ed|es|ing|ion|ions)\b[^.;]{0,80}\b(blood|plasma|platelets?)\b/i,
+  // Taking part in another study, or having had another study's drug. Not "comply with other
+  // study procedures", and not this study's own drug.
+  study: new RegExp(
+    [
+      String.raw`\b(participat(e|ed|es|ing|ion)|(co-?)?enrol\w*)\b[^.;]{0,80}\b(another|other|any)\b[^.;]{0,60}\b(study|studies|trials?)\b(?!\s+(procedures?|requirements?|visits?|related|staff|sites?|restrictions?|assessments?|participation|vaccines?|drugs?|treatments?|interventions?|products?|medications?|period|duration))`,
+      String.raw`\b(received?|receipt|taken|treatment with|treated with|use of|dosing|dosed|exposure to|exposed to|administration of)\b[^.;]{0,60}\binvestigational\b[^.;]{0,100}\b(within|prior|before|days|weeks|months|years?|half-li)`,
+      String.raw`\banother investigational\b`,
+    ].join("|"),
+    "i",
+  ),
 };
+
+/** Lines about contraception and pregnancy name this study's own drug and its last dose; they are never about another study. */
+const NOT_ANOTHER_STUDY = /contracepti|pregnan|breast|\bsperm\b|\beggs?\b|\bova\b/i;
 
 export type Point = {
   /** The Trial's own line, unchanged. */
@@ -36,7 +48,7 @@ export type Point = {
 };
 
 /** The topics a line of Entry criteria mentions. */
-export const topicsOf = (line: string): Topic[] => TOPICS.filter((topic) => MENTIONS[topic].test(line));
+export const topicsOf = (line: string): Topic[] => TOPICS.filter((topic) => MENTIONS[topic].test(line) && !(topic === "study" && NOT_ANOTHER_STUDY.test(line)));
 
 /** A Trial's Points to check, in the order its Entry criteria give them. */
 export function pointsToCheck(criteriaText: string): Point[] {

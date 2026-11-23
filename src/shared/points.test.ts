@@ -50,6 +50,33 @@ describe("Points to check", () => {
     expect(topicsOf("Evaporation of the sample")).toEqual([]);
   });
 
+  it("is not fooled by real lines that only sound like a topic", () => {
+    // Other things people donate.
+    expect(topicsOf("A female must not be pregnant, or breastfeeding and is not considering becoming pregnant or donating eggs during the study.")).toEqual([]);
+    expect(topicsOf("Male participants must refrain from donating sperm for 90 days after the last dose.")).toEqual([]);
+    expect(topicsOf("DONOR: Willing to donate stem cell mobilized mononuclear cells for up to two consecutive days")).toEqual([]);
+    expect(topicsOf("Has donated or lost 1 unit of blood (approximately 500 milliliters [mL]) within 4 weeks before the screening visit.")).toEqual(["donation"]);
+    expect(topicsOf("Reports donating plasma within 14 days prior to first dose.")).toEqual(["donation"]);
+    // This study's own procedures and drug are not another study.
+    expect(topicsOf("Participants who are able to understand and give their signed informed consent before any trial related procedures are performed.")).toEqual([]);
+    expect(topicsOf("Willing and able to comply with all scheduled visits, treatment plan, laboratory tests, lifestyle considerations, and other study procedures.")).toEqual([]);
+    expect(topicsOf("All women of child-bearing potential agree to use an adequate method of contraception for the duration of the study and for 30 days after the last dose of investigational product.")).toEqual([]);
+    expect(topicsOf("Known allergy to the investigational product or its excipients")).toEqual([]);
+    expect(topicsOf("Use of systemic or anorectal immunomodulatory medications within 4 weeks of enrollment or planned use at any time during study participation")).toEqual([]);
+    // Real wordings that are about another study.
+    for (const line of [
+      "Current enrollment in any other clinical study involving an investigational study treatment or any other type of medical research, unless approved by the study clinician",
+      "Has taken kratom or any investigational drug in another study within 30 days of study consent.",
+      "Receipt of investigational therapy within 4 months prior to screening",
+      "In treatment with another investigational drug.",
+      "Concurrently participating in another clinical study, at any time during the study period",
+      "Participation in other research studies involving ionizing radiation within one year of the PET scans",
+      "Agrees not to enroll on another study of an investigational agent during the study period",
+    ]) {
+      expect(topicsOf(line), line).toEqual(["study"]);
+    }
+  });
+
   it("states the Member's own fact, and nothing about whether it fits", () => {
     const me = profile({ heightIn: 69, weightLb: 165, nicotine: "no", lastDonationOn: "2026-10-12" });
     const today = "2026-11-22";
