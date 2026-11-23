@@ -41,6 +41,7 @@ const CODES: Record<string, Record<string, string>> = {
       ["C-5010", "C-8040", "J-2010", "J-41500", "J-5000", "N-3030", "N-34300", "N-38160", "N-38900", "N-40300", "N-40600", "N-40700", "N-41100", "N-41200", "N-41300", "N-41310", "N-41500", "N-41600", "N-5020", "S-36900", "S-38170", "S-40910", "S-41000"].map((code) => [code, code]),
     ),
   },
+  novum: { "12641901 Group5": "12641901", "12641901 Group6": "12641901", "Postmenopausal Data Collection 12500001": "Postmenopausal Data Collection 12500001" },
   "altasciences-kc": { C01: "C01", N47: "N47", N49: "N49", N96: "N96" },
   ocrc: { "AS 7": "AS 7", B6: "B6", EH: "EH", K6: "K6", P4: "P4", V4: "V4" },
   pfizer: { C6381001: "C6381001", JapaneseGeneric: "JapaneseGeneric" },
@@ -58,6 +59,7 @@ describe("which study an Opening belongs to", () => {
   it("drops a group only at the Clinics whose lists show one", () => {
     // The same shapes anywhere else are left whole.
     expect(studyOf("novum", "CA48121-6A")).toBe("CA48121-6A");
+    expect(studyOf("celerion", "12641901 Group5")).toBe("12641901 Group5");
     expect(studyOf("tkl", "778951 9b")).toBe("778951 9b");
     expect(studyOf("pharmaron", "778951 9b")).toBe("778951 9b");
   });

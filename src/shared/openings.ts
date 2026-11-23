@@ -22,6 +22,7 @@ export const OPENING_MARK_LABELS: Record<OpeningMark, string> = { not_this_time:
  * one nobody sees.
  * - Celerion calls its code a "study group": "CA48121-6A" is group 6A of study CA48121.
  * - Fortrea's page for a study carries only its number: "778951 9b" is group 9b of study 778951.
+ * - Novum writes the group out: "12641901 Group5" is group 5 of study 12641901.
  * - Altasciences Los Angeles marks its Spanish copy of an entry "(ES)": the same study.
  * (Inferred from the lists as they stood on 2026-11-23.)
  */
@@ -30,6 +31,7 @@ export function studyOf(source: string, code: string | null): string | null {
   if (!whole) return null;
   if (source === "celerion") return /^(.+?)-\d+[A-Za-z]?$/.exec(whole)?.[1] ?? whole;
   if (source === "fortrea") return /^\d{5,}/.exec(whole)?.[0] ?? whole;
+  if (source === "novum") return whole.replace(/\s+Group\s*\w+$/i, "") || whole;
   if (source === "altasciences-la") return whole.replace(/\s*\(ES\)$/, "");
   return whole;
 }
