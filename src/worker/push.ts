@@ -3,6 +3,7 @@
  * truth, so nothing here can fail a Check; a Push that doesn't arrive just means the Member sees
  * the Alert next time they open the app.
  */
+import { alertsToPush, settlePushed } from "./alerts";
 import type { Trial } from "../shared/api";
 import { keyFacts } from "../shared/plain";
 import { b64url, sendPush, type PushMessage, type PushOutcome, type Subscription, type Vapid } from "./webpush";
@@ -79,22 +80,15 @@ async function deliver(db: D1Database, vapid: Vapid, devices: DeviceRow[], messa
 /** How long an Alert no Device has received keeps being retried. After that it lives in the Alert list only. */
 const RETRY_MS = 24 * 60 * 60 * 1000;
 
-type PendingRow = { id: string; member_id: string; trial: string; watch_names: string; via_private: number; sent_by: string | null; update_text: string | null };
-
 /**
  * Announces every Alert not yet pushed: per Member, one Push per Alert, or one summary if there
  * are many. An Alert is settled once any of the Member's Devices got it, or they have no Device
  * to send to; otherwise the next Check tries again, for up to a day.
  */
 export async function pushPendingAlerts(db: D1Database, vapid: Vapid, post: typeof fetch = fetch, now = Date.now()) {
-  const { results: pending } = await db
-    .prepare("SELECT id, member_id, trial, watch_names, via_private, sent_by, update_text FROM alerts WHERE pushed_at IS NULL AND COALESCE(updated_at, created_at) > ? ORDER BY created_at")
-    .bind(new Date(now - RETRY_MS).toISOString())
-    .all<PendingRow>();
   const byMember = new Map<string, NewAlert[]>();
-  for (const r of pending) {
-    const alert: NewAlert = { id: r.id, memberId: r.member_id, trial: JSON.parse(r.trial) as Trial, watchNames: JSON.parse(r.watch_names) as string[], viaPrivateWatch: r.via_private === 1, sentBy: r.sent_by, changes: r.update_text ? (JSON.parse(r.update_text) as string[]) : null };
-    byMember.set(r.member_id, [...(byMember.get(r.member_id) ?? []), alert]);
+  for (const alert of await alertsToPush(db, new Date(now - RETRY_MS).toISOString())) {
+    byMember.set(alert.memberId, [...(byMember.get(alert.memberId) ?? []), alert]);
   }
   if (!byMember.size) return { sent: 0, gone: 0 };
   const { results: devices } = await db
@@ -113,12 +107,7 @@ export async function pushPendingAlerts(db: D1Database, vapid: Vapid, post: type
       if (r.settled) settled.push(...list.map((a) => a.id));
     }),
   );
-  if (settled.length) {
-    await db
-      .prepare("UPDATE alerts SET pushed_at = ?1 WHERE id IN (SELECT value FROM json_each(?2))")
-      .bind(new Date(now).toISOString(), JSON.stringify(settled))
-      .run();
-  }
+  await settlePushed(db, settled, new Date(now).toISOString());
   return totals;
 }
 

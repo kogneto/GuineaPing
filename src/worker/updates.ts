@@ -5,6 +5,7 @@
  */
 import type { Criteria, Near, Trial } from "../shared/api";
 import { findUpdated, milesBetween, sitesOf, toTrial, type FetchJson } from "../shared/ctgov";
+import { alertsFollowed, refreshAlert } from "./alerts";
 import { daysBefore, OVERLAP_DAYS } from "./check";
 import { nearByMember } from "./profile";
 
@@ -12,8 +13,6 @@ import { nearByMember } from "./profile";
 const FOLLOW_DAYS = 730;
 /** How many new nearby sites an Update names before saying "and N more". */
 const SITES_NAMED = 2;
-
-type AlertRow = { id: string; member_id: string; nct_id: string; trial: string };
 
 /** What changed for one Alert, in the words the Member reads. Empty when nothing worth telling. */
 export function changesFor(old: Trial, fresh: Trial, sites: ReturnType<typeof sitesOf>, nears: Near[]): string[] {
@@ -42,12 +41,9 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
   const saveState = db.prepare("INSERT INTO update_state (id, checked_at) VALUES (1, ?1) ON CONFLICT(id) DO UPDATE SET checked_at = ?1").bind(now);
 
   // "Not for me" means exactly that: those Alerts stay quiet.
-  const { results: alerts } = await db
-    .prepare("SELECT id, member_id, nct_id, trial FROM alerts WHERE (mark IS NULL OR mark != 'not_for_me') AND created_at > ?")
-    .bind(daysBefore(now, FOLLOW_DAYS))
-    .all<AlertRow>();
-  const changed = await findUpdated([...new Set(alerts.map((a) => a.nct_id))], since, get);
-  const affected = alerts.filter((a) => changed.has(a.nct_id));
+  const alerts = await alertsFollowed(db, daysBefore(now, FOLLOW_DAYS));
+  const changed = await findUpdated([...new Set(alerts.map((a) => a.nctId))], since, get);
+  const affected = alerts.filter((a) => changed.has(a.nctId));
   if (!affected.length) {
     await saveState.run();
     return { updated: 0 };
@@ -71,19 +67,19 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
   }
 
   // And the Member's own Profile, when it gives a ZIP code.
-  const profileNear = await nearByMember(db, affected.map((a) => a.member_id));
+  const profileNear = await nearByMember(db, affected.map((a) => a.memberId));
   for (const a of affected) {
-    const near = profileNear.get(a.member_id);
+    const near = profileNear.get(a.memberId);
     if (near) nearsOf.set(a.id, [...(nearsOf.get(a.id) ?? []), near]);
   }
 
   const statements: D1PreparedStatement[] = [];
   let updated = 0;
   for (const a of affected) {
-    const raw = changed.get(a.nct_id);
+    const raw = changed.get(a.nctId);
     const fresh = toTrial(raw);
     if (!fresh) continue;
-    const old = JSON.parse(a.trial) as Trial;
+    const old = a.trial;
     const nears = nearsOf.get(a.id) ?? [];
     const sites = sitesOf(raw);
     // Keep "nearest site" meaning what it meant when alerted: nearest to the Watches' ZIP codes.
@@ -94,18 +90,10 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
         if (!nearest || miles < nearest.miles) nearest = { place: site.short, miles };
       }
     }
-    const snapshot = JSON.stringify({ ...fresh, ...(nearest !== undefined ? { nearest } : {}) } satisfies Trial);
     const changes = changesFor(old, fresh, sites, nears);
-    if (changes.length) {
-      updated++;
-      // Unread again, and pushed again, with what changed.
-      statements.push(
-        db.prepare("UPDATE alerts SET trial = ?, update_text = ?, updated_at = ?, read_at = NULL, pushed_at = NULL WHERE id = ?").bind(snapshot, JSON.stringify(changes), now, a.id),
-      );
-    } else if (snapshot !== a.trial) {
-      // Nothing worth an Update, but the Alert's page should still show today's facts.
-      statements.push(db.prepare("UPDATE alerts SET trial = ? WHERE id = ?").bind(snapshot, a.id));
-    }
+    if (changes.length) updated++;
+    const statement = refreshAlert(db, a, { ...fresh, ...(nearest !== undefined ? { nearest } : {}) }, changes, now);
+    if (statement) statements.push(statement);
   }
   await db.batch([...statements, saveState]);
   return { updated };

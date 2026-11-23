@@ -4,6 +4,7 @@
  */
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
 import { fetchJson, findTrials, nearestOf, withDefaults, type FetchJson, type Site } from "../shared/ctgov";
+import { createAlerts, createdAmong, type AlertToCreate } from "./alerts";
 import { nearByMember } from "./profile";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
 import { report } from "./report";
@@ -117,20 +118,19 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
   };
 
   // One Alert per Member per Trial, naming every Watch of theirs that found it.
-  const alerts = new Map<string, { id: string; member_id: string; nct_id: string; trial: string; watchNames: string[]; viaPrivate: boolean; parsed: Trial }>();
+  const alerts = new Map<string, AlertToCreate>();
   for (const { watchId, watchName, isPrivate, trial } of firstFinds) {
     for (const f of follows) {
       if (f.watch_id !== watchId) continue;
       const key = `${f.member_id} ${trial.nctId}`;
-      const mine = forMember(trial, f.member_id);
-      const alert = alerts.get(key) ?? { id: crypto.randomUUID(), member_id: f.member_id, nct_id: trial.nctId, trial: JSON.stringify(mine), watchNames: [], viaPrivate: false, parsed: mine };
+      const alert = alerts.get(key) ?? { id: crypto.randomUUID(), memberId: f.member_id, trial: forMember(trial, f.member_id), watchNames: [], viaPrivateWatch: false };
       if (!alert.watchNames.includes(watchName)) alert.watchNames.push(watchName);
-      alert.viaPrivate ||= isPrivate;
+      alert.viaPrivateWatch ||= isPrivate;
       alerts.set(key, alert);
     }
   }
 
-  const rows = [...alerts.values()].map((a) => ({ id: a.id, member_id: a.member_id, nct_id: a.nct_id, trial: a.trial, watch_names: JSON.stringify(a.watchNames), via_private: a.viaPrivate ? 1 : 0 }));
+  const wanted = [...alerts.values()];
   const statements: D1PreparedStatement[] = [
     db
       .prepare(
@@ -139,25 +139,14 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
       )
       .bind(now, JSON.stringify(firstFinds.map((f) => ({ w: f.watchId, n: f.trial.nctId })))),
     // A Member alerted on this Trial by an earlier Check (through another Watch) is skipped here.
-    db
-      .prepare(
-        `INSERT OR IGNORE INTO alerts (id, member_id, nct_id, trial, watch_names, via_private, created_at)
-         SELECT value ->> '$.id', value ->> '$.member_id', value ->> '$.nct_id',
-                value ->> '$.trial', value ->> '$.watch_names', value ->> '$.via_private', ?1
-         FROM json_each(?2)
-         RETURNING id`,
-      )
-      .bind(now, JSON.stringify(rows)),
+    createAlerts(db, wanted, now),
     db
       .prepare("UPDATE watches SET checked_at = ?1, failing_since = NULL, check_error = NULL WHERE id IN (SELECT value FROM json_each(?2))")
       .bind(now, JSON.stringify(found.map((f) => f.watchId))),
     markFailed,
   ];
   const [, inserted] = await db.batch<{ id: string }>(statements);
-  const createdIds = new Set((inserted?.results ?? []).map((r) => r.id));
-  const newAlerts: NewAlert[] = [...alerts.values()]
-    .filter((a) => createdIds.has(a.id))
-    .map((a) => ({ id: a.id, memberId: a.member_id, trial: a.parsed, watchNames: a.watchNames, viaPrivateWatch: a.viaPrivate }));
+  const newAlerts: NewAlert[] = createdAmong(wanted, inserted);
   const result: CheckResult = { ok: true, watchesChecked: found.length, watchesFailed: failed.length, alertsCreated: newAlerts.length, newAlerts };
   await record(result).run();
   return result;
