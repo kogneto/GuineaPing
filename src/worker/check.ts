@@ -3,7 +3,7 @@
  * for the first time, and turn that into Alerts, at most one per Member per Trial.
  */
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
-import { fetchJson, findTrials, nearestOf, withDefaults, type FetchJson, type Site } from "../shared/ctgov";
+import { fetchJson, findMatches, nearestOf, withDefaults, type FetchJson, type Match } from "../shared/ctgov";
 import { createAlerts, createdAmong, type AlertToCreate } from "./alerts";
 import { nearByMember } from "./profile";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
@@ -52,15 +52,14 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
 
   // Each Watch looks back from its own last successful check, so one that fails for days still
   // misses nothing once it works again, and never holds the others back.
-  const found: { watchId: string; watchName: string; isPrivate: boolean; trials: Trial[] }[] = [];
+  const found: { watchId: string; watchName: string; isPrivate: boolean; matches: Match[] }[] = [];
   const failed: { id: string; error: string }[] = [];
-  const sites = new Map<string, Site[]>();
   let earliest = daysBefore(now, OVERLAP_DAYS);
   for (const w of watches) {
     const since = daysBefore(w.checked_at ?? w.created_at, OVERLAP_DAYS);
     if (since < earliest) earliest = since;
     try {
-      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, trials: await findTrials(withDefaults(JSON.parse(w.criteria) as Partial<Criteria>), since, get, { sites }) });
+      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, matches: await findMatches(withDefaults(JSON.parse(w.criteria) as Partial<Criteria>), since, get) });
     } catch (err) {
       failed.push({ id: w.id, error: message(err) });
     }
@@ -93,12 +92,12 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
       `SELECT wt.watch_id, wt.nct_id FROM watch_trials wt
        JOIN json_each(?1) j ON wt.watch_id = j.value ->> '$.w' AND wt.nct_id = j.value ->> '$.n'`,
     )
-    .bind(JSON.stringify(found.flatMap((f) => f.trials.map((t) => ({ w: f.watchId, n: t.nctId })))))
+    .bind(JSON.stringify(found.flatMap((f) => f.matches.map((m) => ({ w: f.watchId, n: m.trial.nctId })))))
     .all<{ watch_id: string; nct_id: string }>();
   const knownKeys = new Set(known.map((k) => `${k.watch_id} ${k.nct_id}`));
-  const firstFinds: { watchId: string; watchName: string; isPrivate: boolean; trial: Trial }[] = [];
-  for (const { watchId, watchName, isPrivate, trials } of found) {
-    for (const trial of trials) if (!knownKeys.has(`${watchId} ${trial.nctId}`)) firstFinds.push({ watchId, watchName, isPrivate, trial });
+  const firstFinds: ({ watchId: string; watchName: string; isPrivate: boolean } & Match)[] = [];
+  for (const { watchId, watchName, isPrivate, matches } of found) {
+    for (const match of matches) if (!knownKeys.has(`${watchId} ${match.trial.nctId}`)) firstFinds.push({ watchId, watchName, isPrivate, ...match });
   }
 
   const watchIds = [...new Set(firstFinds.map((f) => f.watchId))];
@@ -111,19 +110,19 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
 
   // A Watch with no ZIP code says nothing about distance; the Member's own Profile can.
   const nearOf = await nearByMember(db, follows.map((f) => f.member_id));
-  const forMember = (trial: Trial, memberId: string): Trial => {
+  const forMember = ({ trial, sites }: Match, memberId: string): Trial => {
     const near = nearOf.get(memberId);
-    const nearest = !trial.nearest && near ? nearestOf(sites.get(trial.nctId) ?? [], [near]) : null;
+    const nearest = !trial.nearest && near ? nearestOf(sites, [near]) : null;
     return nearest ? { ...trial, nearest } : trial;
   };
 
   // One Alert per Member per Trial, naming every Watch of theirs that found it.
   const alerts = new Map<string, AlertToCreate>();
-  for (const { watchId, watchName, isPrivate, trial } of firstFinds) {
+  for (const { watchId, watchName, isPrivate, trial, sites } of firstFinds) {
     for (const f of follows) {
       if (f.watch_id !== watchId) continue;
       const key = `${f.member_id} ${trial.nctId}`;
-      const alert = alerts.get(key) ?? { id: crypto.randomUUID(), memberId: f.member_id, trial: forMember(trial, f.member_id), watchNames: [], viaPrivateWatch: false };
+      const alert = alerts.get(key) ?? { id: crypto.randomUUID(), memberId: f.member_id, trial: forMember({ trial, sites }, f.member_id), watchNames: [], viaPrivateWatch: false };
       if (!alert.watchNames.includes(watchName)) alert.watchNames.push(watchName);
       alert.viaPrivateWatch ||= isPrivate;
       alerts.set(key, alert);

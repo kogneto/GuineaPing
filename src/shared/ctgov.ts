@@ -185,9 +185,10 @@ export type FindOptions = {
   maxPages?: number;
   /** Where to measure "nearest site" from when the Criteria have no ZIP code of their own. */
   nearestTo?: Near | null;
-  /** Filled with each found Trial's sites, for callers that measure distances per Member. */
-  sites?: Map<string, Site[]>;
 };
+
+/** A Trial that matches, with its sites and their map points, for measuring distances per Member. */
+export type Match = { trial: Trial; sites: Site[] };
 
 /** The site closest to any of these points, or null when there is none to measure. */
 export function nearestOf(sites: Site[], points: { lat: number; lon: number }[]): { place: string; miles: number } | null {
@@ -202,31 +203,30 @@ export function nearestOf(sites: Site[], points: { lat: number; lon: number }[])
 }
 
 /**
- * Every Trial matching `criteria` first posted on or after `since`, newest first, following
- * nextPageToken. Stops after `maxPages` pages so one over-broad Watch can't exhaust a Check.
+ * Every Trial matching `criteria` first posted on or after `since`, newest first, each with its
+ * sites. Follows nextPageToken, and stops after `maxPages` pages so one over-broad Watch can't
+ * exhaust a Check.
  */
-export async function findTrials(
-  criteria: Criteria,
-  since: string,
-  get: FetchJson,
-  { pageSize = 100, maxPages = 5, nearestTo = null, sites }: FindOptions = {},
-): Promise<Trial[]> {
+export async function findMatches(criteria: Criteria, since: string, get: FetchJson, { pageSize = 100, maxPages = 5, nearestTo = null }: FindOptions = {}): Promise<Match[]> {
   const base = { ...buildParams(criteria, since), pageSize: String(pageSize) };
-  const trials: Trial[] = [];
+  const matches: Match[] = [];
   let token: string | undefined;
   for (let page = 0; page < maxPages; page++) {
     const params = new URLSearchParams(token ? { ...base, pageToken: token } : base);
     const data = (await get(`${API_URL}?${params}`)) as { studies?: unknown[]; nextPageToken?: string };
     for (const study of data.studies ?? []) {
       const trial = toTrial(study, criteria.near ?? nearestTo);
-      if (!trial) continue;
-      trials.push(trial);
-      sites?.set(trial.nctId, sitesOf(study));
+      if (trial) matches.push({ trial, sites: sitesOf(study) });
     }
     token = data.nextPageToken;
     if (!token) break;
   }
-  return trials;
+  return matches;
+}
+
+/** The same search, for callers that only show the Trials. */
+export async function findTrials(criteria: Criteria, since: string, get: FetchJson, options: FindOptions = {}): Promise<Trial[]> {
+  return (await findMatches(criteria, since, get, options)).map((m) => m.trial);
 }
 
 type Study = {
