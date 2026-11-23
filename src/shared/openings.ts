@@ -36,6 +36,32 @@ export function studyOf(source: string, code: string | null): string | null {
   return whole;
 }
 
+/**
+ * The dollar figure an Opening's pay is ordered by: the highest one in the Clinic's wording, so
+ * "up to $10,000, $14,800 or $19,750" counts as 19,750. Null when it names no figure. It is only
+ * for ordering: what a Member reads is always the Clinic's own wording.
+ */
+export function payAmount(pay: string | null): number | null {
+  const figures = [...(pay ?? "").matchAll(/\$\s?(\d{1,3}(?:,\d{3})+(?!\d)|\d{1,3}(?: \d{3})+(?!\d)|\d+)/g)].map((m) => Number(m[1]!.replace(/[, ]/g, "")));
+  return figures.length ? Math.max(...figures) : null;
+}
+
+export const OPENING_ORDERS = ["pay", "newest"] as const;
+export type OpeningOrder = (typeof OPENING_ORDERS)[number];
+
+type Ordered = { title: string; pay: string | null; firstSeen: string };
+
+/**
+ * Openings in the order asked for, leaving the list given untouched. "pay": highest figure first,
+ * those that name none last. "newest": most recently first seen first, the better paid first
+ * among those seen the same day.
+ */
+export function inOrder<T extends Ordered>(openings: T[], by: OpeningOrder): T[] {
+  const byPay = (a: T, b: T) => (payAmount(b.pay) ?? -1) - (payAmount(a.pay) ?? -1) || a.title.localeCompare(b.title);
+  const byNewest = (a: T, b: T) => b.firstSeen.localeCompare(a.firstSeen) || byPay(a, b);
+  return [...openings].sort(by === "pay" ? byPay : byNewest);
+}
+
 /** What an entry said when a Member set it aside "Not this time". The mark holds while this stays the same. */
 export function roundSeen(o: { code: string | null; when: string | null; firstSeen: string }): string {
   return JSON.stringify([o.code, o.when, o.firstSeen]);

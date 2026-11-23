@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { roundSeen, studyOf } from "./openings";
+import { inOrder, payAmount, roundSeen, studyOf } from "./openings";
 
 /** Every code on the lists GuineaPing had read by 2026-11-23, with the study each belongs to. */
 const CODES: Record<string, Record<string, string>> = {
@@ -73,6 +73,58 @@ describe("which study an Opening belongs to", () => {
   it("has no study for an entry with no code", () => {
     expect(studyOf("altasciences-kc", null)).toBeNull();
     expect(studyOf("celerion", "  ")).toBeNull();
+  });
+});
+
+describe("the figure an Opening's pay is ordered by", () => {
+  /** Every pay wording on the lists GuineaPing had read by 2026-11-23, or one of each shape. */
+  const PAY: [string | null, number | null][] = [
+    ["$375", 375],
+    ["$50", 50],
+    ["$2,700", 2700],
+    ["$10,784", 10784],
+    ["$44,900", 44900],
+    ["$3,000*", 3000],
+    ["$22,750*", 22750],
+    ["$3 550", 3550],
+    ["$16 800", 16800],
+    ["$22,524 to $23,132", 23132],
+    ["up to $1,000", 1000],
+    ["up to $1,000 – $10,000", 10000],
+    ["up to $10,000, $14,800 or $19,750", 19750],
+    ["up to $17,750 or $32,150", 32150],
+    ["compensated up to $4,800 – $12,050", 12050],
+    ["compensated up to $8,600", 8600],
+    ["Up to $3,350 upon completion of the study", 3350],
+    ["Compensation varies by study", null],
+    [null, null],
+    ["", null],
+  ];
+  it("is the highest dollar figure in the Clinic's wording", () => {
+    for (const [pay, amount] of PAY) expect(payAmount(pay), String(pay)).toBe(amount);
+  });
+  it("doesn't run a figure into the words after it", () => {
+    expect(payAmount("$50 12 visits")).toBe(50);
+    expect(payAmount("$3,000 2026")).toBe(3000);
+    expect(payAmount("$1,200.50 per night")).toBe(1200);
+    expect(payAmount("3 nights")).toBeNull();
+  });
+});
+
+describe("Openings in order", () => {
+  const o = (title: string, pay: string | null, firstSeen: string) => ({ title, pay, firstSeen });
+  const list = [o("B", "$3,000*", "2026-11-23"), o("A", "up to $17,750 or $32,150", "2026-11-22"), o("D", null, "2026-11-24"), o("C", "$3 000", "2026-11-24"), o("E", "Compensation varies by study", "2026-11-23")];
+  const titles = (by: "pay" | "newest") => inOrder(list, by).map((x) => x.title);
+
+  it("puts the highest pay first, and those that name no figure last", () => {
+    expect(titles("pay")).toEqual(["A", "B", "C", "D", "E"]);
+  });
+  it("puts the most recently first seen first, the better paid first within a day", () => {
+    expect(titles("newest")).toEqual(["C", "D", "B", "E", "A"]);
+  });
+  it("leaves the list it was given as it was", () => {
+    inOrder(list, "pay");
+    expect(list.map((x) => x.title)).toEqual(["B", "A", "D", "C", "E"]);
   });
 });
 
