@@ -23,7 +23,7 @@ export type ArtName = keyof typeof ART;
  * A decorative illustration on a cream plate, so the charcoal outlines read
  * in dark mode too. It carries no meaning of its own: the text beside it does.
  */
-export function Illustration({ name, size = "md" }: { name: ArtName; size?: "xs" | "sm" | "md" }) {
+export function Illustration({ name, size = "md" }: { name: ArtName; size?: "xs" | "sm" | "md" | "hero" }) {
   // The scenes are mostly canvas, so the small "xs" frame crops in on the character.
   return (
     <span className={`art art-${size}`} aria-hidden="true">

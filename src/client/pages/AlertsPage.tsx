@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { AlertListItem, Mark } from "../../shared/api";
 import { MARK_LABELS, byNearest, keyFacts } from "../../shared/plain";
 import { ago, api } from "../api";
+import { Greeting } from "../components/Greeting";
 import { Illustration } from "../components/Illustration";
 import { SortToggle } from "../components/TrialCard";
 import { Link } from "../router";
@@ -35,10 +36,15 @@ export function AlertsPage() {
   const unread = items.filter((i) => !i.read && (i.kind === "note" || i.mark !== "not_for_me")).length;
   return (
     <>
-      <div className="heading-row">
-        {unread > 0 && <Illustration name="alertExclaim" size="xs" />}
-        <h1>Alerts {unread > 0 && <span className="count">{unread} new</span>}</h1>
-      </div>
+      {items.length > 0 ? (
+        <Greeting
+          art={unread > 0 ? "alertExclaim" : "alertBell"}
+          title={unread > 0 ? `${unread} new ${unread === 1 ? "Alert" : "Alerts"}` : "No new Alerts"}
+          sub={unread > 0 ? "Trials your Watches found, newest first." : "You've seen everything your Watches found."}
+        />
+      ) : (
+        <h1>Alerts</h1>
+      )}
       {!items.length && (
         <div className="empty">
           <Illustration name="alertBell" />
