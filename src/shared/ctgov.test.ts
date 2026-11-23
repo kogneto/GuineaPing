@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { KINDS, type Criteria, type Trial } from "./api";
 import { CLINICS, clinicsFilter, clinicsNamedBy } from "./clinics";
-import { buildParams, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
+import { buildParams, findMatches, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
 import { agesText, criteriaSections, keyFacts, kindFact, kindLabel, kindsAsked, kindsText, phaseText } from "./plain";
 
 const criteria = (c: Partial<Criteria>): Criteria => withDefaults(c);
@@ -107,6 +107,25 @@ describe("fetching", () => {
     const trials = await findTrials(criteria({ conditions: ["MS"] }), "2026-11-01", async (url) => (urls.push(url), pages[urls.length - 1]), { maxPages: 2 });
     expect(trials.map((t) => t.nctId)).toEqual(["NCT00000001", "NCT00000002"]);
     expect(new URL(urls[1]!).searchParams.get("pageToken")).toBe("t2");
+  });
+
+  it("hands back each match with its sites and their map points", async () => {
+    const page = {
+      studies: [
+        {
+          protocolSection: {
+            identificationModule: { nctId: "NCT00000009" },
+            contactsLocationsModule: { locations: [{ city: "Boston", state: "Massachusetts", country: "United States", geoPoint: { lat: 42.36, lon: -71.06 } }, { city: "Nowhere", country: "United States" }] },
+          },
+        },
+        { protocolSection: { identificationModule: { nctId: "bad" } } },
+      ],
+    };
+    const matches = await findMatches(criteria({ conditions: ["MS"] }), "2026-11-01", async () => page);
+    expect(matches).toHaveLength(1);
+    expect(matches[0]!.trial.nctId).toBe("NCT00000009");
+    // Only sites with a map point can be measured from.
+    expect(matches[0]!.sites).toEqual([{ place: "Boston, Massachusetts, United States", short: "Boston, Massachusetts", lat: 42.36, lon: -71.06 }]);
   });
 
   it("drops records without a valid NCT ID and de-duplicates sites", () => {
