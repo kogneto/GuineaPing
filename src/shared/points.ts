@@ -6,7 +6,8 @@
  */
 import type { Profile } from "./api";
 import { criteriaSections, type CriteriaSection } from "./plain";
-import { daysUntil, type PastStudy } from "./waiting";
+import { daysAgo, sayDay } from "./days";
+import type { PastStudy } from "./waiting";
 
 export const TOPICS = ["bmi", "weight", "nicotine", "donation", "study"] as const;
 export type Topic = (typeof TOPICS)[number];
@@ -68,12 +69,6 @@ export function bmiOf(heightIn: number, weightLb: number): number {
 }
 
 const KG_PER_LB = 0.45359237;
-const sayDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-const daysAgo = (day: string, today: string) => {
-  const n = -daysUntil(day, today);
-  return n === 0 ? "today" : n === 1 ? "1 day ago" : n > 1 ? `${n} days ago` : n === -1 ? "in 1 day" : `in ${-n} days`;
-};
-
 /** What a Member sees beside a Point to check: their own fact, or what to add so there is one. */
 export type Fact = { topic: Topic; text: string; missing: boolean };
 

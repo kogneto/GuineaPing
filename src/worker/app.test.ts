@@ -5,7 +5,8 @@ import { setAllowed } from "./access";
 import { app } from "./app";
 import { checkStatus, runCheck } from "./check";
 import { runUpdates } from "./updates";
-import { addDays, type PastStudy } from "../shared/waiting";
+import { addDays } from "../shared/days";
+import type { PastStudy } from "../shared/waiting";
 import { tellWaitsOver } from "./waiting";
 import { fetchJson } from "../shared/ctgov";
 

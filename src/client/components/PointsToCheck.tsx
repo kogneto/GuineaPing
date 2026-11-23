@@ -1,15 +1,10 @@
 import { useEffect, useState } from "react";
 import type { Profile } from "../../shared/api";
+import { todayHere } from "../../shared/days";
 import { factFor, pointsToCheck, type Point } from "../../shared/points";
 import type { PastStudy } from "../../shared/waiting";
 import { api } from "../api";
 import { Link } from "../router";
-
-/** Today where the Member is, as a plain day. */
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
 
 const WHERE: Record<Point["kind"], string> = { include: "Under “you may be able to join if”", exclude: "Under “you can't join if”", other: "From what the study asks for" };
 
@@ -28,7 +23,7 @@ export function PointsToCheck({ text }: { text: string }) {
 
   const points = pointsToCheck(text);
   if (!points.length) return null;
-  const now = today();
+  const now = todayHere();
   return (
     <section>
       <h2>Points to check</h2>

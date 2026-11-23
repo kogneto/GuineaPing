@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { addDays, daysUntil, freeOn, isDay, normalizePastStudy } from "./waiting";
+import { addDays, daysAgo, daysUntil, isDay, sayDay, todayHere } from "./days";
+import { freeOn, normalizePastStudy } from "./waiting";
 
 describe("waiting periods", () => {
   it("adds days to a plain day, across months, years and leap days", () => {
@@ -21,6 +22,18 @@ describe("waiting periods", () => {
     expect(daysUntil("2026-12-01", "2026-11-22")).toBe(9);
     expect(daysUntil("2026-11-22", "2026-11-22")).toBe(0);
     expect(daysUntil("2026-11-20", "2026-11-22")).toBe(-2);
+  });
+
+  it("says a day the same way everywhere, and takes today from the clock it is given", () => {
+    expect(sayDay("2026-12-13")).toBe("December 13, 2026");
+    expect(sayDay("2026-01-01")).toBe("January 1, 2026");
+    expect(daysAgo("2026-10-12", "2026-11-22")).toBe("41 days ago");
+    expect(daysAgo("2026-11-22", "2026-11-22")).toBe("today");
+    expect(daysAgo("2026-11-21", "2026-11-22")).toBe("1 day ago");
+    expect(daysAgo("2026-11-25", "2026-11-22")).toBe("in 3 days");
+    // The local day, not the UTC one: late evening stays the same day.
+    expect(todayHere(new Date(2026, 10, 22, 23, 30))).toBe("2026-11-22");
+    expect(todayHere(new Date(2026, 0, 5, 0, 10))).toBe("2026-01-05");
   });
 
   it("knows a real day from something that only looks like one", () => {
