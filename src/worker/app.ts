@@ -7,7 +7,7 @@ import { accessFrom, setAllowed } from "./access";
 import { getAlert, listAlerts, markRead, sendAlert, sortAlert } from "./alerts";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, knownMatches, RECENT_DAYS, type Known } from "./check";
-import { listClinics, markOpening } from "./clinics";
+import { listClinics, markOpening, setClinicPush } from "./clinics";
 import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
 import { plainFetch, readDueSource } from "./openings/read";
 import { SOURCES } from "./openings/sources";
@@ -354,7 +354,14 @@ app.post("/api/openings/mark", async (c) => {
   return "error" in done ? c.json({ error: done.error }, done.status) : c.json(done);
 });
 
-/** Reads the next due Clinic source on demand during local development. Still at most once a day each. */
+/** Turns the signed-in Member's Push for new Openings at one Clinic on or off. */
+app.post("/api/clinics/push", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { id?: unknown; on?: unknown } | null;
+  const done = await setClinicPush(c.env.DB, c.get("me").memberId, body?.id, body?.on, now());
+  return "error" in done ? c.json({ error: done.error }, done.status) : c.json(done);
+});
+
+/** Reads the next due Clinic source on demand during local development. Still at most once an hour each. */
 app.post("/api/dev/read-clinic", async (c) => {
   if (!isDevRequest(c)) return c.json({ error: "Not found" }, 404);
   return c.json((await readDueSource(c.env.DB, SOURCES, plainFetch)) ?? { status: "nothing due" });

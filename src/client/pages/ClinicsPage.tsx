@@ -62,7 +62,7 @@ function OpeningCard({ opening, onMark, clinic }: { opening: Opening; onMark: Se
   );
 }
 
-function ClinicSection({ clinic, onMark }: { clinic: ClinicItem; onMark: SetAside }) {
+function ClinicSection({ clinic, onMark, onPush }: { clinic: ClinicItem; onMark: SetAside; onPush: (clinic: ClinicItem, on: boolean) => void }) {
   const [showAside, setShowAside] = useState(false);
   const listed = clinic.openings.filter((o) => !o.mark);
   const aside = clinic.openings.filter((o) => o.mark);
@@ -90,6 +90,12 @@ function ClinicSection({ clinic, onMark }: { clinic: ClinicItem; onMark: SetAsid
         </span>
       </div>
       <p className="muted small">{status}</p>
+      {clinic.read && !clinic.refused && (
+        <label className="check small">
+          <input type="checkbox" checked={clinic.pushNew} onChange={(e) => onPush(clinic, e.target.checked)} />
+          Push me new Openings here
+        </label>
+      )}
       {listed.length > 0 && (
         <div className="stack">
           {listed.map((o) => (
@@ -173,6 +179,13 @@ export function ClinicsPage() {
       .then(setClinics, (e: Error) => setMarkError(e.message));
   };
 
+  const setPush = (clinic: ClinicItem, on: boolean) => {
+    setMarkError(null);
+    api("/api/clinics/push", "POST", { id: clinic.id, on })
+      .then(() => api<ClinicItem[]>("/api/clinics"))
+      .then(setClinics, (e: Error) => setMarkError(e.message));
+  };
+
   if (error) return <p className="error">{error}</p>;
   if (!clinics)
     return (
@@ -216,7 +229,7 @@ export function ClinicsPage() {
       )}
       {view !== "clinics" && <p className="muted small">{VIEWS.find((v) => v.view === view)!.says}</p>}
       {markError && <p className="error">{markError}</p>}
-      {view === "clinics" ? shown.map((c) => <ClinicSection key={c.id} clinic={c} onMark={setAside} />) : <AllOpenings clinics={clinics} by={view} onMark={setAside} />}
+      {view === "clinics" ? shown.map((c) => <ClinicSection key={c.id} clinic={c} onMark={setAside} onPush={setPush} />) : <AllOpenings clinics={clinics} by={view} onMark={setAside} />}
       {view === "clinics" && !shown.length && <p className="muted">No Clinic's list has been read yet.</p>}
       <p className="muted small">
         "Watch for Trials" starts a Watch that sends an Alert when a new Trial on ClinicalTrials.gov names that Clinic. It works for every Clinic here, because it never visits the Clinic's site.
@@ -225,7 +238,7 @@ export function ClinicsPage() {
         Set a listing aside when it isn't one you'd take. "Not this time" is for a reason that will change, such as the dates: the listing shows again if the Clinic lists the study again. "Not for me" is for a
         reason that won't: that study stays set aside at that Clinic, later groups too. Only you see what you set aside, and you can always show it and put it back.
       </p>
-      <p className="muted small">GuineaPing reads only some Clinics' lists, once a day. A list can change sooner than that, so check the Clinic's own page before you plan around it.</p>
+      <p className="muted small">GuineaPing reads only some Clinics' lists, once an hour. A list can change sooner than that, so check the Clinic's own page before you plan around it. Tick "Push me new Openings here" under a Clinic to hear on your Devices when its list shows a new one, or new dates or a new group for one it had. That Push names the Clinic and gives the study's title, pay, dates and stay.</p>
     </>
   );
 }

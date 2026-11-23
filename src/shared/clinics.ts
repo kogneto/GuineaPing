@@ -2,7 +2,7 @@
  * The Clinics GuineaPing knows: research units that run paid studies for healthy volunteers and
  * advertise them on their own sites. Kept by hand, from docs/research/paid-study-sources.md.
  *
- * `source` names the reader that fetches this Clinic's study list once a day (src/worker/openings).
+ * `source` names the reader that fetches this Clinic's study list once an hour (src/worker/openings).
  * A Clinic without one is link-only: GuineaPing never visits its site, because its terms forbid
  * automated tools or it turns them away. The Member opens the link and reads it themselves.
  */
@@ -51,7 +51,7 @@ const ICON = "https://iconstudies.com/All-Clinical-Research-Studies/";
 const TRIALMED = "https://trialmed.com/find-a-study/";
 
 export const CLINICS: Clinic[] = [
-  // Read once a day.
+  // Read once an hour.
   c("celerion-lincoln", "Celerion", "Lincoln, NE", 40.8, -96.667, CELERION, "celerion", ["Celerion"]),
   c("celerion-tempe", "Celerion", "Tempe, AZ", 33.4148, -111.9093, CELERION, "celerion", ["Celerion"]),
   c("fortrea-madison", "Fortrea", "Madison, WI", 43.0731, -89.4012, FORTREA, "fortrea", FORTREA_NAMES),

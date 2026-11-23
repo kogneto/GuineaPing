@@ -1,6 +1,6 @@
 /**
  * Reading Clinics' own lists of studies (docs/adr/0003). The rules it keeps:
- * - each source is read at most once a day, one source per run;
+ * - each source is read at most once an hour, one source per run;
  * - a site that says no (401, 403, 429, or a challenge page) is not tried again until someone
  *   clears the refusal by hand;
  * - requests carry no made-up browser identity: no headers are set at all;
@@ -15,13 +15,31 @@ export type Fetcher = (url: string) => Promise<Response>;
 /** The plain request: no User-Agent, no cookies, nothing a browser would add. */
 export const plainFetch: Fetcher = (url) => fetch(url, { redirect: "follow" });
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * How long a source rests between reads. The runs are six minutes apart and each source's turn
+ * comes round once an hour, so this is a little under the hour to let a turn that starts a few
+ * seconds early still count.
+ */
+const REST_MS = 55 * 60 * 1000;
 /** Between two pages of the same source. */
 const GAP_MS = 3000;
 const MAX_TEXT = 300;
 const MAX_FOUND = 200;
 
-export type ReadResult = { source: string; status: "ok" | "refused" | "failed" | "nothing found"; found: number; detail?: string };
+/** An entry a read found that is news: see `readDueSource`. */
+export type FreshOpening = Found & { id: string };
+
+export type ReadResult = {
+  source: string;
+  status: "ok" | "refused" | "failed" | "nothing found";
+  found: number;
+  detail?: string;
+  /** The entries that are news since the last read. Empty unless the read was ok. */
+  fresh: FreshOpening[];
+  /** Whether this outcome differs from the source's last one, so a lasting problem is reported once. */
+  statusChanged: boolean;
+};
+type Outcome = Omit<ReadResult, "fresh" | "statusChanged"> & { fresh?: FreshOpening[] };
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -44,26 +62,35 @@ export function clean(found: Found[], source: Source): Found[] {
 }
 
 /**
- * Reads the one source that has waited longest, if any has waited a day. Returns null when
+ * Reads the one source that has waited longest, if any has rested long enough. Returns null when
  * nothing is due. Never throws for a site's failure: that is a normal outcome, recorded per source.
+ *
+ * `fresh` is what a Member would call a new Opening: an entry not on the list before, one that
+ * had gone and is back, or one whose study code or dates have changed (a Clinic often keeps one
+ * page for a study and swaps in the next group). A source's first good read has none: everything
+ * on it is new only to GuineaPing.
  */
 export async function readDueSource(db: D1Database, sources: Source[], get: Fetcher, now = new Date().toISOString(), wait: (ms: number) => Promise<void> = sleep): Promise<ReadResult | null> {
-  const { results: rows } = await db.prepare("SELECT source, attempted_at, refused_at FROM clinic_sources").all<{ source: string; attempted_at: string | null; refused_at: string | null }>();
+  const { results: rows } = await db
+    .prepare("SELECT source, attempted_at, read_at, refused_at, status FROM clinic_sources")
+    .all<{ source: string; attempted_at: string | null; read_at: string | null; refused_at: string | null; status: string | null }>();
   const state = new Map(rows.map((r) => [r.source, r]));
-  const cutoff = new Date(Date.parse(now) - DAY_MS).toISOString();
+  const cutoff = new Date(Date.parse(now) - REST_MS).toISOString();
   const due = sources
     .filter((s) => !state.get(s.id)?.refused_at && (state.get(s.id)?.attempted_at ?? "") <= cutoff)
     .sort((a, b) => (state.get(a.id)?.attempted_at ?? "").localeCompare(state.get(b.id)?.attempted_at ?? ""))[0];
   if (!due) return null;
 
-  // Recorded before any request, so a second run today cannot read this source again.
+  const before = state.get(due.id);
+  // Recorded before any request, so a second run this hour cannot read this source again.
   await db.prepare("INSERT INTO clinic_sources (source, attempted_at) VALUES (?1, ?2) ON CONFLICT(source) DO UPDATE SET attempted_at = ?2").bind(due.id, now).run();
-  const finish = async (result: ReadResult) => {
+  const finish = async (result: Outcome): Promise<ReadResult> => {
+    const status = result.detail ? `${result.status}: ${result.detail}` : result.status;
     await db
       .prepare("UPDATE clinic_sources SET status = ?2, read_at = COALESCE(?3, read_at), refused_at = COALESCE(?4, refused_at) WHERE source = ?1")
-      .bind(due.id, result.detail ? `${result.status}: ${result.detail}` : result.status, result.status === "ok" ? now : null, result.status === "refused" ? now : null)
+      .bind(due.id, status, result.status === "ok" ? now : null, result.status === "refused" ? now : null)
       .run();
-    return result;
+    return { ...result, fresh: result.fresh ?? [], statusChanged: status !== (before?.status ?? null) };
   };
 
   const pages: string[] = [];
@@ -97,6 +124,20 @@ export async function readDueSource(db: D1Database, sources: Source[], get: Fetc
   // the page was redesigned than that the Clinic has nothing. Keep what there was and say so.
   if (!found.length) return finish({ source: due.id, status: "nothing found", found: 0 });
 
+  const { results: had } = await db
+    .prepare("SELECT id, code, when_text, gone_at FROM clinic_openings WHERE source = ?")
+    .bind(due.id)
+    .all<{ id: string; code: string | null; when_text: string | null; gone_at: string | null }>();
+  const was = new Map(had.map((r) => [r.id, r]));
+  const fresh = before?.read_at
+    ? found
+        .map((f) => ({ ...f, id: `${due.id}:${f.key}` }))
+        .filter((f) => {
+          const old = was.get(f.id);
+          return !old || old.gone_at !== null || (f.code !== null && f.code !== old.code) || (f.when !== null && f.when !== old.when_text);
+        })
+    : [];
+
   // An entry that went from the list and is back counts as first seen today: the Clinic has listed
   // it again, which is news, and a Member who set it aside "Not this time" should see it again.
   const upsert = db.prepare(
@@ -108,5 +149,5 @@ export async function readDueSource(db: D1Database, sources: Source[], get: Fetc
     ...found.map((f) => upsert.bind(`${due.id}:${f.key}`, due.id, f.clinicId, f.title, f.pay, f.when, f.stay, f.who, f.code, f.url, now)),
     db.prepare("UPDATE clinic_openings SET gone_at = ?2 WHERE source = ?1 AND gone_at IS NULL AND last_seen_at < ?2").bind(due.id, now),
   ]);
-  return finish({ source: due.id, status: "ok", found: found.length });
+  return finish({ source: due.id, status: "ok", found: found.length, fresh });
 }

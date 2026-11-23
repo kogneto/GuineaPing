@@ -22,9 +22,10 @@
       "migrations_dir": "migrations"
     }
   ],
-  // The hourly Check, at minute 17 to stay clear of the top-of-hour rush. At minute 47, the Clinic
-  // read: one Clinic source per run, each source at most once a day (src/worker/openings/read.ts).
-  "triggers": { "crons": ["17 * * * *", "47 * * * *"] },
+  // The hourly Check, at minute 17 to stay clear of the top-of-hour rush. Every six minutes, the
+  // Clinic read: one Clinic source per run, each source at most once an hour
+  // (src/worker/openings/read.ts). Ten runs an hour cover the nine sources with one to spare.
+  "triggers": { "crons": ["17 * * * *", "3,9,15,21,27,33,39,45,51,57 * * * *"] },
   "vars": {
     // Cloudflare Access lets Members in: the "GuineaPing" Access application on this Worker's
     // workers.dev host. If that application is ever recreated it gets a new AUD tag; put the new
