@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Trial, Watch } from "../../shared/api";
+import { clinicById, clinicLabel } from "../../shared/clinics";
 import { PHASE_LABELS, STATUS_LABELS, kindLabel } from "../../shared/plain";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
@@ -30,6 +31,7 @@ export function WatchPage({ id }: { id: string }) {
   const rows: [string, string][] = [
     ["Conditions", c.conditions.join(", ")],
     ["Keywords", c.terms.join(", ")],
+    ["Clinics", c.clinics.map((id) => clinicById(id)).filter((x) => !!x).map(clinicLabel).join("; ")],
     ["Where", c.near ? `Within ${c.near.miles} miles of ${c.near.zip}` : "Anywhere"],
     ["Who", [c.age !== null ? `Age ${c.age}` : "", c.sex === "FEMALE" ? "Female" : c.sex === "MALE" ? "Male" : "", c.healthy ? "Healthy volunteers" : ""].filter(Boolean).join(", ") || "Anyone"],
     ["Kind of study", c.kinds.map(kindLabel).join("; ") || "Any"],

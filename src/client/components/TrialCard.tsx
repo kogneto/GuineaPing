@@ -1,7 +1,33 @@
 import { useState } from "react";
 import type { Trial } from "../../shared/api";
+import { clinicById, clinicLabel } from "../../shared/clinics";
 import { byNearest, keyFacts, locationsText } from "../../shared/plain";
 import { Illustration, type ArtName } from "./Illustration";
+
+/**
+ * The Clinics this Trial's listing names, each with a link to the Clinic's own list of studies.
+ * ClinicalTrials.gov doesn't say what a study pays or when it runs; the Clinic's list may.
+ */
+export function TrialClinics({ trial }: { trial: Trial }) {
+  const clinics = (trial.clinics ?? []).map(clinicById).filter((c) => !!c);
+  if (!clinics.length) return null;
+  return (
+    <p className="where">
+      At{" "}
+      {clinics.map((c, i) => (
+        <span key={c.id}>
+          {i > 0 && "; "}
+          {clinicLabel(c)} (
+          <a href={c.url} target="_blank" rel="noreferrer">
+            its own list
+          </a>
+          )
+        </span>
+      ))}
+      . The Clinic's list may give pay and dates, under its own name for the study.
+    </p>
+  );
+}
 
 /** A Trial's title and plain-language key facts, as in Recent matches and the editor preview. */
 export function TrialCard({ trial }: { trial: Trial }) {
@@ -13,6 +39,7 @@ export function TrialCard({ trial }: { trial: Trial }) {
       </a>
       <p className="facts">{keyFacts(trial).join(" · ")}</p>
       {where && <p className="where">{where}</p>}
+      <TrialClinics trial={trial} />
       <p className="meta">
         First posted {trial.firstPosted} · {trial.nctId}
       </p>

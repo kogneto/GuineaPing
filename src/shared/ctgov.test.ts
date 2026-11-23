@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { KINDS, type Criteria, type Trial } from "./api";
+import { CLINICS, clinicsFilter, clinicsNamedBy } from "./clinics";
 import { buildParams, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
 import { agesText, criteriaSections, keyFacts, kindFact, kindLabel, kindsAsked, kindsText, phaseText } from "./plain";
 
@@ -27,7 +28,7 @@ describe("query building", () => {
   });
 
   it("refuses a Watch that would match every Trial, and unknown enums", () => {
-    expect(normalizeCriteria({ conditions: ["  "], terms: [] })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
+    expect(normalizeCriteria({ conditions: ["  "], terms: [] })).toEqual({ error: "A Watch needs a condition, a keyword or a Clinic, or healthy volunteers with a ZIP code" });
     // A volunteer with no condition: healthy-volunteer studies near a ZIP code, and nothing else.
     const open = normalizeCriteria({ conditions: [], healthy: true, near: { zip: "02139", miles: 50 } });
     expect(open).toMatchObject({ conditions: [], terms: [], healthy: true, near: { zip: "02139", miles: 50 } });
@@ -35,8 +36,8 @@ describe("query building", () => {
     expect(p["query.cond"]).toBeUndefined();
     expect(p["filter.advanced"]).toContain("AREA[HealthyVolunteers]true");
     expect(p["filter.geo"]).toBe("distance(42.36,-71.1,50mi)");
-    expect(normalizeCriteria({ conditions: [], healthy: true })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
-    expect(normalizeCriteria({ conditions: [], near: { zip: "02139", miles: 50 } })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
+    expect(normalizeCriteria({ conditions: [], healthy: true })).toEqual({ error: "A Watch needs a condition, a keyword or a Clinic, or healthy volunteers with a ZIP code" });
+    expect(normalizeCriteria({ conditions: [], near: { zip: "02139", miles: 50 } })).toEqual({ error: "A Watch needs a condition, a keyword or a Clinic, or healthy volunteers with a ZIP code" });
     expect(normalizeCriteria({ conditions: ["MS"], phases: ["PHASE9"] })).toEqual({ error: "Unknown phase PHASE9" });
     expect(normalizeCriteria({ conditions: [" MS ", "MS"], statuses: ["RECRUITING"] })).toEqual(criteria({ conditions: ["MS"], statuses: ["RECRUITING"] }));
   });
@@ -121,6 +122,47 @@ describe("fetching", () => {
   });
 });
 
+describe("Clinics", () => {
+  it("asks for a site whose name and city are the Clinic's, joined with OR for several", () => {
+    expect(clinicsFilter([])).toBeNull();
+    expect(clinicsFilter(["celerion-lincoln"])).toBe('SEARCH[Location](AREA[LocationFacility]("Celerion") AND AREA[LocationCity]("Lincoln"))');
+    expect(clinicsFilter(["fortrea-madison", "qps-miami", "nope"])).toBe(
+      '(SEARCH[Location](AREA[LocationFacility]("Fortrea" OR "Covance" OR "Labcorp") AND AREA[LocationCity]("Madison")) OR SEARCH[Location](AREA[LocationFacility]("QPS" OR "Quest Pharmaceutical Services") AND AREA[LocationCity]("South Miami" OR "Miami")))',
+    );
+    const p = buildParams(criteria({ clinics: ["celerion-lincoln"], healthy: true }), "2026-11-01");
+    expect(p["filter.advanced"]).toBe('AREA[StudyFirstPostDate]RANGE[2026-11-01,MAX] AND AREA[HealthyVolunteers]true AND SEARCH[Location](AREA[LocationFacility]("Celerion") AND AREA[LocationCity]("Lincoln"))');
+  });
+
+  it("lets a Clinic be all a Watch asks for, and refuses one it doesn't know or too many", () => {
+    expect(normalizeCriteria({ clinics: ["celerion-lincoln", "celerion-lincoln"] })).toMatchObject({ clinics: ["celerion-lincoln"], conditions: [] });
+    expect(normalizeCriteria({ clinics: ["somewhere"] })).toEqual({ error: "Unknown Clinic somewhere" });
+    expect(normalizeCriteria({ clinics: CLINICS.slice(0, 11).map((c) => c.id) })).toEqual({ error: "A Watch can name at most 10 Clinics" });
+    expect(withDefaults({ conditions: ["MS"] }).clinics).toEqual([]);
+  });
+
+  it("recognises a Clinic in the many ways listings spell it, in its own city only", () => {
+    expect(clinicsNamedBy([{ facility: "Celerion ( Site 0001)", city: "Lincoln" }])).toEqual(["celerion-lincoln"]);
+    expect(clinicsNamedBy([{ facility: "celerion, inc.", city: "Tempe" }])).toEqual(["celerion-tempe"]);
+    expect(clinicsNamedBy([{ facility: "Covance Clinical Research Unit 3402 Kinsman Blvd", city: "Madison" }])).toEqual(["fortrea-madison"]);
+    expect(clinicsNamedBy([{ facility: "QPS-MRA, LLC-Early Phase", city: "Miami" }])).toEqual(["qps-miami"]);
+    // A whole word: "ICON" is not in "Silicon"; and a name alone, in another city, is not the Clinic.
+    expect(clinicsNamedBy([{ facility: "Silicon Valley Research", city: "Lenexa" }])).toEqual([]);
+    expect(clinicsNamedBy([{ facility: "Celerion", city: "Belfast" }, { facility: "Research Site", city: "Lincoln" }, { city: "Lincoln" }])).toEqual([]);
+  });
+
+  it("names the Clinics on a Trial without changing its places", () => {
+    const t = toTrial({
+      protocolSection: {
+        identificationModule: { nctId: "NCT12345678" },
+        contactsLocationsModule: { locations: [{ facility: "Celerion", city: "Lincoln", state: "Nebraska", country: "United States" }, { facility: "Celerion", city: "Tempe", state: "Arizona", country: "United States" }] },
+      },
+    });
+    expect(t?.clinics).toEqual(["celerion-lincoln", "celerion-tempe"]);
+    expect(t?.locations).toEqual(["Lincoln, Nebraska, United States", "Tempe, Arizona, United States"]);
+    expect(toTrial({ protocolSection: { identificationModule: { nctId: "NCT12345678" } } })).not.toHaveProperty("clinics");
+  });
+});
+
 describe("plain language", () => {
   it("explains phases", () => {
     expect(phaseText(["PHASE3"])).toBe("Phase 3 (comparing it against the usual treatment in many people)");
@@ -194,7 +236,7 @@ describe("kind of study", () => {
   });
 
   it("still needs words or a place: a kind alone would match far too much", () => {
-    expect(normalizeCriteria({ conditions: [], kinds: ["DRUG"] })).toEqual({ error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" });
+    expect(normalizeCriteria({ conditions: [], kinds: ["DRUG"] })).toEqual({ error: "A Watch needs a condition, a keyword or a Clinic, or healthy volunteers with a ZIP code" });
   });
 
   it("reads a Trial's kinds from its listing", () => {

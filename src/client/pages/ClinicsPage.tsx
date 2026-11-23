@@ -42,9 +42,14 @@ function ClinicSection({ clinic }: { clinic: ClinicItem }) {
           {clinic.name} <span className="muted">· {clinic.place}</span>
           {clinic.miles !== null && <span className="tag">{clinic.miles} miles</span>}
         </h2>
-        <a href={clinic.url} target="_blank" rel="noreferrer" className="button secondary">
-          Open its list
-        </a>
+        <span className="actions">
+          <Link to={`/watches/new?clinic=${clinic.id}`} className="button secondary">
+            Watch for Trials
+          </Link>
+          <a href={clinic.url} target="_blank" rel="noreferrer" className="button secondary">
+            Open its list
+          </a>
+        </span>
       </div>
       <p className="muted small">{status}</p>
       {clinic.openings.length > 0 && (
@@ -102,6 +107,9 @@ export function ClinicsPage() {
         <ClinicSection key={c.id} clinic={c} />
       ))}
       {!shown.length && <p className="muted">No Clinic's list has been read yet.</p>}
+      <p className="muted small">
+        "Watch for Trials" starts a Watch that sends an Alert when a new Trial on ClinicalTrials.gov names that Clinic. It works for every Clinic here, because it never visits the Clinic's site.
+      </p>
       <p className="muted small">GuineaPing reads only some Clinics' lists, once a day. A list can change sooner than that, so check the Clinic's own page before you plan around it.</p>
     </>
   );

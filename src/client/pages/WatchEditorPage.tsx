@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DISTANCES, KINDS, PHASES, STATUSES, type CriteriaInput, type Kind, type Phase, type Profile, type Sex, type Status, type Trial, type Watch } from "../../shared/api";
+import { CLINICS, MAX_WATCH_CLINICS, clinicById, clinicLabel } from "../../shared/clinics";
 import { PHASE_LABELS, STATUS_LABELS, kindLabel } from "../../shared/plain";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
@@ -19,7 +20,10 @@ function toggle<T>(list: T[], value: T): T[] {
 /** Creates a Watch, or edits one `id` the signed-in Member owns. */
 export function WatchEditorPage({ id }: { id?: string }) {
   const [loaded, setLoaded] = useState(!id);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(() => {
+    const asked = id ? undefined : clinicById(new URLSearchParams(location.search).get("clinic") ?? "");
+    return asked ? clinicLabel(asked) : "";
+  });
   const [conditions, setConditions] = useState("");
   const [terms, setTerms] = useState("");
   const [phases, setPhases] = useState<Phase[]>([]);
@@ -32,10 +36,15 @@ export function WatchEditorPage({ id }: { id?: string }) {
   const [sex, setSex] = useState<Sex | "">("");
   // New Watches start out for healthy volunteers: that is who GuineaPing is mostly for.
   const [healthy, setHealthy] = useState(!id);
+  // The Clinics page links here with ?clinic=<id> to start a Watch for one Clinic.
+  const [clinics, setClinics] = useState<string[]>(() => {
+    const asked = id ? null : new URLSearchParams(location.search).get("clinic");
+    return asked && clinicById(asked) ? [asked] : [];
+  });
   const [profile, setProfile] = useState<Profile | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [preview, setPreview] = useState<Trial[] | null>(null);
-  const [previewNote, setPreviewNote] = useState<string | null>("Add a ZIP code, or type a condition or keyword, to see what it finds.");
+  const [previewNote, setPreviewNote] = useState<string | null>("Add a ZIP code, pick a Clinic, or type a condition or keyword, to see what it finds.");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -71,6 +80,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
       setAge(w.criteria.age === null ? "" : String(w.criteria.age));
       setSex(w.criteria.sex ?? "");
       setHealthy(w.criteria.healthy);
+      setClinics(w.criteria.clinics);
       setLoaded(true);
     }, (e: Error) => setError(e.message));
   }, [id]);
@@ -87,6 +97,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
     age: ageNumber,
     sex: sex || null,
     healthy,
+    clinics,
   };
   const key = JSON.stringify(criteria);
 
@@ -118,9 +129,9 @@ export function WatchEditorPage({ id }: { id?: string }) {
 
   // Recent matches update as the Owner types, so they can see whether the words find the right trials.
   useEffect(() => {
-    if (!criteria.conditions.length && !criteria.terms.length && !(criteria.healthy && criteria.near)) {
+    if (!criteria.conditions.length && !criteria.terms.length && !criteria.clinics.length && !(criteria.healthy && criteria.near)) {
       setPreview(null);
-      setPreviewNote("Add a ZIP code, or type a condition or keyword, to see what it finds.");
+      setPreviewNote("Add a ZIP code, pick a Clinic, or type a condition or keyword, to see what it finds.");
       return;
     }
     setPreviewNote(null);
@@ -194,7 +205,41 @@ export function WatchEditorPage({ id }: { id?: string }) {
                 <input value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" autoComplete="postal-code" maxLength={5} placeholder="02139" className="short" />
               </label>
             </div>
-            <span className="hint">Leave the ZIP code empty for trials anywhere. A Watch with no condition or keyword needs one.</span>
+            <span className="hint">Leave the ZIP code empty for trials anywhere. A Watch with no condition, keyword or Clinic needs one.</span>
+          </fieldset>
+          <fieldset>
+            <legend>Clinics</legend>
+            <span className="hint">
+              Only trials at one of these Clinics. Leave empty for any site. A Clinic is found by the name its trials give their site, so a trial that names no site is missed, and so is one that adds the Clinic after it was first posted.
+            </span>
+            {clinics.length > 0 && (
+              <div className="suggestions" aria-label="Clinics in this Watch">
+                {clinics.map((clinicId) => {
+                  const clinic = clinicById(clinicId);
+                  return (
+                    <button type="button" key={clinicId} className="chip" onClick={() => setClinics(clinics.filter((x) => x !== clinicId))} aria-label={`Remove ${clinic ? clinicLabel(clinic) : clinicId}`}>
+                      {clinic ? clinicLabel(clinic) : clinicId} ×
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {clinics.length < MAX_WATCH_CLINICS && (
+              <label>
+                Add a Clinic
+                <select value="" onChange={(e) => e.target.value && setClinics([...clinics, e.target.value])}>
+                  <option value="">Choose…</option>
+                  {[...CLINICS]
+                    .filter((clinic) => !clinics.includes(clinic.id))
+                    .sort((a, b) => clinicLabel(a).localeCompare(clinicLabel(b)))
+                    .map((clinic) => (
+                      <option key={clinic.id} value={clinic.id}>
+                        {clinicLabel(clinic)}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
           </fieldset>
           <fieldset>
             <legend>Who it's for</legend>

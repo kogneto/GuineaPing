@@ -3,6 +3,7 @@ import { MARKS, MAX_NOTE_CHARS, type AlertItem, type Mark } from "../../shared/a
 import { MARK_LABELS, agesText, criteriaSections, kindsText, locationsText, phaseText, sexText, statusText, type CriteriaSection } from "../../shared/plain";
 import { ago, api } from "../api";
 import { Illustration } from "../components/Illustration";
+import { TrialClinics } from "../components/TrialCard";
 import { Link } from "../router";
 
 export function AlertPage({ id }: { id: string }) {
@@ -65,6 +66,7 @@ export function AlertPage({ id }: { id: string }) {
             </div>
           ))}
       </dl>
+      <TrialClinics trial={t} />
       {t.summary && (
         <>
           <h2>What the study says about itself</h2>

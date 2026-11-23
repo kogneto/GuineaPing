@@ -35,6 +35,8 @@ export type Criteria = {
   sex: Sex | null;
   /** Only Trials that take healthy volunteers. */
   healthy: boolean;
+  /** Only Trials with a site at one of these Clinics (ids from src/shared/clinics.ts); empty means any site. */
+  clinics: string[];
 };
 
 export const DISTANCES = [10, 25, 50, 100, 250] as const;
@@ -67,6 +69,8 @@ export type Trial = {
   locations: string[];
   /** The site closest to the Watch's ZIP code, when the Watch has one. */
   nearest?: { place: string; miles: number } | null;
+  /** The Clinics GuineaPing knows that this Trial's sites name (ids from src/shared/clinics.ts). Left out when none. */
+  clinics?: string[];
   /** Who can join, when the study says more than an age range. Absent on Alerts made before this was kept. */
   eligibility?: Eligibility;
   url: string;

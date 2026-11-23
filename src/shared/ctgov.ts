@@ -3,6 +3,7 @@
  * Criteria into a query, and a study record into a Trial. Every query form used here was checked
  * against the live API on 2026-11-22.
  */
+import { clinicById, clinicsFilter, clinicsNamedBy, MAX_WATCH_CLINICS } from "./clinics";
 import { DISTANCES, KINDS, PHASES, SEXES, STATUSES, type Criteria, type CriteriaInput, type Kind, type Near, type Phase, type Sex, type Status, type Trial } from "./api";
 
 export const API_URL = "https://clinicaltrials.gov/api/v2/studies";
@@ -25,6 +26,7 @@ const FIELDS = [
   "Sex",
   "HealthyVolunteers",
   "EligibilityCriteria",
+  "LocationFacility",
   "LocationCity",
   "LocationState",
   "LocationCountry",
@@ -55,7 +57,7 @@ function anyOf(terms: string[]): string | null {
 
 /** Fills in fields added after a Watch was saved, so older Watches keep working. */
 export function withDefaults(c: Partial<Criteria>): Criteria {
-  return { conditions: [], terms: [], phases: [], statuses: [], kinds: [], near: null, age: null, sex: null, healthy: false, ...c };
+  return { conditions: [], terms: [], phases: [], statuses: [], kinds: [], near: null, age: null, sex: null, healthy: false, clinics: [], ...c };
 }
 
 /**
@@ -71,6 +73,10 @@ export function normalizeCriteria(input: unknown): CriteriaInput | { error: stri
   const phases = strings(raw.phases);
   const statuses = strings(raw.statuses);
   const kinds = strings(raw.kinds);
+  const clinics = strings(raw.clinics);
+  const badClinic = clinics.find((id) => !clinicById(id));
+  if (badClinic) return { error: `Unknown Clinic ${badClinic}` };
+  if (clinics.length > MAX_WATCH_CLINICS) return { error: `A Watch can name at most ${MAX_WATCH_CLINICS} Clinics` };
   const badPhase = phases.find((p) => !(PHASES as readonly string[]).includes(p));
   if (badPhase) return { error: `Unknown phase ${badPhase}` };
   const badStatus = statuses.find((s) => !(STATUSES as readonly string[]).includes(s));
@@ -99,11 +105,12 @@ export function normalizeCriteria(input: unknown): CriteriaInput | { error: stri
     sex = raw.sex as Sex;
   }
   const healthy = raw.healthy === true;
-  // Something has to narrow the search. Words do; so does "healthy volunteers near here", which is
-  // what a volunteer with no condition wants. Healthy volunteers anywhere would be every such Trial.
+  // Something has to narrow the search. Words do; so does a Clinic; so does "healthy volunteers
+  // near here", which is what a volunteer with no condition wants. Healthy volunteers anywhere
+  // would be every such Trial.
   const hasWords = conditions.some(quoteTerm) || terms.some(quoteTerm);
-  if (!hasWords && !(healthy && near)) return { error: "A Watch needs a condition or keyword, or healthy volunteers with a ZIP code" };
-  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], kinds: kinds as Kind[], near, age, sex, healthy };
+  if (!hasWords && !clinics.length && !(healthy && near)) return { error: "A Watch needs a condition, a keyword or a Clinic, or healthy volunteers with a ZIP code" };
+  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], kinds: kinds as Kind[], near, age, sex, healthy, clinics };
 }
 
 /**
@@ -153,6 +160,8 @@ export function buildParams(criteria: Criteria, since: string): Record<string, s
   const ofKinds = kindsFilter(criteria.kinds);
   if (ofKinds) advanced.push(ofKinds);
   advanced.push(...eligibilityFilters(criteria));
+  const atClinics = clinicsFilter(criteria.clinics);
+  if (atClinics) advanced.push(atClinics);
   const params: Record<string, string> = {
     format: "json",
     fields: FIELDS,
@@ -229,7 +238,7 @@ type Study = {
     conditionsModule?: { conditions?: string[] };
     sponsorCollaboratorsModule?: { leadSponsor?: { name?: string } };
     eligibilityModule?: { minimumAge?: string; maximumAge?: string; sex?: string; healthyVolunteers?: boolean; eligibilityCriteria?: string };
-    contactsLocationsModule?: { locations?: { city?: string; state?: string; country?: string; geoPoint?: { lat?: number; lon?: number } }[] };
+    contactsLocationsModule?: { locations?: { facility?: string; city?: string; state?: string; country?: string; geoPoint?: { lat?: number; lon?: number } }[] };
   };
 };
 
@@ -278,6 +287,7 @@ export function toTrial(raw: unknown, near?: Near | null): Trial | null {
     }
   }
   const kinds = kindsOf(raw);
+  const clinics = clinicsNamedBy(ps.contactsLocationsModule?.locations ?? []);
   return {
     nctId,
     title: ps.identificationModule?.briefTitle ?? nctId,
@@ -293,6 +303,8 @@ export function toTrial(raw: unknown, near?: Near | null): Trial | null {
     maximumAge: ps.eligibilityModule?.maximumAge ?? "",
     locations,
     ...(near ? { nearest } : {}),
+    // Left out when empty, like kinds.
+    ...(clinics.length ? { clinics } : {}),
     eligibility: {
       sex: ps.eligibilityModule?.sex ?? "",
       healthyVolunteers: ps.eligibilityModule?.healthyVolunteers ?? null,
