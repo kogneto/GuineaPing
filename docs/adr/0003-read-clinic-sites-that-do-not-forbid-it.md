@@ -2,7 +2,9 @@
 
 ClinicalTrials.gov does not say what a study pays or how long the stay is. Clinics say it on their own recruitment sites. GuineaPing reads the study lists of the Clinics whose sites do not forbid it, once an hour, and shows each Opening in the Clinic’s own words with a link to its page. For every other Clinic it shows only a link, and the Member reads the page themselves.
 
-The Clinics that are read have not been asked. Their sites say nothing about automated reading, and the owner decided on 2026-11-22 to assume permission, because GuineaPing is a private group, is not a paid app, and does not need the Openings to be built. The research behind the choice of Clinics is in `docs/research/paid-study-sources.md` (pull request #19).
+The Clinics that are read have not been asked. Their sites say nothing about automated reading, and the owner decided on 2026-11-22 to assume permission, because GuineaPing is a private group, is not a paid app, and does not need the Openings to be built.
+
+On 2026-11-23 the owner added Tips: a Member may send the owner money through a payment service of their own, and GuineaPing shows where. The owner’s view is that this leaves GuineaPing unpaid, because nothing is shown, hidden or sent sooner according to whether a Member tips, and GuineaPing does not know who has. It is still money reaching the owner from a group that sees Openings read from Clinics’ sites, so it weakens “not a paid app” as a reason, most of all for Pfizer, whose terms allow noncommercial personal reference only. The owner chose to keep reading every source, Pfizer included. The research behind the choice of Clinics is in `docs/research/paid-study-sources.md` (pull request #19).
 
 ## Rules the Clinic read keeps
 

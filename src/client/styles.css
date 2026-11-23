@@ -174,6 +174,11 @@ button.chevron { flex: none; background: none; border: none; color: var(--muted)
 .switch input:checked + span { background: var(--accent); box-shadow: none; }
 .switch input:checked + span::after { transform: translateX(20px); box-shadow: none; }
 .switch input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tips { margin: 1.5rem 0 0; padding: 0.8rem 1rem; background: var(--accent-soft); border-radius: 12px; font-size: 0.92rem; }
+.tips p { margin: 0 0 0.6rem; }
+.tips ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
+.tips .button { background: var(--surface); }
+.tip-handle { overflow-wrap: anywhere; }
 .about { margin-top: 2rem; font-size: 0.875rem; color: var(--muted); }
 .about summary, .more summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 0.65rem 0; }
 .trial-heading { font-size: 1.4rem; }

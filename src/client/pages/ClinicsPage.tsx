@@ -3,6 +3,7 @@ import type { ClinicItem, Opening } from "../../shared/api";
 import { OPENING_MARK_LABELS, inOrder, type OpeningMark } from "../../shared/openings";
 import { ago, api } from "../api";
 import { Illustration } from "../components/Illustration";
+import { TipJar } from "../components/TipJar";
 import { WaitingLine } from "../components/WaitingPeriods";
 import { Link } from "../router";
 
@@ -300,6 +301,7 @@ export function ClinicsPage() {
           ))}
         </ul>
       )}
+      <TipJar lead="Did an Opening here work out?" />
       <details className="about">
         <summary>How this page works</summary>
         <p>Research clinics that pay healthy volunteers. What each one says about pay, dates and stays is in its own words; open it at the Clinic for the details.</p>

@@ -3,6 +3,7 @@ import { daysUntil, isDay, sayDay, todayHere } from "../../shared/days";
 import { DEFAULT_WAIT_DAYS, MAX_LABEL_CHARS, MAX_WAIT_DAYS, freeOn, type PastStudy } from "../../shared/waiting";
 import { api } from "../api";
 import { Link } from "../router";
+import { TipJar } from "./TipJar";
 
 /** The latest day any of these keeps the Member waiting until; null when none does. */
 const waitingUntil = (studies: PastStudy[], now: string) => studies.map((s) => s.freeOn).filter((day) => day > now).sort().pop() ?? null;
@@ -136,6 +137,7 @@ export function WaitingPeriods() {
           ))}
         </div>
       )}
+      {studies && studies.length > 0 && <TipJar lead="Did GuineaPing help you find a study?" />}
       <form className="form" onSubmit={save} id="past-study-form">
         <h3>{editing ? "Change this study" : "Add a study you've done"}</h3>
         <label>
