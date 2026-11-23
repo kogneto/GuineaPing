@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ClinicItem, Opening } from "../../shared/api";
-import { OPENING_MARK_LABELS, type OpeningMark } from "../../shared/openings";
+import { OPENING_MARK_LABELS, inOrder, type OpeningMark, type OpeningOrder } from "../../shared/openings";
 import { ago, api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { WaitingLine } from "../components/WaitingPeriods";
@@ -19,7 +19,7 @@ const MARK_MEANS: Record<OpeningMark, string> = {
 };
 
 /** One Opening, in the Clinic's own words, linking to its page on the Clinic's site. */
-function OpeningCard({ opening, onMark }: { opening: Opening; onMark: SetAside }) {
+function OpeningCard({ opening, onMark, clinic }: { opening: Opening; onMark: SetAside; clinic?: ClinicItem }) {
   const facts = [opening.pay, opening.when, opening.stay].filter(Boolean);
   return (
     <article className={opening.mark ? "trial aside" : "trial"}>
@@ -27,6 +27,12 @@ function OpeningCard({ opening, onMark }: { opening: Opening; onMark: SetAside }
         {opening.title}
       </a>
       {isNew(opening) && !opening.mark && <span className="tag">New</span>}
+      {clinic && (
+        <p className="where">
+          {clinic.name} · {clinic.place}
+          {clinic.miles !== null && ` · ${clinic.miles} miles`}
+        </p>
+      )}
       {facts.length > 0 && <p className="facts">{facts.join(" · ")}</p>}
       {opening.who && <p className="where">{opening.who}</p>}
       <p className="meta">
@@ -111,7 +117,46 @@ function ClinicSection({ clinic, onMark }: { clinic: ClinicItem; onMark: SetAsid
   );
 }
 
+type View = "clinics" | OpeningOrder;
+
+const VIEWS: { view: View; label: string; says: string }[] = [
+  { view: "clinics", label: "Nearest Clinic", says: "" },
+  { view: "pay", label: "Highest pay", says: "Every Opening from every Clinic that is read, highest pay first. Where a Clinic gives a range or several figures, the highest is used for ordering; Openings that name no figure come last." },
+  { view: "newest", label: "Newest listed", says: "Every Opening from every Clinic that is read, the most recently listed first. Clinics give no listing date, so this is the day GuineaPing first saw each one." },
+];
+
+/** Every Opening from every Clinic as one list, in the order asked for, each naming its Clinic. */
+function AllOpenings({ clinics, by, onMark }: { clinics: ClinicItem[]; by: OpeningOrder; onMark: SetAside }) {
+  const [showAside, setShowAside] = useState(false);
+  const clinicOf = new Map(clinics.flatMap((c) => c.openings.map((o) => [o.id, c] as const)));
+  const all = inOrder(clinics.flatMap((c) => c.openings), by);
+  const listed = all.filter((o) => !o.mark);
+  const aside = all.filter((o) => o.mark);
+  const cards = (openings: Opening[]) => (
+    <div className="stack">
+      {openings.map((o) => (
+        <OpeningCard key={o.id} opening={o} onMark={onMark} clinic={clinicOf.get(o.id)} />
+      ))}
+    </div>
+  );
+  return (
+    <>
+      {listed.length > 0 ? cards(listed) : <p className="muted">{all.length ? "You have set every Opening aside." : "No Clinic's list has been read yet."}</p>}
+      {aside.length > 0 && (
+        <p className="muted small">
+          {aside.length} set aside by you.{" "}
+          <button type="button" className="link" onClick={() => setShowAside(!showAside)}>
+            {showAside ? "Hide" : "Show"}
+          </button>
+        </p>
+      )}
+      {showAside && aside.length > 0 && cards(aside)}
+    </>
+  );
+}
+
 export function ClinicsPage() {
+  const [view, setView] = useState<View>("clinics");
   const [clinics, setClinics] = useState<ClinicItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [onlyOpenings, setOnlyOpenings] = useState(false);
@@ -142,7 +187,7 @@ export function ClinicsPage() {
     <>
       <h1>Clinics</h1>
       <p className="muted">
-        Research clinics that pay healthy volunteers, {measured ? "nearest first" : "in name order"}. What each one says about pay, dates and stays is in its own words; follow the link for the details.
+        Research clinics that pay healthy volunteers{view === "clinics" ? (measured ? ", nearest first" : ", in name order") : ""}. What each one says about pay, dates and stays is in its own words; follow the link for the details.
         {!measured && (
           <>
             {" "}
@@ -151,19 +196,28 @@ export function ClinicsPage() {
         )}
       </p>
       <WaitingLine />
-      <p className="views">
-        <button type="button" className="chip" aria-pressed={!onlyOpenings} onClick={() => setOnlyOpenings(false)}>
-          All Clinics
-        </button>
-        <button type="button" className="chip" aria-pressed={onlyOpenings} onClick={() => setOnlyOpenings(true)}>
-          With Openings
-        </button>
+      <p className="views" aria-label="Sort by">
+        <span className="muted small">Sort by</span>
+        {VIEWS.map((v) => (
+          <button type="button" key={v.view} className="chip" aria-pressed={view === v.view} onClick={() => setView(v.view)}>
+            {v.label}
+          </button>
+        ))}
       </p>
+      {view === "clinics" && (
+        <p className="views">
+          <button type="button" className="chip" aria-pressed={!onlyOpenings} onClick={() => setOnlyOpenings(false)}>
+            All Clinics
+          </button>
+          <button type="button" className="chip" aria-pressed={onlyOpenings} onClick={() => setOnlyOpenings(true)}>
+            With Openings
+          </button>
+        </p>
+      )}
+      {view !== "clinics" && <p className="muted small">{VIEWS.find((v) => v.view === view)!.says}</p>}
       {markError && <p className="error">{markError}</p>}
-      {shown.map((c) => (
-        <ClinicSection key={c.id} clinic={c} onMark={setAside} />
-      ))}
-      {!shown.length && <p className="muted">No Clinic's list has been read yet.</p>}
+      {view === "clinics" ? shown.map((c) => <ClinicSection key={c.id} clinic={c} onMark={setAside} />) : <AllOpenings clinics={clinics} by={view} onMark={setAside} />}
+      {view === "clinics" && !shown.length && <p className="muted">No Clinic's list has been read yet.</p>}
       <p className="muted small">
         "Watch for Trials" starts a Watch that sends an Alert when a new Trial on ClinicalTrials.gov names that Clinic. It works for every Clinic here, because it never visits the Clinic's site.
       </p>
