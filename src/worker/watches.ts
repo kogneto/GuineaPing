@@ -14,11 +14,12 @@ type WatchRow = {
   private: number;
   following: number;
   failing_since: string | null;
+  knows: "all" | "recent" | null;
 };
 
 const VISIBLE = "w.deleted_at IS NULL AND (w.private = 0 OR w.owner_id = ?1)";
 const SELECT_WATCH = `
-  SELECT w.id, w.owner_id, w.name, w.criteria, w.private, w.failing_since,
+  SELECT w.id, w.owner_id, w.name, w.criteria, w.private, w.failing_since, w.knows,
          EXISTS (SELECT 1 FROM follows f WHERE f.watch_id = w.id AND f.member_id = ?1 AND f.ended_at IS NULL) AS following
   FROM watches w`;
 
@@ -31,6 +32,7 @@ function toWatch(row: WatchRow, me: Me): Watch {
     isOwner: row.owner_id === me.memberId,
     following: row.following === 1,
     failing: isFailing(row.failing_since),
+    knows: row.knows,
   };
 }
 
