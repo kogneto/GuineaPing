@@ -17,7 +17,6 @@
   --warn-bg: #ffeac3;       /* tan 50 */
   --warn-text: #653d06;     /* tan 700 */
   --danger: #b3261e;
-  --art-plate: #fdf8ee;     /* behind illustrations, in both themes */
   --radius: 14px;
   --card-radius: 20px;
   --card-shadow: 0 4px 14px rgba(91, 74, 42, 0.1);
@@ -87,8 +86,9 @@ h2 { font-size: 1.15rem; font-weight: 800; margin: 2rem 0 0.4rem; }
 .greeting { display: flex; align-items: center; justify-content: space-between; gap: 1rem; background: var(--accent-soft); border-radius: var(--card-radius); padding: 0.75rem 0.75rem 0.75rem 1.15rem; margin: 0.25rem 0 1rem; }
 .greeting h1 { margin: 0; font-size: 1.35rem; line-height: 1.2; }
 .greeting p { margin: 0.4rem 0 0; font-size: 0.875rem; font-weight: 600; color: var(--accent); }
-.art.art-hero { width: 104px; flex: none; border-radius: 50%; }
-.art-hero img { width: 124%; max-width: none; margin: -10% 0 0 -12%; }
+/* The greeting's picture sits in a soft disc, a little enlarged and centred in it. */
+.art.art-hero { width: 104px; flex: none; border-radius: 50%; background: color-mix(in srgb, var(--surface) 70%, transparent); }
+.art.art-hero img { width: 124%; max-width: none; margin: -12% 0 0 -12%; }
 .tab-icon { display: none; }
 
 .top {
@@ -123,7 +123,8 @@ h2 { font-size: 1.15rem; font-weight: 800; margin: 2rem 0 0.4rem; }
 .empty-title { font-weight: 600; font-size: 1.1rem; }
 
 /* Illustrations (components/Illustration.tsx) */
-.art { display: block; aspect-ratio: 1; overflow: hidden; background: var(--art-plate); border-radius: 24px; }
+/* The scenes have clear backgrounds (art/clear-background.mjs), so they need no plate behind them. */
+.art { display: block; aspect-ratio: 1; overflow: hidden; border-radius: 24px; }
 .art img { display: block; width: 100%; height: auto; }
 .art-md { width: min(240px, 70vw); margin: 0 auto 0.5rem; }
 .art-sm { width: 140px; margin: 0 auto 0.25rem; }
