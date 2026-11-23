@@ -77,7 +77,7 @@ export function App() {
     );
   }
 
-  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/clinics") ? "clinics" : path.startsWith("/devices") ? "devices" : path.startsWith("/members") ? "members" : "alerts";
+  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/clinics") ? "clinics" : path.startsWith("/devices") ? "devices" : path.startsWith("/members") ? "members" : path.startsWith("/profile") ? "profile" : "alerts";
   return (
     <>
       <header className="top">
@@ -102,8 +102,11 @@ export function App() {
           </Link>
         </nav>
         {me && (
-          <Link to="/profile" className="who">
-            {me.email}
+          <Link to="/profile" className={section === "profile" ? "who active" : "who"} aria-label={`Your profile, ${me.email}`}>
+            <span className="who-initial" aria-hidden="true">
+              {me.email.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="who-email">{me.email}</span>
           </Link>
         )}
       </header>
