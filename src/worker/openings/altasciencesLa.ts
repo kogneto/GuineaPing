@@ -5,7 +5,14 @@ const PAGE = "https://participantsla.altasciences.com/current-studies";
 
 const column = (row: string, name: string) => new RegExp(`<div class="current_studies_td ${name}">([\\s\\S]*?)<\\/div>`).exec(row)?.[1] ?? "";
 
-/** Altasciences Los Angeles: a table of studies spread over three pages. */
+/** The mark this Clinic puts after a study's code on its Spanish-language copy of an entry: "N-38160 (ES)". */
+const SPANISH = /\s*\(ES\)$/;
+
+/**
+ * Altasciences Los Angeles: a table of studies spread over three pages. Some studies are listed
+ * twice, in English and again in Spanish. The Spanish copy is left out when the English one is
+ * there, so each study is one Opening; a study listed only in Spanish is kept.
+ */
 export const altasciencesLa: Source = {
   id: "altasciences-la",
   pages: [PAGE, `${PAGE}?page=1`, `${PAGE}?page=2`],
@@ -34,6 +41,6 @@ export const altasciencesLa: Source = {
         });
       }
     }
-    return found;
+    return found.filter((f) => !(f.code && SPANISH.test(f.code) && found.some((other) => other.code === f.code!.replace(SPANISH, ""))));
   },
 };
