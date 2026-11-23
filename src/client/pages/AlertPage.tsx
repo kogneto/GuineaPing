@@ -42,7 +42,7 @@ export function AlertPage({ id }: { id: string }) {
         {!alert.read && <Illustration name="match" size="xs" />}
         <h1 className="trial-heading">{t.title}</h1>
       </div>
-      <p className="meta">{alert.sentBy ? `Sent to you by ${alert.sentBy}` : `Matched ${alert.watchNames.join(", ")}`}</p>
+      <p className="meta">{[alert.sentBy ? `Sent to you by ${alert.sentBy}` : "", alert.watchNames.length ? `Matched ${alert.watchNames.join(", ")}` : ""].filter(Boolean).join(" · ")}</p>
       {alert.update && (
         <div className="callout update">
           <div>

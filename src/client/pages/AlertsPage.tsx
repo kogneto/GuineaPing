@@ -82,7 +82,7 @@ export function AlertsPage() {
                 <span className="meta">
                   {item.update
                     ? `Updated ${ago(item.update.at)}: ${item.update.changes.join(" · ")}`
-                    : `${item.sentBy ? `Sent by ${item.sentBy}` : item.watchNames.join(", ")} · ${ago(item.createdAt)}`}
+                    : `${[item.sentBy ? `Sent by ${item.sentBy}` : "", item.watchNames.join(", ")].filter(Boolean).join(" · ")} · ${ago(item.createdAt)}`}
                 </span>
               </Link>
             </li>

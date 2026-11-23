@@ -2,7 +2,8 @@
  * Alerts: one notice to one Member about one Trial. Everything that reads or writes an Alert goes
  * through here, so its rules live in one place:
  * - a Member never has two Alerts for the same Trial (the table refuses a second; callers are
- *   told which ones were really created);
+ *   told which ones were really created), and a Watch that finds the Trial later is added to
+ *   the one they have, quietly;
  * - an Alert is pushed until a Device gets it, and an Update makes it unread and pushed again;
  * - an Alert marked "Not for me" gets no Updates;
  * - an Alert is only ever read, sorted or sent by its own Member;
@@ -134,6 +135,34 @@ export function createAlerts(db: D1Database, alerts: AlertToCreate[], now: strin
        RETURNING id`,
     )
     .bind(now, JSON.stringify(rows));
+}
+
+/**
+ * The statements that add Watch names to Alerts these Members already have: a Trial a Member was
+ * alerted on, or was sent, that another Watch of theirs has now found. Such an Alert is not new,
+ * so it stays as read as it was, keeps its mark and is not pushed again. A Private watch among
+ * them makes it an Alert that came through a Private watch.
+ */
+export async function nameWatches(db: D1Database, alerts: AlertToCreate[]): Promise<D1PreparedStatement[]> {
+  if (!alerts.length) return [];
+  const { results } = await db
+    .prepare(
+      `SELECT a.id, a.member_id, a.nct_id, a.watch_names, a.via_private FROM alerts a
+       JOIN json_each(?1) j ON a.member_id = j.value ->> '$.m' AND a.nct_id = j.value ->> '$.n'`,
+    )
+    .bind(JSON.stringify(alerts.map((a) => ({ m: a.memberId, n: a.trial.nctId }))))
+    .all<{ id: string; member_id: string; nct_id: string; watch_names: string; via_private: number }>();
+  const statements: D1PreparedStatement[] = [];
+  for (const row of results) {
+    const found = alerts.find((a) => a.memberId === row.member_id && a.trial.nctId === row.nct_id);
+    if (!found) continue;
+    const had = JSON.parse(row.watch_names) as string[];
+    const names = [...had, ...found.watchNames.filter((name) => !had.includes(name))];
+    const viaPrivate = row.via_private === 1 || found.viaPrivateWatch;
+    if (names.length === had.length && viaPrivate === (row.via_private === 1)) continue;
+    statements.push(db.prepare("UPDATE alerts SET watch_names = ?, via_private = ? WHERE id = ?").bind(JSON.stringify(names), viaPrivate ? 1 : 0, row.id));
+  }
+  return statements;
 }
 
 /** Of the Alerts handed to `createAlerts`, the ones its statement really created. */
