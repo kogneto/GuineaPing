@@ -4,6 +4,7 @@
  * against the live API on 2026-11-22.
  */
 import { clinicById, clinicsFilter, clinicsNamedBy, MAX_WATCH_CLINICS } from "./clinics";
+import { pointsToCheck } from "./points";
 import { DISTANCES, KINDS, PHASES, SEXES, STATUSES, type Criteria, type CriteriaInput, type Kind, type Near, type Phase, type Sex, type Status, type Trial } from "./api";
 
 export const API_URL = "https://clinicaltrials.gov/api/v2/studies";
@@ -245,8 +246,14 @@ type Study = {
 /** Criteria text beyond this is cut; the listing itself has the rest. Keeps stored Alerts small. */
 export const MAX_CRITERIA_CHARS = 6000;
 
-/** A Trial as lists show it: without the long eligibility text, which only an Alert's own page uses. */
-export const forList = ({ eligibility: _, ...trial }: Trial): Trial => trial;
+/**
+ * A Trial as lists show it: without the long Entry criteria, which only an Alert's own page uses,
+ * but with how many Points to check they hold. The count is the same for every Member.
+ */
+export const forList = ({ eligibility, ...trial }: Trial): Trial => {
+  const points = eligibility?.criteria ? pointsToCheck(eligibility.criteria).length : 0;
+  return points ? { ...trial, points } : trial;
+};
 
 /** Great-circle distance in miles. */
 export function milesBetween(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {

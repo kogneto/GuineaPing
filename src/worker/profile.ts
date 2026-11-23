@@ -3,16 +3,17 @@
  * says where "near you" is for Trials found by a Watch with no ZIP code of its own.
  */
 import { DISTANCES, SEXES, type Near, type Profile, type Sex } from "../shared/api";
+import { isDay } from "../shared/waiting";
 
-type Row = { birth_year: number | null; sex: Sex | null; zip: string | null; miles: number | null; lat: number | null; lon: number | null; healthy: number; conditions: string };
+type Row = { birth_year: number | null; sex: Sex | null; zip: string | null; miles: number | null; lat: number | null; lon: number | null; healthy: number; conditions: string; height_in: number | null; weight_lb: number | null; nicotine: "yes" | "no" | null; last_donation_on: string | null };
 
 /** Before a Member saves anything. GuineaPing is mostly for healthy volunteers, so that starts ticked. */
-const EMPTY: Profile = { birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: true, conditions: [] };
+const EMPTY: Profile = { birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: true, conditions: [], heightIn: null, weightLb: null, nicotine: null, lastDonationOn: null };
 
 export async function getProfile(db: D1Database, memberId: string): Promise<Profile> {
-  const row = await db.prepare("SELECT birth_year, sex, zip, miles, healthy, conditions FROM profiles WHERE member_id = ?").bind(memberId).first<Row>();
+  const row = await db.prepare("SELECT birth_year, sex, zip, miles, healthy, conditions, height_in, weight_lb, nicotine, last_donation_on FROM profiles WHERE member_id = ?").bind(memberId).first<Row>();
   if (!row) return EMPTY;
-  return { birthYear: row.birth_year, sex: row.sex, zip: row.zip, miles: row.miles, healthyVolunteer: row.healthy === 1, conditions: JSON.parse(row.conditions) as string[] };
+  return { birthYear: row.birth_year, sex: row.sex, zip: row.zip, miles: row.miles, healthyVolunteer: row.healthy === 1, conditions: JSON.parse(row.conditions) as string[], heightIn: row.height_in, weightLb: row.weight_lb, nicotine: row.nicotine, lastDonationOn: row.last_donation_on };
 }
 
 /** Where "near you" is for each of these Members who has given a ZIP code. */
@@ -59,12 +60,32 @@ export async function saveProfile(db: D1Database, memberId: string, input: unkno
     ? [...new Set(raw.conditions.filter((s): s is string => typeof s === "string").map((s) => s.trim().slice(0, 100)).filter(Boolean))].slice(0, MAX_CONDITIONS)
     : [];
   const healthy = raw.healthyVolunteer === true;
+  // A number within what a person can be, or nothing.
+  const measure = (value: unknown, min: number, max: number): number | null | "bad" => {
+    if (value == null || value === "") return null;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= min && n <= max ? Math.round(n * 10) / 10 : "bad";
+  };
+  const heightIn = measure(raw.heightIn, 36, 96);
+  if (heightIn === "bad") return { error: "Enter your height, between 3 and 8 feet" };
+  const weightLb = measure(raw.weightLb, 50, 700);
+  if (weightLb === "bad") return { error: "Enter your weight in pounds, between 50 and 700" };
+  let nicotine: Profile["nicotine"] = null;
+  if (raw.nicotine != null && raw.nicotine !== "") {
+    if (raw.nicotine !== "yes" && raw.nicotine !== "no") return { error: "Say yes or no to nicotine, or leave it empty" };
+    nicotine = raw.nicotine;
+  }
+  let lastDonationOn: string | null = null;
+  if (raw.lastDonationOn != null && raw.lastDonationOn !== "") {
+    if (!isDay(raw.lastDonationOn) || raw.lastDonationOn > now.slice(0, 10) || raw.lastDonationOn < `${thisYear - 50}-01-01`) return { error: "Enter the day of your last donation, today or earlier" };
+    lastDonationOn = raw.lastDonationOn;
+  }
   await db
     .prepare(
-      `INSERT INTO profiles (member_id, birth_year, sex, zip, miles, lat, lon, healthy, conditions, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-       ON CONFLICT(member_id) DO UPDATE SET birth_year = ?2, sex = ?3, zip = ?4, miles = ?5, lat = ?6, lon = ?7, healthy = ?8, conditions = ?9, updated_at = ?10`,
+      `INSERT INTO profiles (member_id, birth_year, sex, zip, miles, lat, lon, healthy, conditions, updated_at, height_in, weight_lb, nicotine, last_donation_on) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
+       ON CONFLICT(member_id) DO UPDATE SET birth_year = ?2, sex = ?3, zip = ?4, miles = ?5, lat = ?6, lon = ?7, healthy = ?8, conditions = ?9, updated_at = ?10, height_in = ?11, weight_lb = ?12, nicotine = ?13, last_donation_on = ?14`,
     )
-    .bind(memberId, birthYear, sex, zip, miles, point?.lat ?? null, point?.lon ?? null, healthy ? 1 : 0, JSON.stringify(conditions), now)
+    .bind(memberId, birthYear, sex, zip, miles, point?.lat ?? null, point?.lon ?? null, healthy ? 1 : 0, JSON.stringify(conditions), now, heightIn, weightLb, nicotine, lastDonationOn)
     .run();
-  return { birthYear, sex, zip, miles, healthyVolunteer: healthy, conditions };
+  return { birthYear, sex, zip, miles, healthyVolunteer: healthy, conditions, heightIn, weightLb, nicotine, lastDonationOn };
 }

@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { MARKS, MAX_NOTE_CHARS, type AlertItem, type Mark } from "../../shared/api";
 import { MARK_LABELS, agesText, criteriaSections, kindsText, locationsText, phaseText, sexText, statusText, type CriteriaSection } from "../../shared/plain";
 import { ago, api } from "../api";
+import { PointsToCheck } from "../components/PointsToCheck";
 import { Illustration } from "../components/Illustration";
 import { TrialClinics } from "../components/TrialCard";
 import { Link } from "../router";
@@ -73,6 +74,7 @@ export function AlertPage({ id }: { id: string }) {
           <p className="summary">{t.summary}</p>
         </>
       )}
+      {t.eligibility?.criteria && <PointsToCheck text={t.eligibility.criteria} />}
       {t.eligibility?.criteria && <WhoCanJoin text={t.eligibility.criteria} url={t.url} />}
       <p>
         <a className="button" href={t.url} target="_blank" rel="noreferrer">

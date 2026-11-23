@@ -189,3 +189,8 @@ button.chip { min-height: 36px; padding: 0.25rem 0.75rem; font-weight: 500; back
 .inline-fields label { font-weight: 500; }
 .form select { font: inherit; padding: 0.5rem 0.6rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--text); min-height: 44px; }
 .form input.short { width: 7.5rem; }
+.points { list-style: none; padding: 0; margin: 0.75rem 0 0; display: grid; gap: 0.75rem; }
+.points li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 0.75rem 1rem; }
+.points li p { margin: 0 0 0.35rem; }
+.points .fact { margin: 0.5rem 0 0; padding-left: 0.75rem; border-left: 3px solid var(--accent); font-weight: 600; }
+.points .fact.missing { border-left-color: var(--line); font-weight: 400; }
