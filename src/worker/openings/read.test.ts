@@ -75,6 +75,16 @@ describe("what a read calls new", () => {
     expect(await read(3, [opening("a", { code: "780798 G6", when: "12/01/2026" }), opening("b", { when: "12/30/2026" })])).toEqual(["fortrea:b"]);
   });
 
+  it("counts an entry that is new as first seen then, so the page shows it as new too", async () => {
+    await read(1, [opening("a", { code: "780798 G5" }), opening("b")]);
+    await read(2, [opening("a", { code: "780798 G6" }), opening("b")]);
+    const { results } = await env.DB.prepare("SELECT id, first_seen_at FROM clinic_openings ORDER BY id").all();
+    expect(results).toEqual([
+      { id: "fortrea:a", first_seen_at: at(2) },
+      { id: "fortrea:b", first_seen_at: at(1) },
+    ]);
+  });
+
   it("does not call an entry new for a change of pay or wording, or for losing its dates", async () => {
     await read(1, [opening("a", { when: "12/01/2026" })]);
     expect(await read(2, [opening("a", { when: null, pay: "$2,000", title: "Reworded" })])).toEqual([]);

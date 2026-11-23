@@ -138,15 +138,18 @@ export async function readDueSource(db: D1Database, sources: Source[], get: Fetc
         })
     : [];
 
-  // An entry that went from the list and is back counts as first seen today: the Clinic has listed
-  // it again, which is news, and a Member who set it aside "Not this time" should see it again.
+  const news = new Set(fresh.map((f) => f.id));
+
+  // An entry that is news counts as first seen now, whether it went from the list and is back or
+  // its group or dates changed: the page marks it New and "Newest listed" puts it on top, so what
+  // a Push called new is new on the page too.
   const upsert = db.prepare(
     `INSERT INTO clinic_openings (id, source, clinic_id, title, pay, when_text, stay, who, code, url, first_seen_at, last_seen_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?11)
      ON CONFLICT(id) DO UPDATE SET clinic_id = ?3, title = ?4, pay = ?5, when_text = ?6, stay = ?7, who = ?8, code = ?9, url = ?10, last_seen_at = ?11,
-       first_seen_at = CASE WHEN clinic_openings.gone_at IS NULL THEN clinic_openings.first_seen_at ELSE ?11 END, gone_at = NULL`,
+       first_seen_at = CASE WHEN clinic_openings.gone_at IS NULL AND ?12 = 0 THEN clinic_openings.first_seen_at ELSE ?11 END, gone_at = NULL`,
   );
   await db.batch([
-    ...found.map((f) => upsert.bind(`${due.id}:${f.key}`, due.id, f.clinicId, f.title, f.pay, f.when, f.stay, f.who, f.code, f.url, now)),
+    ...found.map((f) => upsert.bind(`${due.id}:${f.key}`, due.id, f.clinicId, f.title, f.pay, f.when, f.stay, f.who, f.code, f.url, now, news.has(`${due.id}:${f.key}`) ? 1 : 0)),
     db.prepare("UPDATE clinic_openings SET gone_at = ?2 WHERE source = ?1 AND gone_at IS NULL AND last_seen_at < ?2").bind(due.id, now),
   ]);
   return finish({ source: due.id, status: "ok", found: found.length, fresh });
