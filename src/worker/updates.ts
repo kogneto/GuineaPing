@@ -3,7 +3,8 @@
  * matters to them. It starts recruiting, or adds a site within the distance of the Watch that
  * found it, or of their Profile. The Alert itself is refreshed and turns unread; there is still one Alert per Trial.
  */
-import type { Criteria, Near, Trial } from "../shared/api";
+import type { Near, Trial } from "../shared/api";
+import { storedCriteria } from "../shared/criteria";
 import { findUpdated, milesBetween, sitesOf, toTrial, type FetchJson } from "../shared/ctgov";
 import { alertsFollowed, refreshAlert } from "./alerts";
 import { daysBefore, OVERLAP_DAYS } from "./check";
@@ -62,7 +63,7 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
     .all<{ alert_id: string; criteria: string }>();
   const nearsOf = new Map<string, Near[]>();
   for (const p of places) {
-    const near = (JSON.parse(p.criteria) as Partial<Criteria>).near;
+    const near = storedCriteria(p.criteria).near;
     if (near) nearsOf.set(p.alert_id, [...(nearsOf.get(p.alert_id) ?? []), near]);
   }
 

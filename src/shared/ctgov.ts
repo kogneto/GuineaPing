@@ -1,11 +1,12 @@
 /**
  * The ClinicalTrials.gov API v2 (https://clinicaltrials.gov/data-api/api): turning a Watch's
- * Criteria into a query, and a study record into a Trial. Every query form used here was checked
+ * Search criteria into a query, and a study record into a Trial. Every query form used here was checked
  * against the live API on 2026-11-22.
  */
-import { clinicById, clinicsFilter, clinicsNamedBy, MAX_WATCH_CLINICS } from "./clinics";
+import { clinicsFilter, clinicsNamedBy } from "./clinics";
+import { cleanTerm } from "./criteria";
 import { pointsToCheck } from "./points";
-import { DISTANCES, KINDS, PHASES, SEXES, STATUSES, type Criteria, type CriteriaInput, type Kind, type Near, type Phase, type Sex, type Status, type Trial } from "./api";
+import { STATUSES, type Criteria, type Kind, type Near, type Phase, type Sex, type Trial } from "./api";
 
 export const API_URL = "https://clinicaltrials.gov/api/v2/studies";
 const STUDY_URL = "https://clinicaltrials.gov/study/";
@@ -47,71 +48,13 @@ export const fetchJson: FetchJson = async (url) => {
  * AND/OR otherwise change the query's meaning or make the API reject it outright.
  */
 export function quoteTerm(term: string): string | null {
-  const cleaned = term.replace(/["()\[\]]/g, " ").replace(/\s+/g, " ").trim();
+  const cleaned = cleanTerm(term);
   return cleaned ? `"${cleaned}"` : null;
 }
 
 function anyOf(terms: string[]): string | null {
   const quoted = terms.map(quoteTerm).filter((t): t is string => t !== null);
   return quoted.length ? quoted.join(" OR ") : null;
-}
-
-/** Fills in fields added after a Watch was saved, so older Watches keep working. */
-export function withDefaults(c: Partial<Criteria>): Criteria {
-  return { conditions: [], terms: [], phases: [], statuses: [], kinds: [], near: null, age: null, sex: null, healthy: false, clinics: [], ...c };
-}
-
-/**
- * Keeps only criteria the API understands, trimmed and de-duplicated. `near` comes back without
- * coordinates: the Worker looks the ZIP code up before the Criteria are used.
- */
-export function normalizeCriteria(input: unknown): CriteriaInput | { error: string } {
-  const raw = (input ?? {}) as Record<string, unknown>;
-  const strings = (v: unknown) =>
-    Array.isArray(v) ? [...new Set(v.filter((s): s is string => typeof s === "string").map((s) => s.trim()).filter(Boolean))] : [];
-  const conditions = strings(raw.conditions);
-  const terms = strings(raw.terms);
-  const phases = strings(raw.phases);
-  const statuses = strings(raw.statuses);
-  const kinds = strings(raw.kinds);
-  const clinics = strings(raw.clinics);
-  const badClinic = clinics.find((id) => !clinicById(id));
-  if (badClinic) return { error: `Unknown Clinic ${badClinic}` };
-  if (clinics.length > MAX_WATCH_CLINICS) return { error: `A Watch can name at most ${MAX_WATCH_CLINICS} Clinics` };
-  const badPhase = phases.find((p) => !(PHASES as readonly string[]).includes(p));
-  if (badPhase) return { error: `Unknown phase ${badPhase}` };
-  const badStatus = statuses.find((s) => !(STATUSES as readonly string[]).includes(s));
-  if (badStatus) return { error: `Unknown status ${badStatus}` };
-  // ClinicalTrials.gov answers 400 to a query naming a type it doesn't know, so a bad value saved
-  // here would stop the Watch finding anything at all.
-  const badKind = kinds.find((k) => !(KINDS as readonly string[]).includes(k));
-  if (badKind) return { error: `Unknown kind of study ${badKind}` };
-
-  let near: CriteriaInput["near"] = null;
-  if (raw.near != null) {
-    const n = raw.near as { zip?: unknown; miles?: unknown };
-    const zip = typeof n.zip === "string" ? n.zip.trim() : "";
-    if (!/^\d{5}$/.test(zip)) return { error: "Enter a 5-digit US ZIP code" };
-    if (!(DISTANCES as readonly number[]).includes(n.miles as number)) return { error: "Pick one of the distances offered" };
-    near = { zip, miles: n.miles as number };
-  }
-  let age: number | null = null;
-  if (raw.age != null && raw.age !== "") {
-    age = Number(raw.age);
-    if (!Number.isInteger(age) || age < 0 || age > 120) return { error: "Enter an age in whole years, 0 to 120" };
-  }
-  let sex: Sex | null = null;
-  if (raw.sex != null && raw.sex !== "") {
-    if (!(SEXES as readonly unknown[]).includes(raw.sex)) return { error: `Unknown sex ${String(raw.sex)}` };
-    sex = raw.sex as Sex;
-  }
-  const healthy = raw.healthy === true;
-  // Something has to narrow the search. Words do; so does a Clinic; so does "healthy volunteers
-  // near here", which is what a volunteer with no condition wants. Healthy volunteers anywhere
-  // would be every such Trial.
-  const hasWords = conditions.some(quoteTerm) || terms.some(quoteTerm);
-  if (!hasWords && !clinics.length && !(healthy && near)) return { error: "A Watch needs a condition, a keyword or a Clinic, or healthy volunteers with a ZIP code" };
-  return { conditions, terms, phases: phases as Phase[], statuses: statuses as Status[], kinds: kinds as Kind[], near, age, sex, healthy, clinics };
 }
 
 /**

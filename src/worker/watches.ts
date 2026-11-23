@@ -3,7 +3,7 @@
  * not exist for anyone but its Owner, and who follows a Watch is never returned.
  */
 import type { Criteria, Me, Watch, WatchInput } from "../shared/api";
-import { withDefaults } from "../shared/ctgov";
+import { storedCriteria } from "../shared/criteria";
 import { isFailing, type Known } from "./check";
 
 type WatchRow = {
@@ -26,7 +26,7 @@ function toWatch(row: WatchRow, me: Me): Watch {
   return {
     id: row.id,
     name: row.name,
-    criteria: withDefaults(JSON.parse(row.criteria) as Partial<Criteria>),
+    criteria: storedCriteria(row.criteria),
     private: row.private === 1,
     isOwner: row.owner_id === me.memberId,
     following: row.following === 1,

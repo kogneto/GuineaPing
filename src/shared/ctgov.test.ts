@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { KINDS, type Criteria, type Trial } from "./api";
 import { CLINICS, clinicsFilter, clinicsNamedBy } from "./clinics";
-import { buildParams, everyMatch, findMatches, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
+import { normalizeCriteria, withDefaults } from "./criteria";
+import { buildParams, everyMatch, findMatches, findTrials, milesBetween, quoteTerm, toTrial } from "./ctgov";
 import { agesText, criteriaSections, keyFacts, kindFact, kindLabel, kindsAsked, kindsText, phaseText } from "./plain";
 
 const criteria = (c: Partial<Criteria>): Criteria => withDefaults(c);
@@ -83,9 +84,9 @@ describe("where and who", () => {
   it("validates ZIP codes, distances, ages and sexes", () => {
     const ok = normalizeCriteria({ conditions: ["MS"], near: { zip: " 02139 ", miles: 50 }, age: "45", sex: "MALE" });
     expect(ok).toMatchObject({ near: { zip: "02139", miles: 50 }, age: 45, sex: "MALE" });
-    expect(normalizeCriteria({ conditions: ["MS"], near: { zip: "2139", miles: 50 } })).toEqual({ error: "Enter a 5-digit US ZIP code" });
+    expect(normalizeCriteria({ conditions: ["MS"], near: { zip: "2139", miles: 50 } })).toEqual({ error: "Enter a 5-digit US ZIP code, or leave it empty for anywhere" });
     expect(normalizeCriteria({ conditions: ["MS"], near: { zip: "02139", miles: 7 } })).toEqual({ error: "Pick one of the distances offered" });
-    expect(normalizeCriteria({ conditions: ["MS"], age: 4.5 })).toEqual({ error: "Enter an age in whole years, 0 to 120" });
+    expect(normalizeCriteria({ conditions: ["MS"], age: 4.5 })).toEqual({ error: "Enter an age in whole years, 0 to 120, or leave it empty" });
     expect(normalizeCriteria({ conditions: ["MS"], sex: "ALL" })).toEqual({ error: "Unknown sex ALL" });
   });
 

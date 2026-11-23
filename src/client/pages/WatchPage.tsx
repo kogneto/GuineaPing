@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Trial, Watch } from "../../shared/api";
-import { clinicById, clinicLabel } from "../../shared/clinics";
-import { PHASE_LABELS, STATUS_LABELS, kindLabel } from "../../shared/plain";
+import { criteriaRows } from "../../shared/criteria";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { TrialList } from "../components/TrialCard";
@@ -27,17 +26,7 @@ export function WatchPage({ id }: { id: string }) {
 
   if (error) return <p className="error">{error}</p>;
   if (!watch) return <p className="muted">Loading…</p>;
-  const c = watch.criteria;
-  const rows: [string, string][] = [
-    ["Conditions", c.conditions.join(", ")],
-    ["Keywords", c.terms.join(", ")],
-    ["Clinics", c.clinics.map((id) => clinicById(id)).filter((x) => !!x).map(clinicLabel).join("; ")],
-    ["Where", c.near ? `Within ${c.near.miles} miles of ${c.near.zip}` : "Anywhere"],
-    ["Who", [c.age !== null ? `Age ${c.age}` : "", c.sex === "FEMALE" ? "Female" : c.sex === "MALE" ? "Male" : "", c.healthy ? "Healthy volunteers" : ""].filter(Boolean).join(", ") || "Anyone"],
-    ["Kind of study", c.kinds.map(kindLabel).join("; ") || "Any"],
-    ["Phases", c.phases.map((p) => PHASE_LABELS[p]).join(", ") || "Any"],
-    ["Status", (c.statuses.length ? c.statuses : (Object.keys(STATUS_LABELS) as (keyof typeof STATUS_LABELS)[])).map((s) => STATUS_LABELS[s]).join(", ")],
-  ];
+  const rows = criteriaRows(watch.criteria);
 
   return (
     <>
@@ -63,9 +52,7 @@ export function WatchPage({ id }: { id: string }) {
         </p>
       )}
       <dl className="facts-table">
-        {rows
-          .filter(([, v]) => v)
-          .map(([k, v]) => (
+        {rows.map(([k, v]) => (
             <div key={k}>
               <dt>{k}</dt>
               <dd>{v}</dd>

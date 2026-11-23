@@ -1,17 +1,12 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { DISTANCES, KINDS, PHASES, STATUSES, type CriteriaInput, type Kind, type Phase, type Profile, type Sex, type Status, type Trial, type Watch } from "../../shared/api";
+import { DISTANCES, KINDS, PHASES, STATUSES, type Profile, type Sex, type Trial, type Watch } from "../../shared/api";
 import { CLINICS, MAX_WATCH_CLINICS, clinicById, clinicLabel } from "../../shared/clinics";
+import { criteriaOf, formError, formOf, narrows, newForm, withProfile, type CriteriaForm } from "../../shared/criteria";
 import { PHASE_LABELS, STATUS_LABELS, kindLabel } from "../../shared/plain";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { TrialList } from "../components/TrialCard";
 import { Link, navigate } from "../router";
-
-const split = (s: string) =>
-  s
-    .split(/[,;\n]/)
-    .map((x) => x.trim())
-    .filter(Boolean);
 
 function toggle<T>(list: T[], value: T): T[] {
   return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
@@ -24,23 +19,11 @@ export function WatchEditorPage({ id }: { id?: string }) {
     const asked = id ? undefined : clinicById(new URLSearchParams(location.search).get("clinic") ?? "");
     return asked ? clinicLabel(asked) : "";
   });
-  const [conditions, setConditions] = useState("");
-  const [terms, setTerms] = useState("");
-  const [phases, setPhases] = useState<Phase[]>([]);
-  const [kinds, setKinds] = useState<Kind[]>([]);
-  const [statuses, setStatuses] = useState<Status[]>(["RECRUITING", "NOT_YET_RECRUITING"]);
-  const [isPrivate, setPrivate] = useState(false);
-  const [zip, setZip] = useState("");
-  const [miles, setMiles] = useState<number>(50);
-  const [age, setAge] = useState("");
-  const [sex, setSex] = useState<Sex | "">("");
-  // New Watches start out for healthy volunteers: that is who GuineaPing is mostly for.
-  const [healthy, setHealthy] = useState(!id);
   // The Clinics page links here with ?clinic=<id> to start a Watch for one Clinic.
-  const [clinics, setClinics] = useState<string[]>(() => {
-    const asked = id ? null : new URLSearchParams(location.search).get("clinic");
-    return asked && clinicById(asked) ? [asked] : [];
-  });
+  const [form, setForm] = useState<CriteriaForm>(() => newForm(id ? null : new URLSearchParams(location.search).get("clinic")));
+  const set = (patch: Partial<CriteriaForm>) => setForm((f) => ({ ...f, ...patch }));
+  const { conditions, terms, phases, kinds, statuses, zip, miles, age, sex, healthy, clinics } = form;
+  const [isPrivate, setPrivate] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [preview, setPreview] = useState<Trial[] | null>(null);
@@ -52,53 +35,20 @@ export function WatchEditorPage({ id }: { id?: string }) {
     api<Profile>("/api/profile").then(setProfile, () => {});
   }, []);
   const profileHasSomething = !!profile && (profile.zip !== null || profile.birthYear !== null || profile.sex !== null || profile.conditions.length > 0);
-  /** Copies the Member's Profile into the form. Conditions are only filled in when none are typed yet. */
-  const useProfile = () => {
-    if (!profile) return;
-    if (profile.zip) {
-      setZip(profile.zip);
-      setMiles(profile.miles ?? 50);
-    }
-    if (profile.birthYear !== null) setAge(String(new Date().getFullYear() - profile.birthYear));
-    if (profile.sex) setSex(profile.sex);
-    setHealthy(profile.healthyVolunteer);
-    if (!conditions.trim() && profile.conditions.length) setConditions(profile.conditions.join(", "));
-  };
+  const useProfile = () => profile && setForm((f) => withProfile(f, profile, new Date().getFullYear()));
 
   useEffect(() => {
     if (!id) return;
     api<Watch>(`/api/watches/${id}`).then((w) => {
       setName(w.name);
-      setConditions(w.criteria.conditions.join(", "));
-      setTerms(w.criteria.terms.join(", "));
-      setPhases(w.criteria.phases);
-      setKinds(w.criteria.kinds);
-      setStatuses(w.criteria.statuses);
+      setForm(formOf(w.criteria));
       setPrivate(w.private);
-      setZip(w.criteria.near?.zip ?? "");
-      setMiles(w.criteria.near?.miles ?? 50);
-      setAge(w.criteria.age === null ? "" : String(w.criteria.age));
-      setSex(w.criteria.sex ?? "");
-      setHealthy(w.criteria.healthy);
-      setClinics(w.criteria.clinics);
       setLoaded(true);
     }, (e: Error) => setError(e.message));
   }, [id]);
 
   // A half-typed ZIP code or age is left out of the preview rather than shown as an error.
-  const ageNumber = /^\d{1,3}$/.test(age.trim()) ? Number(age.trim()) : null;
-  const criteria: CriteriaInput = {
-    conditions: split(conditions),
-    terms: split(terms),
-    phases,
-    statuses,
-    kinds,
-    near: /^\d{5}$/.test(zip.trim()) ? { zip: zip.trim(), miles } : null,
-    age: ageNumber,
-    sex: sex || null,
-    healthy,
-    clinics,
-  };
+  const criteria = criteriaOf(form);
   const key = JSON.stringify(criteria);
 
   // Suggestions for the condition being typed: the text after the last comma.
@@ -123,13 +73,13 @@ export function WatchEditorPage({ id }: { id?: string }) {
 
   const pick = (suggestion: string) => {
     const done = conditions.split(/[,;]/).slice(0, -1).map((x) => x.trim()).filter(Boolean);
-    setConditions([...done, suggestion].join(", ") + ", ");
+    set({ conditions: [...done, suggestion].join(", ") + ", " });
     setSuggestions([]);
   };
 
   // Recent matches update as the Owner types, so they can see whether the words find the right trials.
   useEffect(() => {
-    if (!criteria.conditions.length && !criteria.terms.length && !criteria.clinics.length && !(criteria.healthy && criteria.near)) {
+    if (!narrows(criteria)) {
       setPreview(null);
       setPreviewNote("Add a ZIP code, pick a Clinic, or type a condition or keyword, to see what it finds.");
       return;
@@ -155,8 +105,8 @@ export function WatchEditorPage({ id }: { id?: string }) {
     setSaving(true);
     setError(null);
     try {
-      if (zip.trim() && !criteria.near) throw new Error("Enter a 5-digit US ZIP code, or leave it empty for anywhere");
-      if (age.trim() && ageNumber === null) throw new Error("Enter an age in whole years, or leave it empty");
+      const problem = formError(form);
+      if (problem) throw new Error(problem);
       const body = { name, criteria, private: isPrivate };
       const saved = id ? await api<Watch>(`/api/watches/${id}`, "PUT", body) : await api<Watch>("/api/watches", "POST", body);
       navigate(`/watches/${saved.id}`);
@@ -192,7 +142,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
             <div className="inline-fields">
               <label>
                 Within
-                <select value={miles} onChange={(e) => setMiles(Number(e.target.value))}>
+                <select value={miles} onChange={(e) => set({ miles: Number(e.target.value) })}>
                   {DISTANCES.map((d) => (
                     <option key={d} value={d}>
                       {d} miles
@@ -202,7 +152,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
               </label>
               <label>
                 of US ZIP code
-                <input value={zip} onChange={(e) => setZip(e.target.value)} inputMode="numeric" autoComplete="postal-code" maxLength={5} placeholder="02139" className="short" />
+                <input value={zip} onChange={(e) => set({ zip: e.target.value })} inputMode="numeric" autoComplete="postal-code" maxLength={5} placeholder="02139" className="short" />
               </label>
             </div>
             <span className="hint">Leave the ZIP code empty for trials anywhere. A Watch with no condition, keyword or Clinic needs one.</span>
@@ -217,7 +167,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
                 {clinics.map((clinicId) => {
                   const clinic = clinicById(clinicId);
                   return (
-                    <button type="button" key={clinicId} className="chip" onClick={() => setClinics(clinics.filter((x) => x !== clinicId))} aria-label={`Remove ${clinic ? clinicLabel(clinic) : clinicId}`}>
+                    <button type="button" key={clinicId} className="chip" onClick={() => set({ clinics: clinics.filter((x) => x !== clinicId) })} aria-label={`Remove ${clinic ? clinicLabel(clinic) : clinicId}`}>
                       {clinic ? clinicLabel(clinic) : clinicId} ×
                     </button>
                   );
@@ -227,7 +177,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
             {clinics.length < MAX_WATCH_CLINICS && (
               <label>
                 Add a Clinic
-                <select value="" onChange={(e) => e.target.value && setClinics([...clinics, e.target.value])}>
+                <select value="" onChange={(e) => e.target.value && set({ clinics: [...clinics, e.target.value] })}>
                   <option value="">Choose…</option>
                   {[...CLINICS]
                     .filter((clinic) => !clinics.includes(clinic.id))
@@ -246,11 +196,11 @@ export function WatchEditorPage({ id }: { id?: string }) {
             <div className="inline-fields">
               <label>
                 Age
-                <input value={age} onChange={(e) => setAge(e.target.value)} inputMode="numeric" maxLength={3} placeholder="Any" className="short" />
+                <input value={age} onChange={(e) => set({ age: e.target.value })} inputMode="numeric" maxLength={3} placeholder="Any" className="short" />
               </label>
               <label>
                 Sex
-                <select value={sex} onChange={(e) => setSex(e.target.value as Sex | "")}>
+                <select value={sex} onChange={(e) => set({ sex: e.target.value as Sex | "" })}>
                   <option value="">Anyone</option>
                   <option value="FEMALE">Female</option>
                   <option value="MALE">Male</option>
@@ -259,13 +209,13 @@ export function WatchEditorPage({ id }: { id?: string }) {
             </div>
             <span className="hint">Only trials this person could join. Leave empty to see all.</span>
             <label className="check">
-              <input type="checkbox" checked={healthy} onChange={(e) => setHealthy(e.target.checked)} />
+              <input type="checkbox" checked={healthy} onChange={(e) => set({ healthy: e.target.checked })} />
               Only trials that take healthy volunteers
             </label>
           </fieldset>
           <label>
             Conditions <span className="muted">(optional)</span>
-            <input value={conditions} onChange={(e) => setConditions(e.target.value)} placeholder="asthma, hay fever" />
+            <input value={conditions} onChange={(e) => set({ conditions: e.target.value })} placeholder="asthma, hay fever" />
             <span className="hint">Leave empty for any healthy-volunteer study near you. Separate several with commas; a trial matching any of them counts.</span>
           </label>
           {suggestions.length > 0 && (
@@ -280,7 +230,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
           )}
           <label>
             Keywords <span className="muted">(optional)</span>
-            <input value={terms} onChange={(e) => setTerms(e.target.value)} placeholder="ocrelizumab" />
+            <input value={terms} onChange={(e) => set({ terms: e.target.value })} placeholder="ocrelizumab" />
             <span className="hint">Drug names, treatments, hospitals… also any-of.</span>
           </label>
           <fieldset>
@@ -289,7 +239,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
             <div className="checks">
               {KINDS.map((k) => (
                 <label key={k} className="check">
-                  <input type="checkbox" checked={kinds.includes(k)} onChange={() => setKinds(toggle(kinds, k))} />
+                  <input type="checkbox" checked={kinds.includes(k)} onChange={() => set({ kinds: toggle(kinds, k) })} />
                   {kindLabel(k)}
                 </label>
               ))}
@@ -301,7 +251,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
             <div className="checks">
               {PHASES.map((p) => (
                 <label key={p} className="check">
-                  <input type="checkbox" checked={phases.includes(p)} onChange={() => setPhases(toggle(phases, p))} />
+                  <input type="checkbox" checked={phases.includes(p)} onChange={() => set({ phases: toggle(phases, p) })} />
                   {PHASE_LABELS[p]}
                 </label>
               ))}
@@ -313,7 +263,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
             <div className="checks">
               {STATUSES.map((s) => (
                 <label key={s} className="check">
-                  <input type="checkbox" checked={statuses.includes(s)} onChange={() => setStatuses(toggle(statuses, s))} />
+                  <input type="checkbox" checked={statuses.includes(s)} onChange={() => set({ statuses: toggle(statuses, s) })} />
                   {STATUS_LABELS[s]}
                 </label>
               ))}

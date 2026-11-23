@@ -34,15 +34,19 @@ _Avoid_: Study, listing, record
 
 **Entry criteria**:
 A Trial's own rules for who can join, in the Trial's own words, which GuineaPing never rewrites. Only the study team can say whether someone meets them.
-_Avoid_: Eligibility, requirements, criteria on its own (a Watch has search criteria)
+_Avoid_: Eligibility, requirements, criteria on its own (a Watch has Search criteria)
 
 **Point to check**:
 A line of a Trial's Entry criteria that mentions something a Member's Profile can hold a fact about, such as BMI, weight, nicotine, a recent donation or a recent study. It is shown first, with the Member's own fact beside it, or an invitation to add the fact when the Profile has none. It never says whether the Member can join: the Member compares the two. It always uses the Profile as it is now, and only that Member sees it, also on an Alert another Member sent. Lists show how many Points to check a Trial has, never what they say.
 _Avoid_: Match (a Trial matches a Watch), pass, fail, eligible, qualifies, screening (the clinic's visit)
 
 **Watch**:
-A named set of search criteria (conditions, keywords, distance from a ZIP code, Clinics, kinds of study, phases, statuses, age, sex, healthy volunteers) that Trials are matched against. A Watch that names Clinics matches only Trials with a site at one of them. Every Member can see and follow any Watch that is not a Private watch; only its Owner can change or delete it. Who follows a Watch is never shown.
+A named set of Search criteria that Trials are matched against. Every Member can see and follow any Watch that is not a Private watch; only its Owner can change or delete it. Who follows a Watch is never shown.
 _Avoid_: Search, filter, query, subscription, saved search
+
+**Search criteria**:
+What a Watch asks for: conditions, keywords, distance from a ZIP code, Clinics, kinds of study, phases, statuses, age, sex, healthy volunteers. Anything left empty means "any". Something must narrow them: a condition, a keyword, a Clinic, or healthy volunteers with a ZIP code. Search criteria that name Clinics match only Trials with a site at one of them.
+_Avoid_: Filter, query, criteria on its own, Entry criteria (those are a Trial's rules for who can join)
 
 **Private watch**:
 A Watch that only its Owner can see or follow.
