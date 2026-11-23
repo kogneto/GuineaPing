@@ -5,6 +5,8 @@ import { setAllowed } from "./access";
 import { app } from "./app";
 import { checkStatus, runCheck } from "./check";
 import { runUpdates } from "./updates";
+import { addDays, type PastStudy } from "../shared/waiting";
+import { tellWaitsOver } from "./waiting";
 import { fetchJson } from "../shared/ctgov";
 
 let env: Env;
@@ -641,5 +643,75 @@ describe("Clinics in a Watch", () => {
     changed = [at("NCT93000001", "Celerion, Inc.", "Lincoln")];
     expect(await runUpdates(env.DB, fetchJson)).toEqual({ updated: 0 });
     expect((await alertsOf(vol))[0]).toMatchObject({ read: true, update: null });
+  });
+});
+
+describe("Past studies and waiting periods", () => {
+  const today = () => new Date().toISOString().slice(0, 10);
+  const notesOf = async (who: ReturnType<typeof as>) => (await alertsOf(who)).filter((a) => a.kind === "note");
+
+  it("works out when the wait ends, and keeps each Member's Past studies to themselves", async () => {
+    const vol = as(app, env, `wait${n}@x.org`);
+    const other = as(app, env, `waitother${n}@x.org`);
+    expect((await vol<PastStudy[]>("/api/past-studies")).json).toEqual([]);
+
+    const ended = addDays(today(), -10);
+    const dose = addDays(today(), -5);
+    const made = await vol<PastStudy>("/api/past-studies", "POST", { label: " Celerion ", endedOn: ended, lastDoseOn: dose });
+    expect(made.status).toBe(201);
+    expect(made.json).toMatchObject({ label: "Celerion", endedOn: ended, lastDoseOn: dose, waitDays: 30, freeOn: addDays(dose, 30) });
+    await vol("/api/past-studies", "POST", { endedOn: ended, waitDays: 90 });
+    // The one that keeps them waiting longest comes first.
+    expect((await vol<PastStudy[]>("/api/past-studies")).json.map((s) => s.freeOn)).toEqual([addDays(ended, 90), addDays(dose, 30)]);
+
+    expect((await vol("/api/past-studies", "POST", { endedOn: "not a day" })).status).toBe(400);
+    expect((await vol("/api/past-studies", "POST", { endedOn: ended, waitDays: 1000 })).status).toBe(400);
+
+    // Nobody else sees them or can remove them.
+    expect((await other<PastStudy[]>("/api/past-studies")).json).toEqual([]);
+    expect((await other(`/api/past-studies/${made.json.id}`, "DELETE")).status).toBe(404);
+    expect((await vol(`/api/past-studies/${made.json.id}`, "DELETE")).status).toBe(204);
+    expect((await vol<PastStudy[]>("/api/past-studies")).json).toHaveLength(1);
+  });
+
+  it("tells a Member once, in their Alert list, when the wait is over, and names no study", async () => {
+    const vol = as(app, env, `waitover${n}@x.org`);
+    const ends = addDays(today(), 3);
+    await vol("/api/past-studies", "POST", { label: "Secret study name", endedOn: addDays(ends, -30) });
+    // A wait already over when it is written down is never announced.
+    await vol("/api/past-studies", "POST", { endedOn: addDays(today(), -200) });
+
+    await tellWaitsOver(env.DB);
+    // Not on the day itself by UTC, which is still the evening before in the United States.
+    await tellWaitsOver(env.DB, `${ends}T12:00:00.000Z`);
+    expect(await notesOf(vol)).toEqual([]);
+
+    await tellWaitsOver(env.DB, `${addDays(ends, 1)}T00:17:00.000Z`);
+    await tellWaitsOver(env.DB, `${addDays(ends, 1)}T01:17:00.000Z`);
+    const notes = await notesOf(vol);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toMatchObject({ read: false, message: `Your waiting period ended on ${ends}, going by the dates you gave. Each study sets its own rule, so ask the clinic before you book a screening.` });
+  });
+
+  it("says nothing while another Past study still keeps the Member waiting", async () => {
+    const vol = as(app, env, `waittwo${n}@x.org`);
+    const first = addDays(today(), 2);
+    const second = addDays(today(), 20);
+    await vol("/api/past-studies", "POST", { endedOn: addDays(first, -30) });
+    await vol("/api/past-studies", "POST", { endedOn: addDays(second, -30) });
+    await tellWaitsOver(env.DB, `${addDays(first, 1)}T00:17:00.000Z`);
+    expect(await notesOf(vol)).toEqual([]);
+    await tellWaitsOver(env.DB, `${addDays(second, 1)}T00:17:00.000Z`);
+    expect((await notesOf(vol)).map((x) => (x as { message: string }).message)).toEqual([expect.stringContaining(`ended on ${second}`)]);
+  });
+
+  it("forgets a Member's Past studies when they leave", async () => {
+    const vol = as(app, env, `waitleaver${n}@x.org`);
+    const mum = as(app, env, `waitmum${n}@x.org`);
+    await vol("/api/past-studies", "POST", { endedOn: addDays(today(), -3) });
+    const leaver = (await mum<MemberList>("/api/members")).json.members.find((m) => m.email === `waitleaver${n}@x.org`)!;
+    expect((await mum(`/api/members/${leaver.id}`, "DELETE")).status).toBe(204);
+    const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM past_studies WHERE member_id = ?").bind(leaver.id).first<{ n: number }>();
+    expect(left?.n).toBe(0);
   });
 });

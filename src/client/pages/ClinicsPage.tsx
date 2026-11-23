@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { ClinicItem, Opening } from "../../shared/api";
 import { ago, api } from "../api";
 import { Illustration } from "../components/Illustration";
+import { WaitingLine } from "../components/WaitingPeriods";
 import { Link } from "../router";
 
 /** An Opening is new for a week after GuineaPing first sees it. */
@@ -95,6 +96,7 @@ export function ClinicsPage() {
           </>
         )}
       </p>
+      <WaitingLine />
       <p className="views">
         <button type="button" className="chip" aria-pressed={!onlyOpenings} onClick={() => setOnlyOpenings(false)}>
           All Clinics
