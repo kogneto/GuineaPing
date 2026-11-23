@@ -70,6 +70,14 @@ _Avoid_: Notification, ping, Alert (an Alert is the record; a Push is how it is 
 Every Alert a Member has received, newest first, each marked read or unread. The record of truth when a push is missed or a Member has no Device.
 _Avoid_: Inbox, feed, history, notifications
 
+**Past study**:
+A study a Member took part in, as they wrote it down: the day it ended, the day of their last dose if they know it, and how many days they must wait. Only that Member sees it.
+_Avoid_: Participation, enrolment, history
+
+**Waiting period**:
+The days a Member waits after a Past study before joining another: from the later of the day it ended and the day of the last dose, 30 days unless the Member says otherwise. It is the Member's own reminder, worked out from what they typed. GuineaPing checks no registry, and each study sets its own rule. When it ends the Member is told once, in their Alert list.
+_Avoid_: Washout (the clinics' word; say it once when explaining), cooldown, lockout
+
 ### Clinics
 
 **Clinic**:

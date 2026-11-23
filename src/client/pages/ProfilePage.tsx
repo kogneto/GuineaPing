@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DISTANCES, type Profile, type Sex } from "../../shared/api";
 import { api } from "../api";
+import { WaitingPeriods } from "../components/WaitingPeriods";
 
 const split = (s: string) =>
   s
@@ -108,6 +109,7 @@ export function ProfilePage() {
           {busy ? "Saving…" : "Save"}
         </button>
       </form>
+      <WaitingPeriods />
     </div>
   );
 }

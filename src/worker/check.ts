@@ -8,6 +8,7 @@ import { nearByMember } from "./profile";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
 import { report } from "./report";
 import { runUpdates } from "./updates";
+import { tellWaitsOver } from "./waiting";
 
 /**
  * How far before a Watch's last successful check to look again. ClinicalTrials.gov refreshes its
@@ -174,6 +175,12 @@ export async function checkAndPush(env: Env, get: FetchJson = fetchJson, post: t
     result.updates = (await runUpdates(env.DB, get)).updated;
   } catch (err) {
     report("Looking for Updates failed", err);
+  }
+  // Waiting periods that have ended: a line in the Member's Alert list, never a Push.
+  try {
+    await tellWaitsOver(env.DB);
+  } catch (err) {
+    report("Telling Members a waiting period is over failed", err);
   }
   const vapid = vapidFrom(env);
   if (!vapid) {
