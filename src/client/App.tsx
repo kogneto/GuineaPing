@@ -11,6 +11,7 @@ import { ProfilePage } from "./pages/ProfilePage";
 import { WatchEditorPage } from "./pages/WatchEditorPage";
 import { WatchesPage } from "./pages/WatchesPage";
 import { WatchPage } from "./pages/WatchPage";
+import { TabIcon } from "./components/TabIcon";
 import { Link, usePath } from "./router";
 
 function route(path: string) {
@@ -86,18 +87,23 @@ export function App() {
         </Link>
         <nav>
           <Link to="/" className={section === "alerts" ? "active" : ""}>
+            <TabIcon name="alerts" />
             Alerts
           </Link>
           <Link to="/watches" className={section === "watches" ? "active" : ""}>
+            <TabIcon name="watches" />
             Watches
           </Link>
           <Link to="/clinics" className={section === "clinics" ? "active" : ""}>
+            <TabIcon name="clinics" />
             Clinics
           </Link>
           <Link to="/devices" className={section === "devices" ? "active" : ""}>
+            <TabIcon name="devices" />
             Devices
           </Link>
           <Link to="/members" className={section === "members" ? "active" : ""}>
+            <TabIcon name="members" />
             Members
           </Link>
         </nav>

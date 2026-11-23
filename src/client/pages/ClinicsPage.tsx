@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import type { ClinicItem, Opening } from "../../shared/api";
-import { OPENING_MARK_LABELS, inOrder, type OpeningMark } from "../../shared/openings";
+import { OPENING_MARK_LABELS, inOrder, payAmount, type OpeningMark } from "../../shared/openings";
 import { ago, api } from "../api";
+import { Greeting } from "../components/Greeting";
 import { Illustration } from "../components/Illustration";
 import { TipJar } from "../components/TipJar";
 import { WaitingLine } from "../components/WaitingPeriods";
@@ -259,12 +260,19 @@ export function ClinicsPage() {
   const mine = clinics.filter((c) => !c.offList);
   const off = clinics.filter((c) => c.offList);
   const lastRead = mine.map((c) => c.lastReadAt).filter((x): x is string => !!x).sort().pop();
+  // The greeting counts what the Member would see: on their list and not set aside.
+  const listed = mine.flatMap((c) => c.openings).filter((o) => !o.mark);
+  const today = new Date().toISOString().slice(0, 10);
+  const newToday = listed.filter((o) => o.firstSeen === today).length;
+  // The highest figure in any Clinic's wording, as "Highest pay" orders them. The cards keep the Clinic's own words.
+  const topPay = Math.max(0, ...listed.map((o) => payAmount(o.pay) ?? 0));
   return (
     <>
-      <div className="title-row">
-        <h1>Openings</h1>
-        {lastRead && <span className="muted small">Read {ago(lastRead)}</span>}
-      </div>
+      <Greeting
+        art="lookout"
+        title={newToday ? `${newToday} new ${newToday === 1 ? "Opening" : "Openings"} today` : listed.length === 1 ? "1 Opening listed" : `${listed.length} Openings listed`}
+        sub={[topPay ? `Top pay right now $${topPay.toLocaleString("en-US")}` : null, lastRead ? `Read ${ago(lastRead)}` : null].filter(Boolean).join(" · ")}
+      />
       <WaitingLine />
       <p className="views scroll" aria-label="Sort by">
         {VIEWS.map((v) => (
