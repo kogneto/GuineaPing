@@ -97,7 +97,7 @@ A research unit that pays healthy volunteers and advertises its studies on its o
 _Avoid_: Site (a site is one place a Trial runs), facility, CRO, unit
 
 **Opening**:
-One entry on a Clinic’s own list of studies, shown in the Clinic’s own words: what it pays, when, how long the stay is, and who it is for. An Opening is not a Trial and is not tied to one, because Clinics give no NCT ID. It links to its page on the Clinic’s site.
+One entry on a Clinic’s own list of studies, shown in the Clinic’s own words: what it pays, when, how long the stay is, and who it is for. An Opening is not a Trial and is not tied to one, because Clinics give no NCT ID. It links to its page on the Clinic’s site. A Member can set an Opening aside, which only they see, in one of two ways. “Not this time” is for a reason that will change, such as the dates: it covers that one entry as it stood, so the same study listed again, with new dates or a new group, shows again. “Not for me” is for a reason that won’t change: it covers the study itself at that Clinic, every group of it, now and later. Which entries are one study is read from the Clinic’s own study code, so an entry with no code can only be set aside “Not this time”. Nothing set aside is removed: each Clinic shows how many are, and they can be shown and put back.
 _Avoid_: Study, listing, Trial, posting
 
 **Clinic read**:

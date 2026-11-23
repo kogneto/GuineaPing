@@ -7,7 +7,7 @@ import { accessFrom, setAllowed } from "./access";
 import { getAlert, listAlerts, markRead, sendAlert, sortAlert } from "./alerts";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, knownMatches, RECENT_DAYS, type Known } from "./check";
-import { listClinics } from "./clinics";
+import { listClinics, markOpening } from "./clinics";
 import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
 import { plainFetch, readDueSource } from "./openings/read";
 import { SOURCES } from "./openings/sources";
@@ -345,7 +345,14 @@ app.delete("/api/members/:id", async (c) => {
 });
 
 /** Every Clinic, nearest first when the Member's Profile has a ZIP code, each with its current Openings. */
-app.get("/api/clinics", async (c) => c.json(await listClinics(c.env.DB, await myNear(c))));
+app.get("/api/clinics", async (c) => c.json(await listClinics(c.env.DB, await myNear(c), c.get("me").memberId)));
+
+/** Sets one Opening aside for the signed-in Member, or puts it back. The id goes in the body: it holds slashes. */
+app.post("/api/openings/mark", async (c) => {
+  const body = (await c.req.json().catch(() => null)) as { id?: unknown; mark?: unknown } | null;
+  const done = await markOpening(c.env.DB, c.get("me").memberId, body?.id, body?.mark ?? null, now());
+  return "error" in done ? c.json({ error: done.error }, done.status) : c.json(done);
+});
 
 /** Reads the next due Clinic source on demand during local development. Still at most once a day each. */
 app.post("/api/dev/read-clinic", async (c) => {

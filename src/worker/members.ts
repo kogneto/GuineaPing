@@ -58,6 +58,7 @@ export async function removeMember(db: D1Database, id: string, now: string): Pro
     db.prepare("UPDATE follows SET ended_at = ?1 WHERE member_id = ?2 AND ended_at IS NULL").bind(now, id),
     db.prepare("DELETE FROM devices WHERE member_id = ?").bind(id),
     db.prepare("DELETE FROM past_studies WHERE member_id = ?").bind(id),
+    db.prepare("DELETE FROM opening_marks WHERE member_id = ?").bind(id),
     db.prepare("UPDATE members SET removed_at = ? WHERE id = ?").bind(now, id),
   );
   await db.batch(statements);

@@ -13,7 +13,7 @@ beforeAll(async () => {
 });
 afterAll(() => dispose());
 beforeEach(async () => {
-  await env.DB.batch([env.DB.prepare("DELETE FROM clinic_openings"), env.DB.prepare("DELETE FROM clinic_sources")]);
+  await env.DB.batch([env.DB.prepare("DELETE FROM clinic_openings"), env.DB.prepare("DELETE FROM clinic_sources"), env.DB.prepare("DELETE FROM opening_marks")]);
 });
 
 const PAGE = "https://www.fortreaclinicaltrials.com/en-us/clinical-research/browse-studies";
@@ -150,6 +150,149 @@ describe("reading a Clinic's list", () => {
   });
 });
 
+describe("setting an Opening aside", () => {
+  const DAY3 = "2026-11-24T09:47:00.000Z";
+  const DAY4 = "2026-11-25T09:47:00.000Z";
+  const ann = () => as(app, env, "ann@example.com");
+  const marksOf = async (who: ReturnType<typeof as>) => {
+    const { json } = await who<ClinicItem[]>("/api/clinics");
+    return Object.fromEntries(json.flatMap((c) => c.openings).map((o) => [o.id, o.mark]));
+  };
+  const mark = (who: ReturnType<typeof as>, id: string, how: string | null) => who<{ error?: string }>("/api/openings/mark", "POST", { id, mark: how });
+  /** A Fortrea entry: its page is the study's, and the group is only in the code. */
+  const group = (study: string, grp: string, when: string) => opening(study, { code: `${study} ${grp}`, when });
+  const read = (entries: Found[], day: string) => readDueSource(env.DB, [source()], serving(entries), day, noWait);
+
+  it("hides nothing by itself: a marked Opening is still listed, with its mark", async () => {
+    await read([group("778951", "9b", "Dec 07 - Dec 16"), group("781236", "1", "Dec 03 - Dec 29")], DAY1);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": null, "fortrea:781236": null });
+    expect((await mark(ann(), "fortrea:778951", "not_this_time")).status).toBe(200);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": "not_this_time", "fortrea:781236": null });
+  });
+
+  it("keeps Not this time through later reads while the entry says the same", async () => {
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY1);
+    await mark(ann(), "fortrea:778951", "not_this_time");
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY2);
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY3);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": "not_this_time" });
+  });
+
+  it("shows a Not this time study again when it is listed with a new group, though its page is the same", async () => {
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY1);
+    await mark(ann(), "fortrea:778951", "not_this_time");
+    await read([group("778951", "10a", "Dec 07 - Dec 16")], DAY2);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": null });
+  });
+
+  it("shows a Not this time study again when its dates change", async () => {
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY1);
+    await mark(ann(), "fortrea:778951", "not_this_time");
+    await read([group("778951", "9b", "Jan 04 - Jan 13")], DAY2);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": null });
+  });
+
+  it("shows a Not this time study again when it went from the list and came back unchanged", async () => {
+    const other = group("781236", "1", "Dec 03 - Dec 29");
+    await read([group("778951", "9b", "Dec 07 - Dec 16"), other], DAY1);
+    await mark(ann(), "fortrea:778951", "not_this_time");
+    await read([other], DAY2);
+    expect(await marksOf(ann())).toEqual({ "fortrea:781236": null });
+    await read([group("778951", "9b", "Dec 07 - Dec 16"), other], DAY3);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": null, "fortrea:781236": null });
+    // Marked again, it holds again.
+    await mark(ann(), "fortrea:778951", "not_this_time");
+    await read([group("778951", "9b", "Dec 07 - Dec 16"), other], DAY4);
+    expect((await marksOf(ann()))["fortrea:778951"]).toBe("not_this_time");
+  });
+
+  it("keeps Not for me through a new group, new dates, and going and coming back", async () => {
+    const other = group("781236", "1", "Dec 03 - Dec 29");
+    await read([group("778951", "9b", "Dec 07 - Dec 16"), other], DAY1);
+    await mark(ann(), "fortrea:778951", "not_for_me");
+    await read([group("778951", "10a", "Jan 04 - Jan 13"), other], DAY2);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": "not_for_me", "fortrea:781236": null });
+    await read([other], DAY3);
+    await read([group("778951", "11", "Feb 01 - Feb 10"), other], DAY4);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": "not_for_me", "fortrea:781236": null });
+  });
+
+  it("covers the study at that one Clinic with Not for me, not the same study in another city", async () => {
+    // Fortrea runs one study in several cities, each its own entry on the one list.
+    const at = (city: string, grp: string) => opening(`781236-${city}`, { clinicId: `fortrea-${city}`, code: `781236 ${grp}`.trim(), when: null });
+    await read([at("madison", ""), at("dallas", "1"), at("daytona", "3"), opening("781236-daytona-b", { clinicId: "fortrea-daytona", code: "781236 4" })], DAY1);
+    await mark(ann(), "fortrea:781236-daytona", "not_for_me");
+    expect(await marksOf(ann())).toEqual({ "fortrea:781236-madison": null, "fortrea:781236-dallas": null, "fortrea:781236-daytona": "not_for_me", "fortrea:781236-daytona-b": "not_for_me" });
+  });
+
+  it("covers every group of the study with Not for me, at that Clinic only", async () => {
+    const celerion = (code: string): Found => ({ key: code, clinicId: "celerion-lincoln", title: `Study ${code}`, pay: "$3,000*", when: "Dec 02 to Dec 10", stay: null, who: null, code, url: `https://helpresearch.com/medical-study/${code}` });
+    const helpresearch: Source = { id: "celerion", pages: ["https://helpresearch.com/studies"], parse: (htmls) => htmls.flatMap((h) => JSON.parse(h) as Found[]) };
+    await readDueSource(env.DB, [helpresearch], serving([celerion("CA48121-6"), celerion("CA48121-6A"), celerion("CA49982-3"), celerion("CB48121-21")]), DAY1, noWait);
+    // Another Clinic that happens to use the same code for a study of its own.
+    await read([opening("x", { code: "CA48121" })], DAY2);
+    await mark(ann(), "celerion:CA48121-6", "not_for_me");
+    expect(await marksOf(ann())).toEqual({ "celerion:CA48121-6": "not_for_me", "celerion:CA48121-6A": "not_for_me", "celerion:CA49982-3": null, "celerion:CB48121-21": null, "fortrea:x": null });
+    // A group listed later is covered too, and undoing from any group brings them all back.
+    await readDueSource(env.DB, [helpresearch], serving([celerion("CA48121-6A"), celerion("CA48121-7"), celerion("CA49982-3")]), DAY3, noWait);
+    expect(await marksOf(ann())).toMatchObject({ "celerion:CA48121-6A": "not_for_me", "celerion:CA48121-7": "not_for_me", "celerion:CA49982-3": null });
+    await mark(ann(), "celerion:CA48121-7", null);
+    expect(await marksOf(ann())).toMatchObject({ "celerion:CA48121-6A": null, "celerion:CA48121-7": null });
+  });
+
+  it("holds one mark at a time, and puts an Opening back", async () => {
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY1);
+    await mark(ann(), "fortrea:778951", "not_this_time");
+    await mark(ann(), "fortrea:778951", "not_for_me");
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": "not_for_me" });
+    await mark(ann(), "fortrea:778951", "not_this_time");
+    // No longer the whole study: a new group shows again.
+    await read([group("778951", "10a", "Dec 07 - Dec 16")], DAY2);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": null });
+    await mark(ann(), "fortrea:778951", "not_for_me");
+    await mark(ann(), "fortrea:778951", null);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": null });
+    const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM opening_marks").first<{ n: number }>();
+    expect(left?.n).toBe(0);
+  });
+
+  it("offers only Not this time for an entry with no study code", async () => {
+    await read([opening("nocode", { code: null })], DAY1);
+    const { json } = await ann()<ClinicItem[]>("/api/clinics");
+    expect(json.flatMap((c) => c.openings)[0]).toMatchObject({ id: "fortrea:nocode", canMarkStudy: false });
+    const refused = await mark(ann(), "fortrea:nocode", "not_for_me");
+    expect(refused.status).toBe(400);
+    expect(refused.json.error).toMatch(/no study code/);
+    expect((await mark(ann(), "fortrea:nocode", "not_this_time")).status).toBe(200);
+    expect(await marksOf(ann())).toEqual({ "fortrea:nocode": "not_this_time" });
+  });
+
+  it("keeps each Member's marks to themselves, and forgets them when they leave", async () => {
+    const bob = as(app, env, "bob@example.com");
+    const carol = as(app, env, "carol@example.com");
+    await read([group("778951", "9b", "Dec 07 - Dec 16"), group("781236", "1", "Dec 03 - Dec 29")], DAY1);
+    await mark(carol, "fortrea:778951", "not_for_me");
+    await mark(carol, "fortrea:781236", "not_this_time");
+    expect(await marksOf(bob)).toEqual({ "fortrea:778951": null, "fortrea:781236": null });
+    await mark(bob, "fortrea:778951", null);
+    expect(await marksOf(carol)).toEqual({ "fortrea:778951": "not_for_me", "fortrea:781236": "not_this_time" });
+
+    const members = (await bob<{ members: { id: string; email: string }[] }>("/api/members")).json.members;
+    const carolId = members.find((m) => m.email === "carol@example.com")!.id;
+    expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM opening_marks WHERE member_id = ?").bind(carolId).first<{ n: number }>())?.n).toBe(2);
+    expect((await bob(`/api/members/${carolId}`, "DELETE")).status).toBe(204);
+    const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM opening_marks WHERE member_id = ?").bind(carolId).first<{ n: number }>();
+    expect(left?.n).toBe(0);
+  });
+
+  it("refuses a mark it doesn't know and an Opening that isn't there", async () => {
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY1);
+    expect((await mark(ann(), "fortrea:778951", "maybe")).status).toBe(400);
+    expect((await mark(ann(), "fortrea:nope", "not_this_time")).status).toBe(404);
+    expect((await ann()("/api/openings/mark", "POST", { mark: "not_this_time" })).status).toBe(404);
+  });
+});
+
 describe("the Clinics page", () => {
   it("lists every Clinic, with Openings for those that are read and a link for the rest", async () => {
     await readDueSource(env.DB, [source()], serving([opening("a")]), DAY1, noWait);
@@ -158,10 +301,20 @@ describe("the Clinics page", () => {
     const madison = json.find((c) => c.id === "fortrea-madison");
     expect(madison).toMatchObject({ read: true, lastReadAt: DAY1, refused: false, miles: null });
     expect(madison?.openings).toEqual([
-      { id: "fortrea:a", title: "Study a", pay: "$1,000", when: null, stay: "1 stay of 2 nights", who: "Age 18-55", code: "a", url: "https://www.fortreaclinicaltrials.com/en-us/a", firstSeen: "2026-11-22" },
+      { id: "fortrea:a", title: "Study a", pay: "$1,000", when: null, stay: "1 stay of 2 nights", who: "Age 18-55", code: "a", url: "https://www.fortreaclinicaltrials.com/en-us/a", firstSeen: "2026-11-22", mark: null, canMarkStudy: true },
     ]);
     const icon = json.find((c) => c.id === "icon-lenexa");
     expect(icon).toMatchObject({ read: false, lastReadAt: null, openings: [], url: "https://iconstudies.com/All-Clinical-Research-Studies/" });
+  });
+
+  it("counts an entry that went from the list and came back as first seen on the day it came back", async () => {
+    const DAY3 = "2026-11-24T09:47:00.000Z";
+    await readDueSource(env.DB, [source()], serving([opening("a"), opening("b")]), DAY1, noWait);
+    await readDueSource(env.DB, [source()], serving([opening("b")]), DAY2, noWait);
+    await readDueSource(env.DB, [source()], serving([opening("a"), opening("b")]), DAY3, noWait);
+    const { json } = await as(app, env, "ann@example.com")<ClinicItem[]>("/api/clinics");
+    const seen = Object.fromEntries(json.find((c) => c.id === "fortrea-madison")!.openings.map((o) => [o.id, o.firstSeen]));
+    expect(seen).toEqual({ "fortrea:a": "2026-11-24", "fortrea:b": "2026-11-22" });
   });
 
   it("puts the nearest Clinic first once the Member's Profile has a ZIP code", async () => {
