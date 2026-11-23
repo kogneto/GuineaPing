@@ -25,7 +25,7 @@ One study registered on ClinicalTrials.gov, identified by its NCT ID. Every Tria
 _Avoid_: Study, listing, record
 
 **Watch**:
-A named set of search criteria (conditions, keywords, distance from a ZIP code, kinds of study, phases, statuses, age, sex, healthy volunteers) that Trials are matched against. Every Member can see and follow any Watch that is not a Private watch; only its Owner can change or delete it. Who follows a Watch is never shown.
+A named set of search criteria (conditions, keywords, distance from a ZIP code, Clinics, kinds of study, phases, statuses, age, sex, healthy volunteers) that Trials are matched against. A Watch that names Clinics matches only Trials with a site at one of them. Every Member can see and follow any Watch that is not a Private watch; only its Owner can change or delete it. Who follows a Watch is never shown.
 _Avoid_: Search, filter, query, subscription, saved search
 
 **Private watch**:
@@ -73,7 +73,7 @@ _Avoid_: Inbox, feed, history, notifications
 ### Clinics
 
 **Clinic**:
-A research unit that pays healthy volunteers and advertises its studies on its own website, such as Celerion in Lincoln or Fortrea in Madison. GuineaPing keeps the list of Clinics by hand: name, city, and a link to the Clinic’s own list of studies. Every Member sees the same Clinics, nearest first when their Profile has a ZIP code.
+A research unit that pays healthy volunteers and advertises its studies on its own website, such as Celerion in Lincoln or Fortrea in Madison. GuineaPing keeps the list of Clinics by hand: name, city, and a link to the Clinic’s own list of studies. Every Member sees the same Clinics, nearest first when their Profile has a ZIP code. A Trial is at a Clinic when its listing names a site by one of the names the Clinic goes by, in the Clinic’s city; a Trial that names no site is not tied to any Clinic.
 _Avoid_: Site (a site is one place a Trial runs), facility, CRO, unit
 
 **Opening**:

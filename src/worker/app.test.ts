@@ -603,3 +603,43 @@ describe("kind of study", () => {
     expect((await vol<AlertItem>(`/api/alerts/${drugAlert.id}`)).json.trial.kinds).toEqual(["DRUG", "PROCEDURE"]);
   });
 });
+
+describe("Clinics in a Watch", () => {
+  const at = (nctId: string, facility: string, city: string) => {
+    const s = study(nctId);
+    return { protocolSection: { ...s.protocolSection, contactsLocationsModule: { locations: [{ facility, city, state: "Nebraska", country: "United States", geoPoint: { lat: 40.8, lon: -96.667 } }] } } };
+  };
+  const lincoln = 'SEARCH[Location](AREA[LocationFacility]("Celerion") AND AREA[LocationCity]("Lincoln"))';
+
+  it("takes a Watch that asks only for a Clinic, and asks ClinicalTrials.gov for that Clinic's site", async () => {
+    const vol = as(app, env, `clinic${n}@x`);
+    const made = await vol<Watch>("/api/watches", "POST", { name: "Celerion", criteria: { clinics: ["celerion-lincoln"], healthy: true }, private: false });
+    expect(made.status).toBe(201);
+    expect(made.json.criteria).toMatchObject({ clinics: ["celerion-lincoln"], conditions: [], healthy: true });
+    filtersSent = [];
+    await check();
+    expect(filtersSent.filter((f) => f.includes(lincoln) && f.includes("AREA[HealthyVolunteers]true"))).toHaveLength(1);
+
+    const refused = await vol<{ error: string }>("/api/watches", "POST", { name: "Nowhere", criteria: { clinics: ["nowhere"] }, private: false });
+    expect(refused.status).toBe(400);
+    expect(refused.json.error).toBe("Unknown Clinic nowhere");
+  });
+
+  it("puts the Clinic on the Alert, and an older Alert without one gets no Update for it", async () => {
+    const vol = as(app, env, `clinicalert${n}@x`);
+    const cond = `clinicalert${n}`;
+    await vol("/api/watches", "POST", watchBody(cond, { criteria: { conditions: [cond], clinics: ["celerion-lincoln"] } }));
+    catalog[cond] = [at("NCT93000001", "Celerion, Inc.", "Lincoln")];
+    await check();
+    const [alert] = (await alertsOf(vol)) as AlertItem[];
+    expect(alert!.trial.clinics).toEqual(["celerion-lincoln"]);
+
+    // An Alert stored before Clinics were kept: the same Trial, read again, is not a change.
+    const old = { ...alert!.trial } as { clinics?: string[] };
+    delete old.clinics;
+    await env.DB.prepare("UPDATE alerts SET trial = ?, read_at = ? WHERE id = ?").bind(JSON.stringify(old), new Date().toISOString(), alert!.id).run();
+    changed = [at("NCT93000001", "Celerion, Inc.", "Lincoln")];
+    expect(await runUpdates(env.DB, fetchJson)).toEqual({ updated: 0 });
+    expect((await alertsOf(vol))[0]).toMatchObject({ read: true, update: null });
+  });
+});
