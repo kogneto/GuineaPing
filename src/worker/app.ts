@@ -1,8 +1,9 @@
 import * as Sentry from "@sentry/cloudflare";
 import { Hono, type Context } from "hono";
-import { MARKS, MAX_NOTE_CHARS, type AlertListItem, type Criteria, type Near, type Device, type Mark, type MemberList, type Trial, type WatchInput } from "../shared/api";
+import { type Criteria, type Near, type Device, type MemberList, type Trial, type WatchInput } from "../shared/api";
 import { fetchJson, findTrials, forList, normalizeCriteria } from "../shared/ctgov";
 import { accessFrom, setAllowed } from "./access";
+import { getAlert, listAlerts, markRead, sendAlert, sortAlert } from "./alerts";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, RECENT_DAYS } from "./check";
 import { listClinics } from "./clinics";
@@ -169,99 +170,28 @@ app.post("/api/preview", async (c) => {
   }
 });
 
-type AlertRow = { id: string; trial: string; watch_names: string; created_at: string; read_at: string | null; mark: Mark | null; note: string | null; sent_by: string | null; via_private: number; update_text: string | null; updated_at: string | null };
-const ALERT_COLUMNS = "id, trial, watch_names, created_at, read_at, mark, note, sent_by, via_private, update_text, updated_at";
-type NoteRow = { id: string; message: string; created_at: string; read_at: string | null };
-
-/** `full` keeps the eligibility text, for an Alert's own page; the Alert list leaves it out. */
-const toAlert = (r: AlertRow, full = false): AlertListItem => ({
-  kind: "alert",
-  id: r.id,
-  trial: full ? (JSON.parse(r.trial) as Trial) : forList(JSON.parse(r.trial) as Trial),
-  watchNames: JSON.parse(r.watch_names) as string[],
-  createdAt: r.created_at,
-  read: r.read_at !== null,
-  mark: r.mark,
-  note: r.note ?? "",
-  sentBy: r.sent_by,
-  update: r.update_text && r.updated_at ? { at: r.updated_at, changes: JSON.parse(r.update_text) as string[] } : null,
-  viaPrivateWatch: r.via_private === 1,
-});
-
-/** The Alert list: the latest 200 Alerts and notes, newest first. */
-app.get("/api/alerts", async (c) => {
-  const id = c.get("me").memberId;
-  const [alerts, notes] = await c.env.DB.batch<AlertRow | NoteRow>([
-    c.env.DB.prepare(`SELECT ${ALERT_COLUMNS} FROM alerts WHERE member_id = ? ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 200`).bind(id),
-    c.env.DB.prepare("SELECT id, message, created_at, read_at FROM notes WHERE member_id = ? ORDER BY created_at DESC LIMIT 200").bind(id),
-  ]);
-  const items: AlertListItem[] = [
-    ...(alerts!.results as AlertRow[]).map((r) => toAlert(r)),
-    ...(notes!.results as NoteRow[]).map((r): AlertListItem => ({ kind: "note", id: r.id, message: r.message, createdAt: r.created_at, read: r.read_at !== null })),
-  ];
-  // An Alert with an Update sits where the Update happened, not where the Alert first did.
-  const when = (i: AlertListItem) => (i.kind === "alert" && i.update ? i.update.at : i.createdAt);
-  items.sort((a, b) => when(b).localeCompare(when(a)));
-  return c.json(items.slice(0, 200));
-});
+/** The Alert list: the latest Alerts and notes, newest first. */
+app.get("/api/alerts", async (c) => c.json(await listAlerts(c.env.DB, c.get("me").memberId)));
 
 app.get("/api/alerts/:id", async (c) => {
-  const row = await c.env.DB.prepare(`SELECT ${ALERT_COLUMNS} FROM alerts WHERE id = ? AND member_id = ?`)
-    .bind(c.req.param("id"), c.get("me").memberId)
-    .first<AlertRow>();
-  return row ? c.json(toAlert(row, true)) : c.json({ error: "No such Alert" }, 404);
+  const alert = await getAlert(c.env.DB, c.get("me").memberId, c.req.param("id"));
+  return alert ? c.json(alert) : c.json({ error: "No such Alert" }, 404);
 });
 
 /** A Member sorts one of their own Alerts: a mark, a private note, or both. */
 app.put("/api/alerts/:id", async (c) => {
-  const body = ((await c.req.json().catch(() => null)) ?? {}) as { mark?: unknown; note?: unknown };
-  const sets: string[] = [];
-  const values: (string | null)[] = [];
-  if ("mark" in body) {
-    if (body.mark !== null && !MARKS.includes(body.mark as Mark)) return c.json({ error: "Unknown mark" }, 400);
-    sets.push("mark = ?");
-    values.push(body.mark as Mark | null);
-  }
-  if ("note" in body) {
-    if (typeof body.note !== "string" || body.note.length > MAX_NOTE_CHARS) return c.json({ error: `Keep the note under ${MAX_NOTE_CHARS} characters` }, 400);
-    sets.push("note = ?");
-    values.push(body.note.trim() || null);
-  }
-  if (!sets.length) return c.json({ error: "Nothing to change" }, 400);
-  const row = await c.env.DB.prepare(`UPDATE alerts SET ${sets.join(", ")} WHERE id = ? AND member_id = ? RETURNING ${ALERT_COLUMNS}`)
-    .bind(...values, c.req.param("id"), c.get("me").memberId)
-    .first<AlertRow>();
-  return row ? c.json(toAlert(row, true)) : c.json({ error: "No such Alert" }, 404);
+  const sorted = await sortAlert(c.env.DB, c.get("me").memberId, c.req.param("id"), await c.req.json().catch(() => null));
+  return "error" in sorted ? c.json({ error: sorted.error }, sorted.status) : c.json(sorted);
 });
 
-/**
- * Sends one of the Member's Alerts to another Member, named by email. They get it as an Alert of
- * their own, or, if the Trial is already in their Alert list, a note saying who sent it. The sender
- * is told the same thing either way, so sending never reveals what someone else has been alerted on.
- */
+/** Sends one of the Member's Alerts to another Member, named by email. */
 app.post("/api/alerts/:id/send", async (c) => {
-  const me = c.get("me");
-  const email = String(((await c.req.json().catch(() => null)) as { email?: unknown } | null)?.email ?? "").trim().toLowerCase();
-  if (!email) return c.json({ error: "Enter the email address of the Member to send it to" }, 400);
-  if (email === me.email) return c.json({ error: "That's your own email address" }, 400);
-  const alert = await c.env.DB.prepare("SELECT nct_id, trial FROM alerts WHERE id = ? AND member_id = ?").bind(c.req.param("id"), me.memberId).first<{ nct_id: string; trial: string }>();
-  if (!alert) return c.json({ error: "No such Alert" }, 404);
-  const to = await c.env.DB.prepare("SELECT id FROM members WHERE email = ? AND removed_at IS NULL").bind(email).first<{ id: string }>();
-  if (!to) return c.json({ error: "No Member has signed in with that email address. Check the spelling." }, 404);
-  const created = await c.env.DB.prepare(
-    `INSERT OR IGNORE INTO alerts (id, member_id, nct_id, trial, watch_names, via_private, sent_by, created_at) VALUES (?, ?, ?, ?, '[]', 0, ?, ?) RETURNING id`,
-  )
-    .bind(crypto.randomUUID(), to.id, alert.nct_id, alert.trial, me.email, now())
-    .first<{ id: string }>();
-  if (!created) {
-    const title = (JSON.parse(alert.trial) as Trial).title;
-    await c.env.DB.prepare("INSERT INTO notes (id, member_id, message, created_at) VALUES (?, ?, ?, ?)")
-      .bind(crypto.randomUUID(), to.id, `${me.email} sent you “${title}”. It's already in your Alerts.`, now())
-      .run();
-  }
+  const body = (await c.req.json().catch(() => null)) as { email?: unknown } | null;
+  const sent = await sendAlert(c.env.DB, c.get("me"), c.req.param("id"), body?.email, now());
+  if ("error" in sent) return c.json({ error: sent.error }, sent.status);
   // Push it now rather than with the next Check. If that fails, the next Check retries.
   const vapid = vapidFrom(c.env);
-  if (created && vapid) {
+  if (sent.created && vapid) {
     const pushing = pushPendingAlerts(c.env.DB, vapid).catch((err) => report("Pushing a sent Alert failed", err));
     try {
       c.executionCtx.waitUntil(pushing);
@@ -272,11 +202,9 @@ app.post("/api/alerts/:id/send", async (c) => {
   return c.json({ ok: true });
 });
 
-for (const [path, table] of [["/api/alerts/:id/read", "alerts"], ["/api/notes/:id/read", "notes"]] as const) {
+for (const [path, what] of [["/api/alerts/:id/read", "alerts"], ["/api/notes/:id/read", "notes"]] as const) {
   app.post(path, async (c) => {
-    await c.env.DB.prepare(`UPDATE ${table} SET read_at = COALESCE(read_at, ?) WHERE id = ? AND member_id = ?`)
-      .bind(now(), c.req.param("id"), c.get("me").memberId)
-      .run();
+    await markRead(c.env.DB, c.get("me").memberId, what, c.req.param("id"), now());
     return c.body(null, 204);
   });
 }
