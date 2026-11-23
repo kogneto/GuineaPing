@@ -23,6 +23,12 @@ export function WatchEditorPage({ id }: { id?: string }) {
   const [form, setForm] = useState<CriteriaForm>(() => newForm(id ? null : new URLSearchParams(location.search).get("clinic")));
   const set = (patch: Partial<CriteriaForm>) => setForm((f) => ({ ...f, ...patch }));
   const { conditions, terms, phases, kinds, statuses, zip, miles, age, sex, healthy, clinics } = form;
+  // The criteria most Watches leave alone are folded away until asked for, or until one is set.
+  const hasMore = (f: CriteriaForm) => {
+    const blank = newForm(null);
+    return (["age", "sex", "healthy", "conditions", "terms", "kinds", "phases", "statuses"] as const).some((k) => JSON.stringify(f[k]) !== JSON.stringify(blank[k]));
+  };
+  const [more, setMore] = useState(() => hasMore(form));
   const [isPrivate, setPrivate] = useState(false);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -35,13 +41,18 @@ export function WatchEditorPage({ id }: { id?: string }) {
     api<Profile>("/api/profile").then(setProfile, () => {});
   }, []);
   const profileHasSomething = !!profile && (profile.zip !== null || profile.birthYear !== null || profile.sex !== null || profile.conditions.length > 0);
-  const useProfile = () => profile && setForm((f) => withProfile(f, profile, new Date().getFullYear()));
+  const useProfile = () => {
+    if (!profile) return;
+    setForm((f) => withProfile(f, profile, new Date().getFullYear()));
+    setMore(true);
+  };
 
   useEffect(() => {
     if (!id) return;
     api<Watch>(`/api/watches/${id}`).then((w) => {
       setName(w.name);
       setForm(formOf(w.criteria));
+      setMore(hasMore(formOf(w.criteria)));
       setPrivate(w.private);
       setLoaded(true);
     }, (e: Error) => setError(e.message));
@@ -191,6 +202,8 @@ export function WatchEditorPage({ id }: { id?: string }) {
               </label>
             )}
           </fieldset>
+          <details className="more" open={more} onToggle={(e) => setMore(e.currentTarget.open)}>
+            <summary>More: who it's for, conditions, keywords, kind, phase, status</summary>
           <fieldset>
             <legend>Who it's for</legend>
             <div className="inline-fields">
@@ -269,14 +282,17 @@ export function WatchEditorPage({ id }: { id?: string }) {
               ))}
             </div>
           </fieldset>
+          </details>
           <label className="check">
             <input type="checkbox" checked={isPrivate} onChange={(e) => setPrivate(e.target.checked)} />
             Private: only I can see and follow this Watch
           </label>
-          {error && <p className="error">{error}</p>}
-          <button type="submit" disabled={saving}>
-            {saving ? "Saving…" : id ? "Save changes" : "Create and follow"}
-          </button>
+          <div className="save-bar">
+            {error && <p className="error">{error}</p>}
+            <button type="submit" disabled={saving}>
+              {saving ? "Saving…" : id ? "Save changes" : "Create and follow"}
+            </button>
+          </div>
         </form>
         <section className="preview">
           <h2>Recent matches</h2>
