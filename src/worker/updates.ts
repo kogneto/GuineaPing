@@ -1,7 +1,8 @@
 /**
  * Updates: telling a Member when a Trial they already have an Alert for changes in a way that
- * matters to them. It starts recruiting, or adds a site within the distance of the Watch that
- * found it, or of their Profile. The Alert itself is refreshed and turns unread; there is still one Alert per Trial.
+ * matters to them. It starts recruiting, or adds a site within the distance of a Watch that found
+ * it; a Watch that gives no ZIP code is measured from the Member's Profile instead, as a new Alert
+ * is. The Alert itself is refreshed and turns unread; there is still one Alert per Trial.
  */
 import type { Near, Trial } from "../shared/api";
 import { storedCriteria } from "../shared/criteria";
@@ -50,7 +51,9 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
     return { updated: 0 };
   }
 
-  // Where "near you" is for each Alert: the ZIP codes of the Watches the Member still follows that found this Trial.
+  // Where "near you" is for each Alert: the ZIP code of each Watch the Member still follows that
+  // found this Trial. A ZIP code on a Watch is deliberate (it may be someone else's home), so the
+  // Profile is used only for a Watch that gives none, or an Alert no Watch of theirs found.
   const { results: places } = await db
     .prepare(
       `SELECT a.id AS alert_id, w.criteria FROM alerts a
@@ -61,18 +64,15 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
     )
     .bind(JSON.stringify(affected.map((a) => a.id)))
     .all<{ alert_id: string; criteria: string }>();
-  const nearsOf = new Map<string, Near[]>();
-  for (const p of places) {
-    const near = storedCriteria(p.criteria).near;
-    if (near) nearsOf.set(p.alert_id, [...(nearsOf.get(p.alert_id) ?? []), near]);
-  }
-
-  // And the Member's own Profile, when it gives a ZIP code.
+  const foundBy = new Map<string, (Near | null)[]>();
+  for (const p of places) foundBy.set(p.alert_id, [...(foundBy.get(p.alert_id) ?? []), storedCriteria(p.criteria).near]);
   const profileNear = await nearByMember(db, affected.map((a) => a.memberId));
-  for (const a of affected) {
-    const near = profileNear.get(a.memberId);
-    if (near) nearsOf.set(a.id, [...(nearsOf.get(a.id) ?? []), near]);
-  }
+  const nearsFor = (a: { id: string; memberId: string }): Near[] => {
+    const watches = foundBy.get(a.id) ?? [];
+    const nears = watches.filter((near): near is Near => near !== null);
+    const profile = !watches.length || watches.includes(null) ? profileNear.get(a.memberId) : undefined;
+    return profile ? [...nears, profile] : nears;
+  };
 
   const statements: D1PreparedStatement[] = [];
   let updated = 0;
@@ -81,9 +81,9 @@ export async function runUpdates(db: D1Database, get: FetchJson, now = new Date(
     const fresh = toTrial(raw);
     if (!fresh) continue;
     const old = a.trial;
-    const nears = nearsOf.get(a.id) ?? [];
+    const nears = nearsFor(a);
     const sites = sitesOf(raw);
-    // Keep "nearest site" meaning what it meant when alerted: nearest to the Watches' ZIP codes.
+    // Keep "nearest site" meaning what it meant when alerted: nearest to the same places.
     let nearest = old.nearest;
     for (const site of sites) {
       for (const near of nears) {

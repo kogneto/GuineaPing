@@ -407,6 +407,70 @@ describe("Updates", () => {
     expect(alert!.trial.nearest).toEqual({ place: "Cambridge, Massachusetts", miles: 1 });
   });
 
+  const cambridge = { city: "Cambridge", lat: 42.3736, lon: -71.1097 };
+  const springfield = { city: "Springfield", lat: 42.1015, lon: -72.5898 };
+
+  it("measures a new site from the Watch's ZIP code, not the Profile's, when the Watch has one", async () => {
+    const mum = as(app, env, `sitewatch${n}@x`);
+    const cond = `sitewatch${n}`;
+    // The Watch is about Cambridge; the Member lives in Springfield.
+    await mum("/api/profile", "PUT", { zip: "01103", miles: 25 });
+    await mum("/api/watches", "POST", { ...watchBody(cond), criteria: { conditions: [cond], terms: [], phases: [], statuses: [], near: { zip: "02139", miles: 25 } } });
+    catalog[cond] = [raw("NCT91000004", "RECRUITING", [boston])];
+    await check();
+    changed = [raw("NCT91000004", "RECRUITING", [boston, springfield])];
+    expect(await update()).toEqual({ updated: 0 });
+    expect((await alertsOf(mum))[0]).toMatchObject({ update: null });
+    changed = [raw("NCT91000004", "RECRUITING", [boston, springfield, cambridge])];
+    expect(await update()).toEqual({ updated: 1 });
+    expect(((await alertsOf(mum))[0] as AlertItem).update!.changes).toEqual(["New site near you: Cambridge, Massachusetts (1 mi)"]);
+  });
+
+  it("measures a new site from the Profile when the Watch has no ZIP code", async () => {
+    const mum = as(app, env, `siteprofile${n}@x`);
+    const cond = `siteprofile${n}`;
+    await mum("/api/profile", "PUT", { zip: "01103", miles: 25 });
+    await mum("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [raw("NCT91000005", "RECRUITING", [boston])];
+    await check();
+    changed = [raw("NCT91000005", "RECRUITING", [boston, cambridge])];
+    expect(await update()).toEqual({ updated: 0 });
+    changed = [raw("NCT91000005", "RECRUITING", [boston, cambridge, springfield])];
+    expect(await update()).toEqual({ updated: 1 });
+    expect(((await alertsOf(mum))[0] as AlertItem).update!.changes).toEqual([expect.stringMatching(/^New site near you: Springfield, Massachusetts \(/)]);
+  });
+
+  it("measures from both when one Watch that found the Trial has a ZIP code and another has none", async () => {
+    const mum = as(app, env, `siteboth${n}@x`);
+    const [withZip, without] = [`sitebotha${n}`, `sitebothb${n}`];
+    await mum("/api/profile", "PUT", { zip: "01103", miles: 25 });
+    await mum("/api/watches", "POST", { ...watchBody(withZip), criteria: { conditions: [withZip], terms: [], phases: [], statuses: [], near: { zip: "02139", miles: 25 } } });
+    await mum("/api/watches", "POST", watchBody(without));
+    catalog[withZip] = [raw("NCT91000006", "RECRUITING", [boston])];
+    catalog[without] = [raw("NCT91000006", "RECRUITING", [boston])];
+    await check();
+    changed = [raw("NCT91000006", "RECRUITING", [boston, cambridge, springfield])];
+    expect(await update()).toEqual({ updated: 1 });
+    expect(((await alertsOf(mum))[0] as AlertItem).update!.changes[0]).toMatch(/^New sites near you: .*Cambridge.*Springfield|^New sites near you: .*Springfield.*Cambridge/);
+  });
+
+  it("measures an Alert another Member sent from the Profile", async () => {
+    const [mumEmail, dadEmail] = [`sitesentmum${n}@x`, `sitesentdad${n}@x`];
+    const mum = as(app, env, mumEmail);
+    const dad = as(app, env, dadEmail);
+    const cond = `sitesent${n}`;
+    await mum("/api/profile", "PUT", { zip: "01103", miles: 25 });
+    await dad("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [raw("NCT91000007", "RECRUITING", [boston])];
+    await check();
+    const [dadsAlert] = (await alertsOf(dad)) as AlertItem[];
+    await dad(`/api/alerts/${dadsAlert!.id}/send`, "POST", { email: mumEmail });
+    changed = [raw("NCT91000007", "RECRUITING", [boston, springfield])];
+    await update();
+    expect(((await alertsOf(mum))[0] as AlertItem).update!.changes).toEqual([expect.stringMatching(/^New site near you: Springfield/)]);
+    expect((await alertsOf(dad))[0]).toMatchObject({ update: null });
+  });
+
   it("leaves Alerts marked Not for me alone", async () => {
     const mum = as(app, env, `quietupd${n}@x`);
     const cond = `quietupd${n}`;

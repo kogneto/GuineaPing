@@ -79,7 +79,7 @@ One notice to one Member about one Trial: a New trial, naming every Watch they f
 _Avoid_: Ping, notification, message
 
 **Update**:
-News about a Trial a Member already has an Alert for: it has started recruiting, or added a site within the distance of a Watch of theirs that found it. The Alert turns unread and says what changed; it is still the one Alert for that Trial. Alerts marked "Not for me" get no Updates.
+News about a Trial a Member already has an Alert for: it has started recruiting, or added a site within the distance of a Watch of theirs that found it. A Watch with no ZIP code is measured from the Member's Profile instead, as it is for a new Alert; a Watch with one is never measured from the Profile. The Alert turns unread and says what changed; it is still the one Alert for that Trial. Alerts marked "Not for me" get no Updates.
 _Avoid_: Change alert, second Alert, re-alert
 
 **Push**:
