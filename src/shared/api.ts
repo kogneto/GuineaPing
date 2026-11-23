@@ -1,4 +1,5 @@
 /** Types shared by the Worker and the browser. Names follow CONTEXT.md. */
+import type { OpeningMark } from "./openings";
 
 export const PHASES = ["EARLY_PHASE1", "PHASE1", "PHASE2", "PHASE3", "PHASE4", "NA"] as const;
 export type Phase = (typeof PHASES)[number];
@@ -184,8 +185,12 @@ export type Opening = {
   code: string | null;
   /** The entry's own page on the Clinic's site, or the Clinic's list when entries have no page. */
   url: string;
-  /** The day GuineaPing first saw it (YYYY-MM-DD). */
+  /** The day GuineaPing first saw it (YYYY-MM-DD), or saw it again after it had gone from the list. */
   firstSeen: string;
+  /** How the signed-in Member has set it aside, if they have. Only they see it. */
+  mark: OpeningMark | null;
+  /** Whether it can be marked "Not for me": only an entry that carries a study code can. */
+  canMarkStudy: boolean;
 };
 
 export type ClinicItem = {
