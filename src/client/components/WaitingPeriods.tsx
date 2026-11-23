@@ -33,6 +33,8 @@ export function WaitingPeriods() {
   const [endedOn, setEndedOn] = useState("");
   const [lastDoseOn, setLastDoseOn] = useState("");
   const [waitDays, setWaitDays] = useState(String(DEFAULT_WAIT_DAYS));
+  /** The Past study being changed; null while adding a new one. */
+  const [editing, setEditing] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -41,16 +43,35 @@ export function WaitingPeriods() {
     void load();
   }, []);
 
-  const add = async (e: FormEvent) => {
+  const clear = () => {
+    setEditing(null);
+    setLabel("");
+    setEndedOn("");
+    setLastDoseOn("");
+    setWaitDays(String(DEFAULT_WAIT_DAYS));
+    setError(null);
+  };
+
+  /** Puts a Past study into the form, to be changed there. */
+  const change = (study: PastStudy) => {
+    setEditing(study.id);
+    setLabel(study.label);
+    setEndedOn(study.endedOn);
+    setLastDoseOn(study.lastDoseOn ?? "");
+    setWaitDays(String(study.waitDays));
+    setError(null);
+    document.getElementById("past-study-form")?.scrollIntoView({ block: "nearest" });
+  };
+
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
     try {
-      await api<PastStudy>("/api/past-studies", "POST", { label, endedOn, lastDoseOn: lastDoseOn || null, waitDays: waitDays.trim() });
-      setLabel("");
-      setEndedOn("");
-      setLastDoseOn("");
-      setWaitDays(String(DEFAULT_WAIT_DAYS));
+      const body = { label, endedOn, lastDoseOn: lastDoseOn || null, waitDays: waitDays.trim() };
+      if (editing) await api<PastStudy>(`/api/past-studies/${editing}`, "PUT", body);
+      else await api<PastStudy>("/api/past-studies", "POST", body);
+      clear();
       await load();
     } catch (err) {
       setError((err as Error).message);
@@ -62,6 +83,7 @@ export function WaitingPeriods() {
   const remove = async (study: PastStudy) => {
     if (!confirm("Remove this past study? Its waiting period goes with it.")) return;
     await api(`/api/past-studies/${study.id}`, "DELETE").catch((e: Error) => setError(e.message));
+    if (editing === study.id) clear();
     await load();
   };
 
@@ -96,9 +118,14 @@ export function WaitingPeriods() {
             <article className="trial" key={s.id}>
               <div className="title-row">
                 <strong>{s.label || "A study"}</strong>
-                <button type="button" className="link" onClick={() => remove(s)}>
-                  Remove
-                </button>
+                <span className="actions">
+                  <button type="button" className="link" onClick={() => change(s)}>
+                    Change
+                  </button>
+                  <button type="button" className="link" onClick={() => remove(s)}>
+                    Remove
+                  </button>
+                </span>
               </div>
               <p className="facts">
                 Ended {sayDay(s.endedOn)}
@@ -109,8 +136,8 @@ export function WaitingPeriods() {
           ))}
         </div>
       )}
-      <form className="form" onSubmit={add}>
-        <h3>Add a study you've done</h3>
+      <form className="form" onSubmit={save} id="past-study-form">
+        <h3>{editing ? "Change this study" : "Add a study you've done"}</h3>
         <label>
           What you call it <span className="muted">(optional)</span>
           <input value={label} onChange={(e) => setLabel(e.target.value)} maxLength={MAX_LABEL_CHARS} placeholder="Celerion, October" />
@@ -134,9 +161,16 @@ export function WaitingPeriods() {
         </span>
         {wouldBeFree && <p className="muted">That wait would end on {sayDay(wouldBeFree)}.</p>}
         {error && <p className="error">{error}</p>}
-        <button type="submit" disabled={busy}>
-          {busy ? "Saving…" : "Add"}
-        </button>
+        <p className="actions">
+          <button type="submit" disabled={busy}>
+            {busy ? "Saving…" : editing ? "Save changes" : "Add"}
+          </button>
+          {editing && (
+            <button type="button" className="secondary" onClick={clear}>
+              Cancel
+            </button>
+          )}
+        </p>
       </form>
     </section>
   );

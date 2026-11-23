@@ -29,6 +29,28 @@ export async function addPastStudy(db: D1Database, memberId: string, input: unkn
   return toPastStudy(row);
 }
 
+/**
+ * Changes one of the Member's own Past studies; null when it isn't theirs or isn't there. The
+ * Member is still told only once per wait: a wait moved into the future is told when it ends, and
+ * one that is now already over is never announced late.
+ */
+export async function changePastStudy(db: D1Database, memberId: string, id: string, input: unknown, now: string): Promise<PastStudy | { error: string } | null> {
+  const today = now.slice(0, 10);
+  const study = normalizePastStudy(input, today);
+  if ("error" in study) return study;
+  const free = freeOn(study.endedOn, study.lastDoseOn, study.waitDays);
+  const row = await db
+    .prepare(
+      `UPDATE past_studies SET label = ?1, ended_on = ?2, last_dose_on = ?3, wait_days = ?4, free_on = ?5,
+         told_at = CASE WHEN ?5 <= ?6 THEN COALESCE(told_at, ?7) ELSE NULL END
+       WHERE id = ?8 AND member_id = ?9
+       RETURNING id, label, ended_on, last_dose_on, wait_days, free_on`,
+    )
+    .bind(study.label, study.endedOn, study.lastDoseOn, study.waitDays, free, today, now, id, memberId)
+    .first<Row>();
+  return row ? toPastStudy(row) : null;
+}
+
 /** Removes one of the Member's own Past studies. False when it isn't theirs or isn't there. */
 export async function removePastStudy(db: D1Database, memberId: string, id: string): Promise<boolean> {
   const done = await db.prepare("DELETE FROM past_studies WHERE id = ? AND member_id = ?").bind(id, memberId).run();
