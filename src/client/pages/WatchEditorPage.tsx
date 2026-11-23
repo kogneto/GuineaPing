@@ -280,7 +280,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
         </form>
         <section className="preview">
           <h2>Recent matches</h2>
-          <p className="muted small">Posted in the last 30 days. Saving won't send Alerts for these, or for anything else that matches today: only for trials that start to match from now on.</p>
+          <p className="muted small">Posted in the last 30 days. Saving won't send Alerts for these, or for anything else that matches today: only for trials that start to match from now on. If the Watch matches more than 1,000 trials, it alerts only on newly posted ones, so narrow it to also catch older trials that change.</p>
           {previewNote ? (
             <div className="empty compact">
               <Illustration name="makingWatch" size="sm" />
