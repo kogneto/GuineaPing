@@ -5,7 +5,7 @@
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
 import { storedCriteria } from "../shared/criteria";
 import { everyMatch, fetchJson, findMatches, findTrials, nearestOf, type FetchJson, type Match } from "../shared/ctgov";
-import { createAlerts, createdAmong, type AlertToCreate } from "./alerts";
+import { createAlerts, createdAmong, nameWatches, type AlertToCreate } from "./alerts";
 import { nearByMember } from "./profile";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
 import { report } from "./report";
@@ -156,6 +156,9 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
   }
 
   const wanted = [...alerts.values()];
+  // A Member who already has an Alert for the Trial, through another Watch or because someone
+  // sent it, gets no second one: the Alert they have gains this Watch's name.
+  const namings = await nameWatches(db, wanted);
   const statements: D1PreparedStatement[] = [
     db
       .prepare(
@@ -163,12 +166,13 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
          SELECT value ->> '$.w', value ->> '$.n', ?1 FROM json_each(?2)`,
       )
       .bind(now, JSON.stringify(firstFinds.map((f) => ({ w: f.watchId, n: f.trial.nctId })))),
-    // A Member alerted on this Trial by an earlier Check (through another Watch) is skipped here.
+    // A Member who already has an Alert for this Trial is skipped here.
     createAlerts(db, wanted, now),
     db
       .prepare("UPDATE watches SET checked_at = ?1, failing_since = NULL, check_error = NULL WHERE id IN (SELECT value FROM json_each(?2))")
       .bind(now, JSON.stringify(found.map((f) => f.watchId))),
     markFailed,
+    ...namings,
     ...learned.flatMap(({ watchId, known }) => [
       db.prepare("INSERT OR IGNORE INTO watch_trials (watch_id, nct_id, found_at) SELECT ?1, value, ?2 FROM json_each(?3)").bind(watchId, now, JSON.stringify(known.nctIds)),
       db.prepare("UPDATE watches SET knows = ? WHERE id = ? AND knows IS NULL").bind(known.knows, watchId),

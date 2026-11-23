@@ -75,7 +75,7 @@ _Avoid_: Backlog, history, results
 ### Alerts
 
 **Alert**:
-One notice to one Member about one Trial: a New trial, naming every Watch they follow that it matches, or a Trial another Member sent them. A Member never gets two Alerts for the same Trial; it is pushed to all their Devices and kept in their Alert list. A Member can mark an Alert "Interested" or "Not for me" and keep a note on it; only they see either.
+One notice to one Member about one Trial: a New trial, naming every Watch they follow that found it, or a Trial another Member sent them. A Member never gets two Alerts for the same Trial; it is pushed to all their Devices and kept in their Alert list. When another Watch of theirs finds the Trial later, the Alert they have gains that Watch's name and nothing else changes: it stays read or unread as it was and is not pushed again. A Member can mark an Alert "Interested" or "Not for me" and keep a note on it; only they see either.
 _Avoid_: Ping, notification, message
 
 **Update**:

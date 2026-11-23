@@ -808,6 +808,91 @@ describe("Points to check", () => {
   });
 });
 
+describe("A Trial a Member already has an Alert for", () => {
+  const row = (nctId: string, email: string) =>
+    env.DB.prepare("SELECT a.watch_names, a.via_private, a.read_at, a.pushed_at, a.mark, a.sent_by, a.update_text FROM alerts a JOIN members m ON m.id = a.member_id WHERE a.nct_id = ? AND m.email = ?")
+      .bind(nctId, email)
+      .first<{ watch_names: string; via_private: number; read_at: string | null; pushed_at: string | null; mark: string | null; sent_by: string | null; update_text: string | null }>();
+
+  it("gains the name of another Watch that finds it later, and nothing else changes", async () => {
+    const email = `second${n}@x`;
+    const vol = as(app, env, email);
+    const [a, b] = [`seconda${n}`, `secondb${n}`];
+    await vol("/api/watches", "POST", watchBody(a));
+    await vol("/api/watches", "POST", watchBody(b));
+    catalog[a] = [study("NCT96000001")];
+    expect((await check()).alertsCreated).toBe(1);
+    const [first] = (await alertsOf(vol)) as AlertItem[];
+    expect(first!.watchNames).toEqual([`${a} watch`]);
+    await vol(`/api/alerts/${first!.id}/read`, "POST");
+    await vol(`/api/alerts/${first!.id}`, "PUT", { mark: "not_for_me" });
+    await env.DB.prepare("UPDATE alerts SET pushed_at = '2026-01-01T00:00:00.000Z' WHERE id = ?").bind(first!.id).run();
+
+    // The same Trial now matches the second Watch too.
+    catalog[b] = [study("NCT96000001")];
+    expect((await check()).alertsCreated).toBe(0);
+    const list = (await alertsOf(vol)) as AlertItem[];
+    expect(list).toHaveLength(1);
+    expect(list[0]).toMatchObject({ id: first!.id, watchNames: [`${a} watch`, `${b} watch`], read: true, mark: "not_for_me", update: null });
+    expect(await row("NCT96000001", email)).toMatchObject({ pushed_at: "2026-01-01T00:00:00.000Z", via_private: 0 });
+
+    // And only once: a third Check leaves it as it is.
+    await check();
+    expect(((await alertsOf(vol)) as AlertItem[])[0]!.watchNames).toEqual([`${a} watch`, `${b} watch`]);
+  });
+
+  it("names the Watch on an Alert another Member sent, and keeps who sent it", async () => {
+    const [mumEmail, dadEmail] = [`secondmum${n}@x`, `seconddad${n}@x`];
+    const mum = as(app, env, mumEmail);
+    const dad = as(app, env, dadEmail);
+    const [dads, mums] = [`sentd${n}`, `sentm${n}`];
+    await dad("/api/watches", "POST", watchBody(dads, { private: true }));
+    await mum("/api/watches", "POST", watchBody(mums));
+    catalog[dads] = [study("NCT96100001")];
+    await check();
+    const [dadsAlert] = (await alertsOf(dad)) as AlertItem[];
+    expect((await dad(`/api/alerts/${dadsAlert!.id}/send`, "POST", { email: mumEmail })).status).toBe(200);
+    expect(((await alertsOf(mum)) as AlertItem[])[0]).toMatchObject({ sentBy: dadEmail, watchNames: [] });
+
+    catalog[mums] = [study("NCT96100001")];
+    expect((await check()).alertsCreated).toBe(0);
+    const mine = (await alertsOf(mum)) as AlertItem[];
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toMatchObject({ sentBy: dadEmail, watchNames: [`${mums} watch`], viaPrivateWatch: false });
+  });
+
+  it("becomes an Alert from a Private watch when the Watch that finds it later is private", async () => {
+    const email = `secondprivate${n}@x`;
+    const vol = as(app, env, email);
+    const [open, secret] = [`privopen${n}`, `privsecret${n}`];
+    await vol("/api/watches", "POST", watchBody(open));
+    await vol("/api/watches", "POST", watchBody(secret, { private: true }));
+    catalog[open] = [study("NCT96200001")];
+    await check();
+    catalog[secret] = [study("NCT96200001")];
+    await check();
+    expect(((await alertsOf(vol)) as AlertItem[])[0]).toMatchObject({ watchNames: [`${open} watch`, `${secret} watch`], viaPrivateWatch: true });
+  });
+
+  it("is left alone by a Watch made or changed when it already matched", async () => {
+    const vol = as(app, env, `secondmade${n}@x`);
+    const [a, b, c] = [`madea${n}`, `madeb${n}`, `madec${n}`];
+    await vol("/api/watches", "POST", watchBody(a));
+    catalog[a] = [study("NCT96300001")];
+    await check();
+    // A Watch made while the Trial already matches it has not found it: it knew it from the start.
+    catalog[b] = [study("NCT96300001")];
+    const made = await vol<Watch>("/api/watches", "POST", watchBody(b));
+    await check();
+    expect(((await alertsOf(vol)) as AlertItem[])[0]!.watchNames).toEqual([`${a} watch`]);
+    // The same when its criteria change to something the Trial matches.
+    catalog[c] = [study("NCT96300001")];
+    await vol(`/api/watches/${made.json.id}`, "PUT", watchBody(c));
+    await check();
+    expect(((await alertsOf(vol)) as AlertItem[])[0]!.watchNames).toEqual([`${a} watch`]);
+  });
+});
+
 describe("Trials that come to match later", () => {
   const watchRow = (id: string) => env.DB.prepare("SELECT knows FROM watches WHERE id = ?").bind(id).first<{ knows: string | null }>();
   /** What the fake ClinicalTrials.gov was asked about one condition since `asked` was last emptied. */
