@@ -7,6 +7,7 @@ import { accessFrom, setAllowed } from "./access";
 import { getAlert, listAlerts, markRead, sendAlert, sortAlert } from "./alerts";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
 import { checkAndPush, checkStatus, daysBefore, knownMatches, RECENT_DAYS, type Known } from "./check";
+import { tipsFrom, type TipSettings } from "../shared/tips";
 import { listClinics, markOpening, setClinicOffList, setClinicPush } from "./clinics";
 import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
 import { plainFetch, readDueSource } from "./openings/read";
@@ -69,6 +70,9 @@ async function readWatchInput(db: D1Database, body: unknown): Promise<WatchInput
 }
 
 app.get("/api/me", (c) => c.json(c.get("me")));
+
+/** Where a Member can send a tip, from the Worker's settings. Empty until a handle is set. */
+app.get("/api/tips", (c) => c.json(tipsFrom(c.env as TipSettings)));
 
 app.get("/api/status", async (c) => c.json(await checkStatus(c.env.DB)));
 
