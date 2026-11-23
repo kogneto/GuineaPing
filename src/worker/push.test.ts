@@ -195,6 +195,74 @@ describe("Pushes after a Check", () => {
     expect(old.calls.filter((c) => c.url === endpoint("late"))).toEqual([]);
   });
 
+  /** Gives `who` a Past study whose waiting period ended on `day`, not yet told. */
+  const waitEndedOn = async (who: ReturnType<typeof as>, day: string) => {
+    const soon = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+    const made = await who<{ id: string }>("/api/past-studies", "POST", { label: "Secret study", endedOn: soon, waitDays: 0 });
+    await env.DB.prepare("UPDATE past_studies SET free_on = ?, told_at = NULL WHERE id = ?").bind(day, made.json.id).run();
+  };
+  const daysAgo = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  const noteRows = (email: string) =>
+    env.DB.prepare("SELECT n.announce, n.pushed_at FROM notes n JOIN members m ON m.id = n.member_id WHERE m.email = ?").bind(email).all<{ announce: number; pushed_at: string | null }>();
+
+  it("pushes once when a waiting period ends, saying only that there is a note", async () => {
+    const vol = as(app, env, `w1${n}@x`);
+    await addDevice(vol, "wait");
+    await waitEndedOn(vol, daysAgo(2));
+    const first = pushService();
+    await checkAndPush(env, fetchJson, first.post);
+    expect(first.calls.filter((c) => c.url === endpoint("wait"))).toHaveLength(1);
+    const second = pushService();
+    await checkAndPush(env, fetchJson, second.post);
+    expect(second.calls.filter((c) => c.url === endpoint("wait"))).toEqual([]);
+    expect((await noteRows(`w1${n}@x`)).results).toEqual([{ announce: 1, pushed_at: expect.any(String) }]);
+
+    const { NOTE_MESSAGE } = await import("./push");
+    expect(JSON.stringify(NOTE_MESSAGE)).not.toMatch(/wait|stud|clinic|trial|Secret/i);
+    expect(NOTE_MESSAGE.url).toBe("/");
+  });
+
+  it("keeps a waiting-period Push apart from the Alerts it arrives with", async () => {
+    const vol = as(app, env, `w2${n}@x`);
+    const cond = `waitbusy${n}`;
+    await vol("/api/watches", "POST", watchBody(cond));
+    await addDevice(vol, "both");
+    await waitEndedOn(vol, daysAgo(2));
+    // Five Alerts make one summary Push; the note is one more, not a sixth Alert.
+    catalog[cond] = ["1", "2", "3", "4", "5"].map((i) => study(`NCT8700000${i}`));
+    const svc = pushService();
+    expect((await checkAndPush(env, fetchJson, svc.post)).alertsCreated).toBe(5);
+    expect(svc.calls.filter((c) => c.url === endpoint("both"))).toHaveLength(2);
+  });
+
+  it("tries a waiting-period Push again when no Device got it, and settles it for a Member with none", async () => {
+    const vol = as(app, env, `w3${n}@x`);
+    const none = as(app, env, `w4${n}@x`);
+    await addDevice(vol, "down");
+    await waitEndedOn(vol, daysAgo(2));
+    await waitEndedOn(none, daysAgo(2));
+    await checkAndPush(env, fetchJson, pushService(() => 503).post);
+    expect((await noteRows(`w3${n}@x`)).results).toEqual([{ announce: 1, pushed_at: null }]);
+    expect((await noteRows(`w4${n}@x`)).results).toEqual([{ announce: 1, pushed_at: expect.any(String) }]);
+    const retry = pushService();
+    await checkAndPush(env, fetchJson, retry.post);
+    expect(retry.calls.filter((c) => c.url === endpoint("down"))).toHaveLength(1);
+  });
+
+  it("pushes no other kind of note", async () => {
+    const owner = as(app, env, `w5${n}@x`);
+    const follower = as(app, env, `w6${n}@x`);
+    const { json: watch } = await owner<Watch>("/api/watches", "POST", watchBody(`quiet${n}`));
+    await follower(`/api/watches/${watch.id}/follow`, "POST");
+    await addDevice(follower, "quiet");
+    // Deleting a Watch leaves its followers a note in their Alert list.
+    await owner(`/api/watches/${watch.id}`, "DELETE");
+    expect((await noteRows(`w6${n}@x`)).results).toEqual([{ announce: 0, pushed_at: null }]);
+    const svc = pushService();
+    await checkAndPush(env, fetchJson, svc.post);
+    expect(svc.calls.filter((c) => c.url === endpoint("quiet"))).toEqual([]);
+  });
+
   it("never names a trial found through a Private watch on the lock screen", async () => {
     const { messagesFor } = await import("./push");
     const trial = { nctId: "NCT83000001", title: "HIV vaccine study", summary: "", firstPosted: "", status: "RECRUITING", phases: [], conditions: [], sponsor: "", minimumAge: "", maximumAge: "", locations: [], url: "" };

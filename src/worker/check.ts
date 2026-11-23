@@ -194,7 +194,8 @@ export async function checkAndPush(env: Env, get: FetchJson = fetchJson, post: t
   } catch (err) {
     report("Looking for Updates failed", err);
   }
-  // Waiting periods that have ended: a line in the Member's Alert list, never a Push.
+  // Waiting periods that have ended: a line in the Member's Alert list, which the Pushes below
+  // announce without saying what it is about.
   try {
     await tellWaitsOver(env.DB);
   } catch (err) {

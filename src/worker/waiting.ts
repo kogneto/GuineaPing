@@ -59,7 +59,8 @@ export async function removePastStudy(db: D1Database, memberId: string, id: stri
 
 /**
  * Tells each Member, once, in their Alert list, that a waiting period is over. The message names
- * no study or Clinic. It waits until the day has passed in UTC, so it never comes early for
+ * no study or Clinic. The note is written to be announced, so the next Pushes tell their Devices
+ * there is a note to read, and no more than that. It waits until the day has passed in UTC, so it never comes early for
  * anyone in the United States. Returns how many Members were told something.
  */
 export async function tellWaitsOver(db: D1Database, now = new Date().toISOString()): Promise<number> {
@@ -79,7 +80,7 @@ export async function tellWaitsOver(db: D1Database, now = new Date().toISOString
   await db.batch([
     ...tell.map(([memberId, day]) =>
       db
-        .prepare("INSERT INTO notes (id, member_id, message, created_at) VALUES (?, ?, ?, ?)")
+        .prepare("INSERT INTO notes (id, member_id, message, created_at, announce) VALUES (?, ?, ?, ?, 1)")
         .bind(crypto.randomUUID(), memberId, `Your waiting period ended on ${day}, going by the dates you gave. Each study sets its own rule, so ask the clinic before you book a screening.`, now),
     ),
     db.prepare("UPDATE past_studies SET told_at = ?1 WHERE told_at IS NULL AND free_on < ?2").bind(now, today),
