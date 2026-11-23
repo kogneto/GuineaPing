@@ -14,7 +14,7 @@ import { SOURCES } from "./openings/sources";
 import { getProfile, nearByMember, saveProfile } from "./profile";
 import { pushPendingAlerts, pushTest, validKeys, vapidFrom } from "./push";
 import { report } from "./report";
-import { addPastStudy, listPastStudies, removePastStudy } from "./waiting";
+import { addPastStudy, changePastStudy, listPastStudies, removePastStudy } from "./waiting";
 import { isPushEndpoint } from "./webpush";
 import { createWatch, deleteWatch, getWatch, listWatches, parseWatchInput, setFollowing, updateWatch } from "./watches";
 
@@ -284,6 +284,12 @@ app.get("/api/past-studies", async (c) => c.json(await listPastStudies(c.env.DB,
 app.post("/api/past-studies", async (c) => {
   const saved = await addPastStudy(c.env.DB, c.get("me").memberId, await c.req.json().catch(() => null), now());
   return "error" in saved ? c.json(saved, 400) : c.json(saved, 201);
+});
+
+app.put("/api/past-studies/:id", async (c) => {
+  const saved = await changePastStudy(c.env.DB, c.get("me").memberId, c.req.param("id"), await c.req.json().catch(() => null), now());
+  if (!saved) return c.json({ error: "Not found" }, 404);
+  return "error" in saved ? c.json(saved, 400) : c.json(saved);
 });
 
 app.delete("/api/past-studies/:id", async (c) => {

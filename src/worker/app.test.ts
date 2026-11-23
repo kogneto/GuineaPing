@@ -708,6 +708,48 @@ describe("Past studies and waiting periods", () => {
     expect(notes[0]).toMatchObject({ read: false, message: `Your waiting period ended on ${ends}, going by the dates you gave. Each study sets its own rule, so ask the clinic before you book a screening.` });
   });
 
+  it("lets a Member change a Past study of their own, and nobody else's", async () => {
+    const vol = as(app, env, `waitedit${n}@x.org`);
+    const other = as(app, env, `waiteditother${n}@x.org`);
+    const ended = addDays(today(), -10);
+    const made = await vol<PastStudy>("/api/past-studies", "POST", { label: "Celerion", endedOn: ended });
+    const changed = await vol<PastStudy>(`/api/past-studies/${made.json.id}`, "PUT", { label: " Celerion, October ", endedOn: ended, lastDoseOn: addDays(ended, 2), waitDays: 60 });
+    expect(changed.status).toBe(200);
+    expect(changed.json).toEqual({ id: made.json.id, label: "Celerion, October", endedOn: ended, lastDoseOn: addDays(ended, 2), waitDays: 60, freeOn: addDays(ended, 62) });
+    expect((await vol<PastStudy[]>("/api/past-studies")).json).toEqual([changed.json]);
+
+    expect((await vol(`/api/past-studies/${made.json.id}`, "PUT", { endedOn: "not a day" })).status).toBe(400);
+    expect((await vol("/api/past-studies/no-such-id", "PUT", { endedOn: ended })).status).toBe(404);
+    expect((await other(`/api/past-studies/${made.json.id}`, "PUT", { label: "Mine now", endedOn: ended })).status).toBe(404);
+    expect((await vol<PastStudy[]>("/api/past-studies")).json).toEqual([changed.json]);
+  });
+
+  it("still tells a Member once after a Past study is changed", async () => {
+    const vol = as(app, env, `waitretell${n}@x.org`);
+    const ends = addDays(today(), 3);
+    const made = await vol<PastStudy>("/api/past-studies", "POST", { endedOn: addDays(ends, -30) });
+    await tellWaitsOver(env.DB, `${addDays(ends, 1)}T00:17:00.000Z`);
+    expect(await notesOf(vol)).toHaveLength(1);
+
+    // Moved into the future: told again when the new wait ends, and only then.
+    const later = addDays(today(), 40);
+    await vol(`/api/past-studies/${made.json.id}`, "PUT", { endedOn: addDays(later, -30) });
+    await tellWaitsOver(env.DB, `${addDays(ends, 2)}T00:17:00.000Z`);
+    expect(await notesOf(vol)).toHaveLength(1);
+    await tellWaitsOver(env.DB, `${addDays(later, 1)}T00:17:00.000Z`);
+    await tellWaitsOver(env.DB, `${addDays(later, 1)}T01:17:00.000Z`);
+    expect((await notesOf(vol)).map((x) => (x as { message: string }).message)).toEqual([expect.stringContaining(`ended on ${later}`), expect.stringContaining(`ended on ${ends}`)]);
+  });
+
+  it("announces nothing late for a wait changed to be already over", async () => {
+    const vol = as(app, env, `waitpast${n}@x.org`);
+    const made = await vol<PastStudy>("/api/past-studies", "POST", { endedOn: addDays(today(), -5) });
+    await vol(`/api/past-studies/${made.json.id}`, "PUT", { endedOn: addDays(today(), -100) });
+    await tellWaitsOver(env.DB, `${addDays(today(), 1)}T00:17:00.000Z`);
+    await tellWaitsOver(env.DB, `${addDays(today(), 400)}T00:17:00.000Z`);
+    expect(await notesOf(vol)).toEqual([]);
+  });
+
   it("says nothing while another Past study still keeps the Member waiting", async () => {
     const vol = as(app, env, `waittwo${n}@x.org`);
     const first = addDays(today(), 2);
