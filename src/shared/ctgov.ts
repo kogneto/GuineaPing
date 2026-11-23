@@ -154,9 +154,17 @@ function kindsFilter(kinds: Kind[]): string | null {
   return either[0] ?? null;
 }
 
-/** Query parameters for Trials matching `criteria` first posted on or after `since` (YYYY-MM-DD). */
-export function buildParams(criteria: Criteria, since: string): Record<string, string> {
-  const advanced = [`AREA[StudyFirstPostDate]RANGE[${since},MAX]`];
+/**
+ * Which date "since" is measured on. "posted" is the day a Trial first appeared. "updated" is the
+ * day its listing last changed, which is never earlier, so it finds new Trials too, and also old
+ * ones that have only now come to match: a site added, recruiting reopened.
+ */
+export type Since = "posted" | "updated";
+const SINCE_FIELD: Record<Since, string> = { posted: "StudyFirstPostDate", updated: "LastUpdatePostDate" };
+
+/** Query parameters for Trials matching `criteria` posted, or updated, on or after `since` (YYYY-MM-DD). */
+export function buildParams(criteria: Criteria, since: string, by: Since = "posted"): Record<string, string> {
+  const advanced = [`AREA[${SINCE_FIELD[by]}]RANGE[${since},MAX]`];
   if (criteria.phases.length) advanced.push(`AREA[Phase](${criteria.phases.join(" OR ")})`);
   const ofKinds = kindsFilter(criteria.kinds);
   if (ofKinds) advanced.push(ofKinds);
@@ -166,7 +174,7 @@ export function buildParams(criteria: Criteria, since: string): Record<string, s
   const params: Record<string, string> = {
     format: "json",
     fields: FIELDS,
-    sort: "StudyFirstPostDate:desc",
+    sort: `${SINCE_FIELD[by]}:desc`,
     "filter.advanced": advanced.join(" AND "),
     "filter.overallStatus": (criteria.statuses.length ? criteria.statuses : STATUSES).join(","),
   };
@@ -185,6 +193,8 @@ export type FindOptions = {
   maxPages?: number;
   /** Where to measure "nearest site" from when the Criteria have no ZIP code of their own. */
   nearestTo?: Near | null;
+  /** Which date `since` is measured on; "posted" unless said. */
+  by?: Since;
 };
 
 /** A Trial that matches, with its sites and their map points, for measuring distances per Member. */
@@ -203,12 +213,12 @@ export function nearestOf(sites: Site[], points: { lat: number; lon: number }[])
 }
 
 /**
- * Every Trial matching `criteria` first posted on or after `since`, newest first, each with its
- * sites. Follows nextPageToken, and stops after `maxPages` pages so one over-broad Watch can't
- * exhaust a Check.
+ * Every Trial matching `criteria` posted (or, with `by: "updated"`, changed) on or after `since`,
+ * newest first, each with its sites. Follows nextPageToken, and stops after `maxPages` pages so
+ * one over-broad Watch can't exhaust a Check.
  */
-export async function findMatches(criteria: Criteria, since: string, get: FetchJson, { pageSize = 100, maxPages = 5, nearestTo = null }: FindOptions = {}): Promise<Match[]> {
-  const base = { ...buildParams(criteria, since), pageSize: String(pageSize) };
+export async function findMatches(criteria: Criteria, since: string, get: FetchJson, { pageSize = 100, maxPages = 5, nearestTo = null, by = "posted" }: FindOptions = {}): Promise<Match[]> {
+  const base = { ...buildParams(criteria, since, by), pageSize: String(pageSize) };
   const matches: Match[] = [];
   let token: string | undefined;
   for (let page = 0; page < maxPages; page++) {
@@ -227,6 +237,21 @@ export async function findMatches(criteria: Criteria, since: string, get: FetchJ
 /** The same search, for callers that only show the Trials. */
 export async function findTrials(criteria: Criteria, since: string, get: FetchJson, options: FindOptions = {}): Promise<Trial[]> {
   return (await findMatches(criteria, since, get, options)).map((m) => m.trial);
+}
+
+/** The most Trials a Watch may match and still have every one of them recorded. One request's worth. */
+export const MAX_KNOWN = 1000;
+
+/**
+ * The NCT ID of every Trial that matches `criteria` today, whenever it was posted, or null when
+ * there are more than MAX_KNOWN. (RANGE[MIN,MAX] on the last-update date matches every listing,
+ * and a page of 1000 is the most the API gives: both checked live on 2026-11-23.)
+ */
+export async function everyMatch(criteria: Criteria, get: FetchJson): Promise<string[] | null> {
+  const params = new URLSearchParams({ ...buildParams(criteria, "MIN", "updated"), fields: "NCTId", pageSize: String(MAX_KNOWN) });
+  const data = (await get(`${API_URL}?${params}`)) as { studies?: unknown[]; nextPageToken?: string };
+  if (data.nextPageToken) return null;
+  return (data.studies ?? []).map((study) => (study as Study).protocolSection?.identificationModule?.nctId ?? "").filter((id) => /^NCT\d{8}$/.test(id));
 }
 
 type Study = {

@@ -3,7 +3,7 @@
  * for the first time, and turn that into Alerts, at most one per Member per Trial.
  */
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
-import { fetchJson, findMatches, nearestOf, withDefaults, type FetchJson, type Match } from "../shared/ctgov";
+import { everyMatch, fetchJson, findMatches, findTrials, nearestOf, withDefaults, type FetchJson, type Match } from "../shared/ctgov";
 import { createAlerts, createdAmong, type AlertToCreate } from "./alerts";
 import { nearByMember } from "./profile";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
@@ -24,6 +24,21 @@ const STALE_MS = 24 * 60 * 60 * 1000;
 
 export const daysBefore = (iso: string, days: number) =>
   new Date(Date.parse(iso) - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+/**
+ * What a Watch matches today, to be recorded as already seen. `knows` says how complete that is:
+ * "all" when every matching Trial is in `nctIds`, so a Check may alert on any Trial it has not
+ * seen; "recent" when the Watch matches too many to record, and only the last 30 days' are.
+ */
+export type Known = { knows: "all" | "recent"; nctIds: string[] };
+
+/** Asks ClinicalTrials.gov what `criteria` match today. Throws when it can't be reached. */
+export async function knownMatches(criteria: Criteria, get: FetchJson, now = new Date().toISOString()): Promise<Known> {
+  const all = await everyMatch(criteria, get);
+  if (all) return { knows: "all", nctIds: all };
+  const recent = await findTrials(criteria, daysBefore(now, RECENT_DAYS), get, { pageSize: 100, maxPages: 10 });
+  return { knows: "recent", nctIds: recent.map((t) => t.nctId) };
+}
 
 export type CheckResult = {
   /** False only when no Watch could be checked at all. */
@@ -47,21 +62,31 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
   // Every Watch is asked about, even one nobody follows right now: it must keep recording what it
   // finds, or whoever follows it next would be alerted on Trials posted before they followed.
   const { results: watches } = await db
-    .prepare("SELECT w.id, w.name, w.criteria, w.private, w.checked_at, w.created_at FROM watches w WHERE w.deleted_at IS NULL")
-    .all<{ id: string; name: string; criteria: string; private: number; checked_at: string | null; created_at: string }>();
+    .prepare("SELECT w.id, w.name, w.criteria, w.private, w.checked_at, w.created_at, w.knows FROM watches w WHERE w.deleted_at IS NULL")
+    .all<{ id: string; name: string; criteria: string; private: number; checked_at: string | null; created_at: string; knows: "all" | "recent" | null }>();
 
   // Each Watch looks back from its own last successful check, so one that fails for days still
   // misses nothing once it works again, and never holds the others back.
   const found: { watchId: string; watchName: string; isPrivate: boolean; matches: Match[] }[] = [];
   const failed: { id: string; error: string }[] = [];
+  // Watches made before `knows` was kept: what each turns out to match today, recorded with this Check.
+  const learned: { watchId: string; known: Known }[] = [];
   let earliest = daysBefore(now, OVERLAP_DAYS);
   for (const w of watches) {
     const since = daysBefore(w.checked_at ?? w.created_at, OVERLAP_DAYS);
     if (since < earliest) earliest = since;
+    const criteria = withDefaults(JSON.parse(w.criteria) as Partial<Criteria>);
     try {
-      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, matches: await findMatches(withDefaults(JSON.parse(w.criteria) as Partial<Criteria>), since, get) });
+      // A Watch that knows everything it matched looks at Trials changed since its last check, so
+      // it also finds an old Trial that has only now come to match. Any other looks at new ones.
+      const matches = await findMatches(criteria, since, get, w.knows === "all" ? { by: "updated", maxPages: 10 } : {});
+      found.push({ watchId: w.id, watchName: w.name, isPrivate: w.private === 1, matches });
+      // Learned after this Check's own look, which was by first-posted date: so a Trial posted
+      // this hour still causes its Alert, and everything older is recorded without one.
+      if (w.knows === null) learned.push({ watchId: w.id, known: await knownMatches(criteria, get, now) });
     } catch (err) {
-      failed.push({ id: w.id, error: message(err) });
+      // Not learning is no failure: the Watch was checked, and the next Check tries again.
+      if (!found.some((f) => f.watchId === w.id)) failed.push({ id: w.id, error: message(err) });
     }
   }
 
@@ -143,6 +168,10 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
       .prepare("UPDATE watches SET checked_at = ?1, failing_since = NULL, check_error = NULL WHERE id IN (SELECT value FROM json_each(?2))")
       .bind(now, JSON.stringify(found.map((f) => f.watchId))),
     markFailed,
+    ...learned.flatMap(({ watchId, known }) => [
+      db.prepare("INSERT OR IGNORE INTO watch_trials (watch_id, nct_id, found_at) SELECT ?1, value, ?2 FROM json_each(?3)").bind(watchId, now, JSON.stringify(known.nctIds)),
+      db.prepare("UPDATE watches SET knows = ? WHERE id = ? AND knows IS NULL").bind(known.knows, watchId),
+    ]),
   ];
   const [, inserted] = await db.batch<{ id: string }>(statements);
   const newAlerts: NewAlert[] = createdAmong(wanted, inserted);

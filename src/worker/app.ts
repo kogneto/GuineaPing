@@ -5,7 +5,7 @@ import { fetchJson, findTrials, forList, normalizeCriteria } from "../shared/ctg
 import { accessFrom, setAllowed } from "./access";
 import { getAlert, listAlerts, markRead, sendAlert, sortAlert } from "./alerts";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
-import { checkAndPush, checkStatus, daysBefore, RECENT_DAYS } from "./check";
+import { checkAndPush, checkStatus, daysBefore, knownMatches, RECENT_DAYS, type Known } from "./check";
 import { listClinics } from "./clinics";
 import { addMember, listMembers, looksLikeEmail, removeMember } from "./members";
 import { plainFetch, readDueSource } from "./openings/read";
@@ -38,11 +38,11 @@ app.use("/api/*", requireMember);
 const now = () => new Date().toISOString();
 
 /**
- * Recent matches: newest first, capped for display; `all` pages further, for seeding. `nearestTo`
- * is where the viewer is, for Criteria that have no ZIP code of their own.
+ * Recent matches: newest first, capped for display. `nearestTo` is where the viewer is, for
+ * Criteria that have no ZIP code of their own.
  */
-async function recentMatches(criteria: Criteria, all = false, nearestTo: Near | null = null): Promise<Trial[]> {
-  const trials = await findTrials(criteria, daysBefore(now(), RECENT_DAYS), fetchJson, { ...(all ? { pageSize: 100, maxPages: 10 } : { pageSize: 50, maxPages: 1 }), nearestTo });
+async function recentMatches(criteria: Criteria, nearestTo: Near | null = null): Promise<Trial[]> {
+  const trials = await findTrials(criteria, daysBefore(now(), RECENT_DAYS), fetchJson, { pageSize: 50, maxPages: 1, nearestTo });
   return trials.map(forList);
 }
 
@@ -76,13 +76,13 @@ app.get("/api/watches", async (c) => c.json(await listWatches(c.env.DB, c.get("m
 app.post("/api/watches", async (c) => {
   const input = await readWatchInput(c.env.DB, await c.req.json().catch(() => null));
   if ("error" in input) return c.json(input, 400);
-  let recent: Trial[];
+  let known: Known;
   try {
-    recent = await recentMatches(input.criteria, true);
+    known = await knownMatches(input.criteria, fetchJson);
   } catch {
     return c.json(upstreamError, 502);
   }
-  const id = await createWatch(c.env.DB, c.get("me"), input, recent, now());
+  const id = await createWatch(c.env.DB, c.get("me"), input, known, now());
   return c.json(await getWatch(c.env.DB, c.get("me"), id), 201);
 });
 
@@ -98,15 +98,15 @@ app.put("/api/watches/:id", async (c) => {
   if (!existing.isOwner) return c.json({ error: "Only the Watch's Owner can change it" }, 403);
   const input = await readWatchInput(c.env.DB, await c.req.json().catch(() => null));
   if ("error" in input) return c.json(input, 400);
-  let recent: Trial[] | null = null;
+  let known: Known | null = null;
   if (JSON.stringify(input.criteria) !== JSON.stringify(existing.criteria)) {
     try {
-      recent = await recentMatches(input.criteria, true);
+      known = await knownMatches(input.criteria, fetchJson);
     } catch {
       return c.json(upstreamError, 502);
     }
   }
-  await updateWatch(c.env.DB, me, existing.id, input, recent, now());
+  await updateWatch(c.env.DB, me, existing.id, input, known, now());
   return c.json(await getWatch(c.env.DB, me, existing.id));
 });
 
@@ -128,7 +128,7 @@ app.get("/api/watches/:id/recent", async (c) => {
   const watch = await getWatch(c.env.DB, c.get("me"), c.req.param("id"));
   if (!watch) return c.json({ error: "No such Watch" }, 404);
   try {
-    return c.json(await recentMatches(watch.criteria, false, await myNear(c)));
+    return c.json(await recentMatches(watch.criteria, await myNear(c)));
   } catch {
     return c.json(upstreamError, 502);
   }
@@ -164,7 +164,7 @@ app.post("/api/preview", async (c) => {
   const criteria = await readCriteria(c.env.DB, (await c.req.json().catch(() => null))?.criteria);
   if ("error" in criteria) return c.json(criteria, 400);
   try {
-    return c.json(await recentMatches(criteria, false, await myNear(c)));
+    return c.json(await recentMatches(criteria, await myNear(c)));
   } catch {
     return c.json(upstreamError, 502);
   }
