@@ -1,15 +1,9 @@
 import { useEffect, useState } from "react";
 import type { Watch } from "../../shared/api";
-import { kindsAsked } from "../../shared/plain";
+import { criteriaLine } from "../../shared/criteria";
 import { api } from "../api";
 import { Illustration } from "../components/Illustration";
 import { Link } from "../router";
-
-export function describeCriteria(w: Watch): string {
-  const c = w.criteria;
-  const who = [c.healthy ? "Healthy volunteers" : "", c.near ? `within ${c.near.miles} miles of ${c.near.zip}` : ""].filter(Boolean).join(" ");
-  return [[...c.conditions, ...c.terms].join(", "), who, kindsAsked(c.kinds)].filter(Boolean).join(" · ");
-}
 
 export function FollowButton({ watch, onChange }: { watch: Watch; onChange: (w: Watch) => void }) {
   const [busy, setBusy] = useState(false);
@@ -68,7 +62,7 @@ export function WatchesPage() {
               {w.private && <span className="tag">Private</span>}
               {w.isOwner && <span className="tag">Yours</span>}
               {w.failing && <span className="tag">Not checked lately</span>}
-              <div className="muted small">{describeCriteria(w)}</div>
+              <div className="muted small">{criteriaLine(w.criteria)}</div>
             </div>
             <FollowButton watch={w} onChange={replace} />
           </li>

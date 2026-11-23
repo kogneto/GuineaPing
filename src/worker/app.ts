@@ -1,7 +1,8 @@
 import * as Sentry from "@sentry/cloudflare";
 import { Hono, type Context } from "hono";
 import { type Criteria, type Near, type Device, type MemberList, type Trial, type WatchInput } from "../shared/api";
-import { fetchJson, findTrials, forList, normalizeCriteria } from "../shared/ctgov";
+import { normalizeCriteria, sameCriteria } from "../shared/criteria";
+import { fetchJson, findTrials, forList } from "../shared/ctgov";
 import { accessFrom, setAllowed } from "./access";
 import { getAlert, listAlerts, markRead, sendAlert, sortAlert } from "./alerts";
 import { isDevRequest, requireMember, type AppEnv } from "./auth";
@@ -99,7 +100,7 @@ app.put("/api/watches/:id", async (c) => {
   const input = await readWatchInput(c.env.DB, await c.req.json().catch(() => null));
   if ("error" in input) return c.json(input, 400);
   let known: Known | null = null;
-  if (JSON.stringify(input.criteria) !== JSON.stringify(existing.criteria)) {
+  if (!sameCriteria(input.criteria, existing.criteria)) {
     try {
       known = await knownMatches(input.criteria, fetchJson);
     } catch {

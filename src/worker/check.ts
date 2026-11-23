@@ -3,7 +3,8 @@
  * for the first time, and turn that into Alerts, at most one per Member per Trial.
  */
 import type { CheckStatus, Criteria, Trial } from "../shared/api";
-import { everyMatch, fetchJson, findMatches, findTrials, nearestOf, withDefaults, type FetchJson, type Match } from "../shared/ctgov";
+import { storedCriteria } from "../shared/criteria";
+import { everyMatch, fetchJson, findMatches, findTrials, nearestOf, type FetchJson, type Match } from "../shared/ctgov";
 import { createAlerts, createdAmong, type AlertToCreate } from "./alerts";
 import { nearByMember } from "./profile";
 import { pushPendingAlerts, vapidFrom, type NewAlert } from "./push";
@@ -75,7 +76,7 @@ export async function runCheck(db: D1Database, get: FetchJson, now = new Date().
   for (const w of watches) {
     const since = daysBefore(w.checked_at ?? w.created_at, OVERLAP_DAYS);
     if (since < earliest) earliest = since;
-    const criteria = withDefaults(JSON.parse(w.criteria) as Partial<Criteria>);
+    const criteria = storedCriteria(w.criteria);
     try {
       // A Watch that knows everything it matched looks at Trials changed since its last check, so
       // it also finds an old Trial that has only now come to match. Any other looks at new ones.
