@@ -205,7 +205,7 @@ export function nearestOf(sites: Site[], points: { lat: number; lon: number }[])
 /**
  * Every Trial matching `criteria` first posted on or after `since`, newest first, each with its
  * sites. Follows nextPageToken, and stops after `maxPages` pages so one over-broad Watch can't
- * exhaust a Check. This is the one place that decides what "matches since" means.
+ * exhaust a Check.
  */
 export async function findMatches(criteria: Criteria, since: string, get: FetchJson, { pageSize = 100, maxPages = 5, nearestTo = null }: FindOptions = {}): Promise<Match[]> {
   const base = { ...buildParams(criteria, since), pageSize: String(pageSize) };
