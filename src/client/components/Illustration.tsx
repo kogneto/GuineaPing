@@ -1,4 +1,4 @@
-/** The guinea pig scenes in public/art/scenes. All are 480×480 WebP squares (full-size originals are in art/source). */
+/** The guinea pig scenes in public/art/scenes. All are 480×480 WebP squares with clear backgrounds (full-size originals are in art/source; art/clear-background.mjs clears a new one). */
 const ART = {
   alertBell: "/art/scenes/alert-bell.webp",
   alertExclaim: "/art/scenes/alert-exclaim.webp",
@@ -20,8 +20,8 @@ const ART = {
 export type ArtName = keyof typeof ART;
 
 /**
- * A decorative illustration on a cream plate, so the charcoal outlines read
- * in dark mode too. It carries no meaning of its own: the text beside it does.
+ * A decorative illustration. The scenes have clear backgrounds, so they sit on whatever is behind
+ * them, light or dark. It carries no meaning of its own: the text beside it does.
  */
 export function Illustration({ name, size = "md" }: { name: ArtName; size?: "xs" | "sm" | "md" | "hero" }) {
   // The scenes are mostly canvas, so the small "xs" frame crops in on the character.
