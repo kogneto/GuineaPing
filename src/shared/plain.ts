@@ -144,7 +144,8 @@ export function keyFacts(trial: Trial): string[] {
   // "No phase" is only worth the room on a phone when there is no kind to show instead.
   const phase = kind && trial.phases.join() === "NA" ? null : phaseText(trial.phases);
   // The kind comes before the phase: it is the shorter of the two, and what a volunteer picks by.
-  return [statusText(trial.status), nearestText(trial), kind, phase, agesText(trial.minimumAge, trial.maximumAge)].filter(
+  const points = trial.points ? (trial.points === 1 ? "1 point to check" : `${trial.points} points to check`) : null;
+  return [statusText(trial.status), nearestText(trial), kind, phase, agesText(trial.minimumAge, trial.maximumAge), points].filter(
     (s): s is string => !!s,
   );
 }

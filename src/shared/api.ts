@@ -71,6 +71,8 @@ export type Trial = {
   nearest?: { place: string; miles: number } | null;
   /** The Clinics GuineaPing knows that this Trial's sites name (ids from src/shared/clinics.ts). Left out when none. */
   clinics?: string[];
+  /** How many Points to check its Entry criteria have. Only on Trials in lists, which leave the criteria out. */
+  points?: number;
   /** Who can join, when the study says more than an age range. Absent on Alerts made before this was kept. */
   eligibility?: Eligibility;
   url: string;
@@ -94,6 +96,13 @@ export type Profile = {
   miles: number | null;
   healthyVolunteer: boolean;
   conditions: string[];
+  /** Height in inches and weight in pounds, as the Member gives them. BMI is worked out, never stored. */
+  heightIn: number | null;
+  weightLb: number | null;
+  /** Whether they use nicotine in any form; null when they haven't said. */
+  nicotine: "yes" | "no" | null;
+  /** The day of their last blood or plasma donation (YYYY-MM-DD). */
+  lastDonationOn: string | null;
 };
 
 export type Me = { memberId: string; email: string };

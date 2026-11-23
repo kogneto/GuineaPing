@@ -504,9 +504,9 @@ describe("Profiles", () => {
 
   it("keeps a Member's Profile to themselves and checks what goes in", async () => {
     const mum = as(app, env, `prof${n}@x.org`);
-    expect((await mum<Profile>("/api/profile")).json).toEqual({ birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: true, conditions: [] });
+    expect((await mum<Profile>("/api/profile")).json).toEqual({ birthYear: null, sex: null, zip: null, miles: null, healthyVolunteer: true, conditions: [], heightIn: null, weightLb: null, nicotine: null, lastDonationOn: null });
     const saved = await mum<Profile>("/api/profile", "PUT", { birthYear: "1981", sex: "FEMALE", zip: " 02139 ", healthyVolunteer: true, conditions: [" MS ", "MS", ""] });
-    expect(saved.json).toEqual({ birthYear: 1981, sex: "FEMALE", zip: "02139", miles: 50, healthyVolunteer: true, conditions: ["MS"] });
+    expect(saved.json).toEqual({ birthYear: 1981, sex: "FEMALE", zip: "02139", miles: 50, healthyVolunteer: true, conditions: ["MS"], heightIn: null, weightLb: null, nicotine: null, lastDonationOn: null });
     expect((await mum<Profile>("/api/profile")).json).toEqual(saved.json);
     expect((await as(app, env, `other${n}@x.org`)<Profile>("/api/profile")).json.zip).toBeNull();
     for (const bad of [{ birthYear: 1700 }, { sex: "ALL" }, { zip: "00000" }, { zip: "02139", miles: 7 }]) {
@@ -713,5 +713,40 @@ describe("Past studies and waiting periods", () => {
     expect((await mum(`/api/members/${leaver.id}`, "DELETE")).status).toBe(204);
     const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM past_studies WHERE member_id = ?").bind(leaver.id).first<{ n: number }>();
     expect(left?.n).toBe(0);
+  });
+});
+
+describe("Points to check", () => {
+  const withCriteria = (nctId: string, eligibilityCriteria: string) => {
+    const s = study(nctId);
+    return { protocolSection: { ...s.protocolSection, eligibilityModule: { eligibilityCriteria } } };
+  };
+
+  it("keeps the new Profile facts to their Member and checks what goes in", async () => {
+    const vol = as(app, env, `facts${n}@x.org`);
+    const today = new Date().toISOString().slice(0, 10);
+    const saved = await vol<Profile>("/api/profile", "PUT", { healthyVolunteer: true, heightIn: 69.04, weightLb: "165", nicotine: "no", lastDonationOn: today });
+    expect(saved.status).toBe(200);
+    expect(saved.json).toMatchObject({ heightIn: 69, weightLb: 165, nicotine: "no", lastDonationOn: today });
+    expect((await vol<Profile>("/api/profile")).json).toEqual(saved.json);
+    expect((await as(app, env, `factsother${n}@x.org`)<Profile>("/api/profile")).json).toMatchObject({ heightIn: null, weightLb: null, nicotine: null, lastDonationOn: null });
+    for (const bad of [{ heightIn: 10 }, { heightIn: "x" }, { weightLb: 5 }, { weightLb: 5000 }, { nicotine: "sometimes" }, { lastDonationOn: "2999-01-01" }, { lastDonationOn: "yesterday" }]) {
+      expect((await vol("/api/profile", "PUT", bad)).status, JSON.stringify(bad)).toBe(400);
+    }
+    // Saving without them clears them: every fact is optional.
+    expect((await vol<Profile>("/api/profile", "PUT", { healthyVolunteer: true })).json).toMatchObject({ heightIn: null, weightLb: null, nicotine: null, lastDonationOn: null });
+  });
+
+  it("shows the count in the Alert list and the Entry criteria only on the Alert itself", async () => {
+    const vol = as(app, env, `points${n}@x.org`);
+    const cond = `points${n}`;
+    await vol("/api/watches", "POST", watchBody(cond));
+    catalog[cond] = [withCriteria("NCT94000001", "Inclusion Criteria:\n\n* BMI 18 to 30 kg/m2\n* Non-smoker\n\nExclusion Criteria:\n\n* History of liver disease")];
+    await check();
+    const [listed] = (await alertsOf(vol)) as AlertItem[];
+    expect(listed!.trial.points).toBe(2);
+    expect(listed!.trial).not.toHaveProperty("eligibility");
+    const full = (await vol<AlertItem>(`/api/alerts/${listed!.id}`)).json;
+    expect(full.trial.eligibility?.criteria).toContain("BMI 18 to 30");
   });
 });
