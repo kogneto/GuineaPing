@@ -312,10 +312,18 @@ async function syncAccess(c: Context<AppEnv>, email: string, allowed: boolean) {
 
 const accessTrouble = { error: "Couldn't change the sign-in list at Cloudflare just now, so nothing was changed. Please try again in a minute." };
 
-app.get("/api/members", async (c) => c.json({ members: await listMembers(c.env.DB, c.get("me")), canChange: canChangeMembers(c) } satisfies MemberList));
+const organiserOnly = { error: "Only the person who runs GuineaPing can do that." };
+
+/** The group, for the Organiser. Any other Member is sent only themselves. */
+app.get("/api/members", async (c) => {
+  const me = c.get("me");
+  const members = await listMembers(c.env.DB, me);
+  return c.json({ members: me.organiser ? members : members.filter((m) => m.isYou), canChange: canChangeMembers(c) } satisfies MemberList);
+});
 
 /** Invites someone: they are allowed to sign in, and become a Member. */
 app.post("/api/members", async (c) => {
+  if (!c.get("me").organiser) return c.json(organiserOnly, 403);
   if (!canChangeMembers(c)) return c.json({ error: "Inviting isn't switched on yet" }, 503);
   const email = String(((await c.req.json().catch(() => null)) as { email?: unknown } | null)?.email ?? "").trim().toLowerCase();
   if (!looksLikeEmail(email)) return c.json({ error: "Enter a full email address" }, 400);
@@ -332,6 +340,8 @@ app.post("/api/members", async (c) => {
 
 /** Removes a Member, or lets the signed-in Member leave. */
 app.delete("/api/members/:id", async (c) => {
+  // The Organiser removes anyone; any other Member can only leave.
+  if (!c.get("me").organiser && c.req.param("id") !== c.get("me").memberId) return c.json(organiserOnly, 403);
   if (!canChangeMembers(c)) return c.json({ error: "Removing Members isn't switched on yet" }, 503);
   const target = await c.env.DB.prepare("SELECT email FROM members WHERE id = ? AND removed_at IS NULL").bind(c.req.param("id")).first<{ email: string }>();
   if (!target) return c.json({ error: "No such Member" }, 404);

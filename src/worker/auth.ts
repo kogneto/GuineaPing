@@ -45,8 +45,12 @@ async function memberFor(db: D1Database, rawEmail: string): Promise<Me | null> {
     .prepare("INSERT INTO members (id, email, created_at) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING")
     .bind(crypto.randomUUID(), email, new Date().toISOString())
     .run();
-  const row = await db.prepare("SELECT id, removed_at FROM members WHERE email = ?").bind(email).first<{ id: string; removed_at: string | null }>();
-  return row!.removed_at ? null : { memberId: row!.id, email };
+  // The Organiser is whoever has been a Member longest: no setting to keep, and never nobody.
+  const row = await db
+    .prepare("SELECT id, removed_at, (SELECT id FROM members WHERE removed_at IS NULL ORDER BY created_at, id LIMIT 1) AS organiser FROM members WHERE email = ?")
+    .bind(email)
+    .first<{ id: string; removed_at: string | null; organiser: string | null }>();
+  return row!.removed_at ? null : { memberId: row!.id, email, organiser: row!.organiser === row!.id };
 }
 
 export const requireMember: MiddlewareHandler<AppEnv> = async (c, next) => {

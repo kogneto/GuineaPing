@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import type { MemberItem, MemberList } from "../../shared/api";
 import { api } from "../api";
 
-/** Who is in the group. Any Member can invite someone or remove a Member, themselves included. */
-export function MembersPage() {
+/** Who is in the group: a section of Settings that only the Organiser is shown. They can invite someone or remove a Member. */
+export function Members() {
   const [list, setList] = useState<MemberList | null>(null);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -39,7 +39,7 @@ export function MembersPage() {
 
   const remove = (m: MemberItem) => {
     const question = m.isYou
-      ? "Leave GuineaPing? You'll stop getting Alerts. Watches you own pass to whoever has followed them longest, or are deleted if nobody else follows them."
+      ? "Leave GuineaPing? You'll stop getting Alerts, and whoever has been a Member longest after you will run the group. Watches you own pass to whoever has followed them longest, or are deleted if nobody else follows them."
       : `Remove ${m.email}? They'll stop getting Alerts. Watches they own pass to whoever has followed them longest, or are deleted if nobody else follows them.`;
     if (!confirm(question)) return;
     return run(async () => {
@@ -55,9 +55,9 @@ export function MembersPage() {
 
   if (!list) return message ? <p className="error">{message.text}</p> : <p className="muted">Loading…</p>;
   return (
-    <>
-      <h1>Members</h1>
-      <p className="muted">Everyone who can sign in to GuineaPing. Who follows which Watch is never shown.</p>
+    <section>
+      <h2>Members</h2>
+      <p className="muted">Everyone who can sign in to GuineaPing. Only you see this list, because you run the group. Who follows which Watch is never shown.</p>
       <ul className="watches">
         {list.members.map((m) => (
           <li key={m.id}>
@@ -93,6 +93,6 @@ export function MembersPage() {
           {message.text}
         </p>
       )}
-    </>
+    </section>
   );
 }

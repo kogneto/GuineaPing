@@ -1,3 +1,4 @@
+import { Link } from "../router";
 import { useCallback, useEffect, useState } from "react";
 import type { Device } from "../../shared/api";
 import { ago, api, ApiError } from "../api";
@@ -84,6 +85,9 @@ export function DevicesPage() {
 
   return (
     <div className="narrow">
+      <p className="crumb">
+        <Link to="/settings">← Settings</Link>
+      </p>
       <div className="heading-row">
         <Illustration name="notifications" size="xs" />
         <h1>Devices</h1>

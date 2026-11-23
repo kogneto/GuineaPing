@@ -106,9 +106,10 @@ export type Profile = {
   lastDonationOn: string | null;
 };
 
-export type Me = { memberId: string; email: string };
+/** `organiser`: whether this Member runs the group (CONTEXT.md, Organiser). */
+export type Me = { memberId: string; email: string; organiser: boolean };
 
-/** A Member as other Members see them: an email address and how they joined. */
+/** A Member as the Organiser sees them: an email address and how they joined. */
 export type MemberItem = { id: string; email: string; since: string; invitedBy: string | null; isYou: boolean };
 /** `canChange` is false until inviting and removing are switched on for this deployment. */
 export type MemberList = { members: MemberItem[]; canChange: boolean };
