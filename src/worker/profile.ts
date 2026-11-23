@@ -3,7 +3,7 @@
  * says where "near you" is for Trials found by a Watch with no ZIP code of its own.
  */
 import { DISTANCES, SEXES, type Near, type Profile, type Sex } from "../shared/api";
-import { isDay } from "../shared/waiting";
+import { isDay } from "../shared/days";
 
 type Row = { birth_year: number | null; sex: Sex | null; zip: string | null; miles: number | null; lat: number | null; lon: number | null; healthy: number; conditions: string; height_in: number | null; weight_lb: number | null; nicotine: "yes" | "no" | null; last_donation_on: string | null };
 

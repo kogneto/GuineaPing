@@ -1,16 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { DEFAULT_WAIT_DAYS, MAX_LABEL_CHARS, MAX_WAIT_DAYS, daysUntil, freeOn, isDay, type PastStudy } from "../../shared/waiting";
+import { daysUntil, isDay, sayDay, todayHere } from "../../shared/days";
+import { DEFAULT_WAIT_DAYS, MAX_LABEL_CHARS, MAX_WAIT_DAYS, freeOn, type PastStudy } from "../../shared/waiting";
 import { api } from "../api";
 import { Link } from "../router";
-
-/** Today where the Member is, as a plain day. */
-const today = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-};
-
-/** A plain day as a person reads it: "10 December 2026". */
-const sayDay = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
 
 /** The latest day any of these keeps the Member waiting until; null when none does. */
 const waitingUntil = (studies: PastStudy[], now: string) => studies.map((s) => s.freeOn).filter((day) => day > now).sort().pop() ?? null;
@@ -23,7 +15,7 @@ export function WaitingLine() {
   useEffect(() => {
     api<PastStudy[]>("/api/past-studies").then(setStudies, () => {});
   }, []);
-  const until = waitingUntil(studies, today());
+  const until = waitingUntil(studies, todayHere());
   if (!until) return null;
   return (
     <p className="callout">
@@ -73,7 +65,7 @@ export function WaitingPeriods() {
     await load();
   };
 
-  const now = today();
+  const now = todayHere();
   const until = studies ? waitingUntil(studies, now) : null;
   const days = /^\d{1,3}$/.test(waitDays.trim()) ? Number(waitDays.trim()) : null;
   const wouldBeFree = isDay(endedOn) && (!lastDoseOn || isDay(lastDoseOn)) && days !== null ? freeOn(endedOn, lastDoseOn || null, days) : null;
