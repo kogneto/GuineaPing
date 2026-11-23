@@ -208,5 +208,7 @@ export type ClinicItem = {
   refused: boolean;
   /** Whether this Member asked for a Push when this Clinic's list shows a new Opening. */
   pushNew: boolean;
+  /** Whether this Member took the Clinic off their own list. It is still sent, so they can put it back. */
+  offList: boolean;
   openings: Opening[];
 };

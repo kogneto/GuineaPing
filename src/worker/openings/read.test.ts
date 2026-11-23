@@ -15,7 +15,7 @@ beforeAll(async () => {
 });
 afterAll(() => dispose());
 beforeEach(async () => {
-  await env.DB.batch([env.DB.prepare("DELETE FROM clinic_openings"), env.DB.prepare("DELETE FROM clinic_sources"), env.DB.prepare("DELETE FROM opening_marks"), env.DB.prepare("DELETE FROM clinic_pushes")]);
+  await env.DB.batch([env.DB.prepare("DELETE FROM clinic_openings"), env.DB.prepare("DELETE FROM clinic_sources"), env.DB.prepare("DELETE FROM opening_marks"), env.DB.prepare("DELETE FROM clinic_pushes"), env.DB.prepare("DELETE FROM clinics_off_list")]);
 });
 
 const PAGE = "https://www.fortreaclinicaltrials.com/en-us/clinical-research/browse-studies";
@@ -160,6 +160,31 @@ describe("Pushes for new Openings", () => {
     expect((await ann("/api/clinics/push", "POST", { id: linkOnly.id, on: true })).status).toBe(400);
     expect((await ann("/api/clinics/push", "POST", { id: "nowhere", on: true })).status).toBe(404);
     expect((await ann("/api/clinics/push", "POST", { id: "fortrea-madison" })).status).toBe(400);
+  });
+
+  it("stop for a Clinic the Member takes off their list, and stay off when it is put back", async () => {
+    const ann = await memberWithDevice("offlist");
+    const bob = as(app, env, `offlistbob${n}@x`);
+    await ann.who("/api/clinics/push", "POST", { id: "fortrea-madison", on: true });
+    expect((await ann.who("/api/clinics/off-list", "POST", { id: "fortrea-madison", off: true })).status).toBe(200);
+    const madison = async (who: typeof bob) => (await who<ClinicItem[]>("/api/clinics")).json.find((c) => c.id === "fortrea-madison")!;
+    expect(await madison(ann.who)).toMatchObject({ offList: true, pushNew: false });
+    expect(await madison(bob)).toMatchObject({ offList: false });
+    expect((await ann.who("/api/clinics/push", "POST", { id: "fortrea-madison", on: true })).status).toBe(400);
+    const service = pushService();
+    await pushNewOpenings(env.DB, vapid(), "fortrea", [fresh("a")], service.post);
+    expect(service.calls).toEqual([]);
+    await ann.who("/api/clinics/off-list", "POST", { id: "fortrea-madison", off: false });
+    expect(await madison(ann.who)).toMatchObject({ offList: false, pushNew: false });
+  });
+
+  it("takes any Clinic off a list, read or not, but not one that doesn't exist", async () => {
+    const ann = as(app, env, `anyoff${n}@x`);
+    const linkOnly = (await ann<ClinicItem[]>("/api/clinics")).json.find((c) => !c.read)!;
+    expect((await ann("/api/clinics/off-list", "POST", { id: linkOnly.id, off: true })).status).toBe(200);
+    expect((await ann<ClinicItem[]>("/api/clinics")).json.filter((c) => c.offList).map((c) => c.id)).toEqual([linkOnly.id]);
+    expect((await ann("/api/clinics/off-list", "POST", { id: "nowhere", off: true })).status).toBe(404);
+    expect((await ann("/api/clinics/off-list", "POST", { id: linkOnly.id })).status).toBe(400);
   });
 
   it("name the Clinic and give the entry in its own words", () => {
