@@ -87,6 +87,25 @@ describe("Altasciences Los Angeles", () => {
   });
 });
 
+describe("Altasciences Los Angeles, a study listed in English and in Spanish", () => {
+  const english = page("altasciences-la.html");
+  const spanish = english.replace(/N-38160/g, "N-38160 (ES)").replace(/n-38160-en-1/g, "n-38160-es-1");
+
+  it("is one Opening, the English one", () => {
+    const found = altasciencesLa.parse([english, spanish]);
+    expect(found.map((f) => f.code)).toEqual(["S-38170", "S-40910", "N-38160"]);
+    expect(found.map((f) => f.url)).not.toContain("https://participantsla.altasciences.com/current-studies/n-38160-es-1");
+    // Whichever page the Spanish copy comes on.
+    expect(altasciencesLa.parse([spanish, english]).map((f) => f.code).sort()).toEqual(["N-38160", "S-38170", "S-40910"]);
+  });
+
+  it("keeps a study listed only in Spanish", () => {
+    const found = altasciencesLa.parse([spanish]);
+    expect(found.map((f) => f.code)).toEqual(["S-38170", "S-40910", "N-38160 (ES)"]);
+    expect(found[2]!.url).toBe("https://participantsla.altasciences.com/current-studies/n-38160-es-1");
+  });
+});
+
 describe("a page that is not the list", () => {
   it("yields nothing, from every parser", () => {
     for (const s of [fortrea, celerion, altasciencesKc, altasciencesLa]) expect(s.parse(["<html><body>Welcome</body></html>"])).toEqual([]);
