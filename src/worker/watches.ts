@@ -2,9 +2,9 @@
  * Watches and Follows. Visibility rules live here, so every route gets them: a Private watch does
  * not exist for anyone but its Owner, and who follows a Watch is never returned.
  */
-import type { Criteria, Me, Trial, Watch, WatchInput } from "../shared/api";
+import type { Criteria, Me, Watch, WatchInput } from "../shared/api";
 import { withDefaults } from "../shared/ctgov";
-import { isFailing } from "./check";
+import { isFailing, type Known } from "./check";
 
 type WatchRow = {
   id: string;
@@ -46,21 +46,19 @@ export async function getWatch(db: D1Database, me: Me, id: string): Promise<Watc
 }
 
 /** Records Trials as already found for a Watch, so a Check never alerts on them. One query, however many. */
-function seed(db: D1Database, watchId: string, trials: Trial[], now: string) {
-  return db
-    .prepare("INSERT OR IGNORE INTO watch_trials (watch_id, nct_id, found_at) SELECT ?1, value, ?2 FROM json_each(?3)")
-    .bind(watchId, now, JSON.stringify(trials.map((t) => t.nctId)));
+export function seed(db: D1Database, watchId: string, nctIds: string[], now: string) {
+  return db.prepare("INSERT OR IGNORE INTO watch_trials (watch_id, nct_id, found_at) SELECT ?1, value, ?2 FROM json_each(?3)").bind(watchId, now, JSON.stringify(nctIds));
 }
 
-/** Creates a Watch owned and followed by `me`; its current Recent matches never cause Alerts. */
-export async function createWatch(db: D1Database, me: Me, input: WatchInput, recent: Trial[], now: string): Promise<string> {
+/** Creates a Watch owned and followed by `me`. What it matches today is `known`, and never causes Alerts. */
+export async function createWatch(db: D1Database, me: Me, input: WatchInput, known: Known, now: string): Promise<string> {
   const id = crypto.randomUUID();
   await db.batch([
     db
-      .prepare("INSERT INTO watches (id, owner_id, name, criteria, private, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(id, me.memberId, input.name, JSON.stringify(input.criteria), input.private ? 1 : 0, now, now),
+      .prepare("INSERT INTO watches (id, owner_id, name, criteria, private, knows, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(id, me.memberId, input.name, JSON.stringify(input.criteria), input.private ? 1 : 0, known.knows, now, now),
     db.prepare("INSERT INTO follows (id, member_id, watch_id, followed_at) VALUES (?, ?, ?, ?)").bind(crypto.randomUUID(), me.memberId, id, now),
-    seed(db, id, recent, now),
+    seed(db, id, known.nctIds, now),
   ]);
   return id;
 }
@@ -82,15 +80,15 @@ function endOthersFollows(db: D1Database, watchId: string, ownerId: string, mess
 export type OwnerResult = "ok" | "not-found" | "not-owner";
 
 /**
- * Changes a Watch. `recent` is given when its criteria changed: the new criteria's Recent matches
- * are seeded so the change itself sets off no Alerts.
+ * Changes a Watch. `known` is given when its criteria changed: what the new criteria match today
+ * is recorded, so the change itself sets off no Alerts.
  */
 export async function updateWatch(
   db: D1Database,
   me: Me,
   id: string,
   input: WatchInput,
-  recent: Trial[] | null,
+  known: Known | null,
   now: string,
 ): Promise<OwnerResult> {
   const watch = await getWatch(db, me, id);
@@ -101,7 +99,7 @@ export async function updateWatch(
       .prepare("UPDATE watches SET name = ?, criteria = ?, private = ?, updated_at = ? WHERE id = ?")
       .bind(input.name, JSON.stringify(input.criteria), input.private ? 1 : 0, now, id),
   ];
-  if (recent) statements.push(seed(db, id, recent, now));
+  if (known) statements.push(seed(db, id, known.nctIds, now), db.prepare("UPDATE watches SET knows = ? WHERE id = ?").bind(known.knows, id));
   if (input.private && !watch.private) {
     statements.push(...endOthersFollows(db, id, me.memberId, `“${watch.name}” was made private by its Owner, so you no longer get Alerts for it.`, now));
   }

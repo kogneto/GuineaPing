@@ -210,7 +210,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
           <fieldset>
             <legend>Clinics</legend>
             <span className="hint">
-              Only trials at one of these Clinics. Leave empty for any site. A Clinic is found by the name its trials give their site, so a trial that names no site is missed, and so is one that adds the Clinic after it was first posted.
+              Only trials at one of these Clinics. Leave empty for any site. A Clinic is found by the name its trials give their site, so a trial that names no site is missed.
             </span>
             {clinics.length > 0 && (
               <div className="suggestions" aria-label="Clinics in this Watch">
@@ -330,7 +330,7 @@ export function WatchEditorPage({ id }: { id?: string }) {
         </form>
         <section className="preview">
           <h2>Recent matches</h2>
-          <p className="muted small">Posted in the last 30 days. Saving won't send Alerts for these, only for trials found from now on.</p>
+          <p className="muted small">Posted in the last 30 days. Saving won't send Alerts for these, or for anything else that matches today: only for trials that start to match from now on.</p>
           {previewNote ? (
             <div className="empty compact">
               <Illustration name="makingWatch" size="sm" />

@@ -83,7 +83,7 @@ export function WatchPage({ id }: { id: string }) {
         </p>
       )}
       <h2>Recent matches</h2>
-      <p className="muted small">Trials first posted in the last 30 days. These don't send Alerts; only trials found from now on do.</p>
+      <p className="muted small">Trials first posted in the last 30 days. These don't send Alerts; only trials that start to match from now on do, including older ones that change.</p>
       {recentError ? <p className="error">{recentError}</p> : <TrialList trials={recent} empty="Nothing posted in the last 30 days matches. Still watching for new ones." art="lookout" />}
     </>
   );

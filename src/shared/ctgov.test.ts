@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { KINDS, type Criteria, type Trial } from "./api";
 import { CLINICS, clinicsFilter, clinicsNamedBy } from "./clinics";
-import { buildParams, findMatches, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
+import { buildParams, everyMatch, findMatches, findTrials, milesBetween, normalizeCriteria, quoteTerm, toTrial, withDefaults } from "./ctgov";
 import { agesText, criteriaSections, keyFacts, kindFact, kindLabel, kindsAsked, kindsText, phaseText } from "./plain";
 
 const criteria = (c: Partial<Criteria>): Criteria => withDefaults(c);
@@ -19,6 +19,27 @@ describe("query building", () => {
     expect(p["filter.advanced"]).toBe("AREA[StudyFirstPostDate]RANGE[2026-11-19,MAX] AND AREA[Phase](PHASE2 OR PHASE3)");
     expect(p["filter.overallStatus"]).toBe("RECRUITING");
     expect(p["query.term"]).toBeUndefined();
+  });
+
+  it("can ask by the day a listing last changed, newest change first", () => {
+    const p = buildParams(criteria({ conditions: ["MS"] }), "2026-11-19", "updated");
+    expect(p["filter.advanced"]).toBe("AREA[LastUpdatePostDate]RANGE[2026-11-19,MAX]");
+    expect(p.sort).toBe("LastUpdatePostDate:desc");
+    expect(buildParams(criteria({ conditions: ["MS"] }), "2026-11-19").sort).toBe("StudyFirstPostDate:desc");
+  });
+
+  it("lists every Trial a Watch matches today in one request, or says there are too many", async () => {
+    const urls: string[] = [];
+    const ids = await everyMatch(criteria({ conditions: ["MS"] }), async (url) => {
+      urls.push(url);
+      return { studies: [{ protocolSection: { identificationModule: { nctId: "NCT00000001" } } }, { protocolSection: { identificationModule: { nctId: "junk" } } }] };
+    });
+    expect(ids).toEqual(["NCT00000001"]);
+    const sent = new URL(urls[0]!).searchParams;
+    expect(sent.get("filter.advanced")).toBe("AREA[LastUpdatePostDate]RANGE[MIN,MAX]");
+    expect(sent.get("pageSize")).toBe("1000");
+    expect(sent.get("fields")).toBe("NCTId");
+    expect(await everyMatch(criteria({ conditions: ["cancer"] }), async () => ({ studies: [], nextPageToken: "more" }))).toBeNull();
   });
 
   it("defaults to every status someone could still join", () => {

@@ -20,6 +20,12 @@ let changed: { protocolSection: { identificationModule: { nctId: string } } }[] 
 let failing = false;
 /** Every `filter.advanced` the fake ClinicalTrials.gov has been sent since the test began. */
 let filtersSent: string[] = [];
+/** The same, with the condition each was asked about, for tests that follow one Watch among many. */
+let asked: { cond: string; filter: string }[] = [];
+/** Conditions the fake ClinicalTrials.gov says match more Trials than fit in one answer. */
+let tooBroad: string[] = [];
+/** Trials first posted long ago: the fake leaves them out when asked by first-posted date. */
+let longPosted: string[] = [];
 
 beforeAll(async () => {
   ({ env, dispose } = await createWorkerEnv());
@@ -30,9 +36,14 @@ beforeAll(async () => {
     if (ids) return Response.json({ studies: changed.filter((s) => ids.includes(s.protocolSection.identificationModule.nctId)) });
     filtersSent.push(params.get("filter.advanced") ?? "");
     const cond = params.get("query.cond") ?? "";
+    asked.push({ cond, filter: params.get("filter.advanced") ?? "" });
+    const byPosted = (params.get("filter.advanced") ?? "").includes("AREA[StudyFirstPostDate]");
     const studies = Object.entries(catalog)
       .filter(([c]) => cond.includes(`"${c}"`))
-      .flatMap(([, s]) => s);
+      .flatMap(([, s]) => s)
+      .filter((s) => !(byPosted && longPosted.includes((s as { protocolSection: { identificationModule: { nctId: string } } }).protocolSection.identificationModule.nctId)));
+    // Asked for everything a Watch matches, and it is too much: there is a next page.
+    if (params.get("pageSize") === "1000" && tooBroad.some((c) => cond.includes(`"${c}"`))) return Response.json({ studies, nextPageToken: "more" });
     return Response.json({ studies });
   });
 });
@@ -47,6 +58,9 @@ beforeEach(async () => {
   changed = [];
   failing = false;
   filtersSent = [];
+  asked = [];
+  tooBroad = [];
+  longPosted = [];
   // Each test gets its own Members and Watches; the Check history is shared, so clear it.
   await env.DB.prepare("DELETE FROM checks").run();
   n++;
@@ -749,5 +763,92 @@ describe("Points to check", () => {
     expect(listed!.trial).not.toHaveProperty("eligibility");
     const full = (await vol<AlertItem>(`/api/alerts/${listed!.id}`)).json;
     expect(full.trial.eligibility?.criteria).toContain("BMI 18 to 30");
+  });
+});
+
+describe("Trials that come to match later", () => {
+  const watchRow = (id: string) => env.DB.prepare("SELECT knows FROM watches WHERE id = ?").bind(id).first<{ knows: string | null }>();
+  /** What the fake ClinicalTrials.gov was asked about one condition since `asked` was last emptied. */
+  const filtersFor = (cond: string) => asked.filter((q) => q.cond.includes(`"${cond}"`)).map((q) => q.filter);
+
+  it("alerts on a Trial posted long ago once it starts to match, but not on what the Watch matched when it was made", async () => {
+    const vol = as(app, env, `late${n}@x`);
+    const cond = `late${n}`;
+    // Matching already when the Watch is made: recorded, never an Alert.
+    catalog[cond] = [study("NCT95000001", "Was already there", "2024-01-10")];
+    longPosted = ["NCT95000001", "NCT95000002"];
+    const made = await vol<Watch>("/api/watches", "POST", watchBody(cond));
+    expect((await watchRow(made.json.id))?.knows).toBe("all");
+    await check();
+    expect(await alertsOf(vol)).toEqual([]);
+
+    // Posted in 2024, and only now matching (a site added, recruiting reopened).
+    catalog[cond]!.push(study("NCT95000002", "Matches only now", "2024-03-02"));
+    asked = [];
+    const result = await check();
+    expect(result.alertsCreated).toBe(1);
+    const [alert] = (await alertsOf(vol)) as AlertItem[];
+    expect(alert!.trial).toMatchObject({ nctId: "NCT95000002", firstPosted: "2024-03-02" });
+    // It was found by asking what changed, not what was first posted.
+    expect(filtersFor(cond)).toHaveLength(1);
+    expect(filtersFor(cond)[0]).toMatch(/^AREA\[LastUpdatePostDate\]RANGE\[\d{4}-\d\d-\d\d,MAX\]$/);
+    // And only once.
+    expect((await check()).alertsCreated).toBe(0);
+  });
+
+  it("keeps looking only at newly posted Trials for a Watch that matches too many to record", async () => {
+    const vol = as(app, env, `broad${n}@x`);
+    const cond = `broad${n}`;
+    tooBroad = [cond];
+    catalog[cond] = [study("NCT95100001")];
+    const made = await vol<Watch>("/api/watches", "POST", watchBody(cond));
+    expect((await watchRow(made.json.id))?.knows).toBe("recent");
+    // An old Trial that changes is not something this Watch can tell from one it always matched.
+    catalog[cond]!.push(study("NCT95100002", "Old and changed", "2023-05-05"));
+    longPosted = ["NCT95100002"];
+    asked = [];
+    expect((await check()).alertsCreated).toBe(0);
+    expect(filtersFor(cond)).toHaveLength(1);
+    expect(filtersFor(cond)[0]).toMatch(/^AREA\[StudyFirstPostDate\]RANGE\[/);
+    // A newly posted one still alerts.
+    catalog[cond]!.push(study("NCT95100003", "Posted today"));
+    expect((await check()).alertsCreated).toBe(1);
+  });
+
+  it("teaches a Watch made before this what it matches, without Alerts for any of it, and loses no new Trial that hour", async () => {
+    const vol = as(app, env, `older${n}@x`);
+    const cond = `older${n}`;
+    const made = await vol<Watch>("/api/watches", "POST", watchBody(cond));
+    // As it was before `knows` existed: nothing recorded about old Trials.
+    await env.DB.prepare("UPDATE watches SET knows = NULL WHERE id = ?").bind(made.json.id).run();
+    catalog[cond] = [study("NCT95200001", "Old, matched all along", "2022-02-02"), study("NCT95200002", "Posted this hour")];
+    longPosted = ["NCT95200001"];
+
+    const first = await check();
+    expect(first.alertsCreated).toBe(1);
+    expect(((await alertsOf(vol)) as AlertItem[]).map((a) => a.trial.nctId)).toEqual(["NCT95200002"]);
+    expect((await watchRow(made.json.id))?.knows).toBe("all");
+
+    // From now on it asks what changed, and the old Trial it learned about stays quiet.
+    asked = [];
+    expect((await check()).alertsCreated).toBe(0);
+    expect(filtersFor(cond)).toEqual([expect.stringMatching(/^AREA\[LastUpdatePostDate\]RANGE\[/)]);
+  });
+
+  it("records what the new criteria match when a Watch is changed, so the change sets off no Alerts", async () => {
+    const vol = as(app, env, `edit${n}@x`);
+    const a = `edita${n}`;
+    const b = `editb${n}`;
+    const made = await vol<Watch>("/api/watches", "POST", watchBody(a));
+    catalog[b] = [study("NCT95300001", "Matched the new words already", "2021-09-09")];
+    longPosted = ["NCT95300001"];
+    tooBroad = [b];
+    await vol(`/api/watches/${made.json.id}`, "PUT", watchBody(b));
+    expect((await watchRow(made.json.id))?.knows).toBe("recent");
+    tooBroad = [];
+    await vol(`/api/watches/${made.json.id}`, "PUT", { ...watchBody(b), criteria: { conditions: [b], terms: [], phases: ["PHASE1"], statuses: [] } });
+    expect((await watchRow(made.json.id))?.knows).toBe("all");
+    expect((await check()).alertsCreated).toBe(0);
+    expect(await alertsOf(vol)).toEqual([]);
   });
 });

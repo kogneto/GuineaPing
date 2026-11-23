@@ -57,11 +57,11 @@ A Member's choice to receive Alerts for a Watch, starting from the moment they f
 _Avoid_: Subscribe, join, watch (as a verb)
 
 **Check**:
-One hourly look at ClinicalTrials.gov, Watch by Watch, for Trials first posted since each Watch was last checked successfully. A Watch that can't be checked leaves no gap: it catches up the next time it can, without holding back the others. A Check fails only when no Watch could be checked.
+One hourly look at ClinicalTrials.gov, Watch by Watch, for Trials posted or changed since each Watch was last checked successfully. A Watch that can't be checked leaves no gap: it catches up the next time it can, without holding back the others. A Check fails only when no Watch could be checked.
 _Avoid_: Poll, run, sync, scan
 
 **New trial**:
-For a given Member and Watch: a Trial that a Check finds matching the Watch for the first time after the Member started following it, and that the Member has never been alerted on. Trials already among the Watch's Recent matches when it was created or its criteria changed are not new. A status change or added site does not make a Trial new; it may cause an Update.
+For a given Member and Watch: a Trial that a Check finds matching the Watch for the first time after the Member started following it, and that the Member has never been alerted on. It need not be newly posted: a Trial posted long ago is new to a Watch when a change, such as an added site or reopened recruiting, makes it match for the first time. Trials the Watch already matched when it was created or its criteria changed are not new. A change to a Trial the Watch already matched does not make it new; it may cause an Update. A Watch that matches more than a thousand Trials cannot tell the two apart, so for it only newly posted Trials are new.
 _Avoid_: Fresh trial, update
 
 **Recent match**:
