@@ -217,7 +217,15 @@ describe("setting an Opening aside", () => {
     expect(await marksOf(ann())).toEqual({ "fortrea:778951": "not_for_me", "fortrea:781236": null });
   });
 
-  it("covers every group of the study with Not for me, at that Clinic's source only", async () => {
+  it("covers the study at that one Clinic with Not for me, not the same study in another city", async () => {
+    // Fortrea runs one study in several cities, each its own entry on the one list.
+    const at = (city: string, grp: string) => opening(`781236-${city}`, { clinicId: `fortrea-${city}`, code: `781236 ${grp}`.trim(), when: null });
+    await read([at("madison", ""), at("dallas", "1"), at("daytona", "3"), opening("781236-daytona-b", { clinicId: "fortrea-daytona", code: "781236 4" })], DAY1);
+    await mark(ann(), "fortrea:781236-daytona", "not_for_me");
+    expect(await marksOf(ann())).toEqual({ "fortrea:781236-madison": null, "fortrea:781236-dallas": null, "fortrea:781236-daytona": "not_for_me", "fortrea:781236-daytona-b": "not_for_me" });
+  });
+
+  it("covers every group of the study with Not for me, at that Clinic only", async () => {
     const celerion = (code: string): Found => ({ key: code, clinicId: "celerion-lincoln", title: `Study ${code}`, pay: "$3,000*", when: "Dec 02 to Dec 10", stay: null, who: null, code, url: `https://helpresearch.com/medical-study/${code}` });
     const helpresearch: Source = { id: "celerion", pages: ["https://helpresearch.com/studies"], parse: (htmls) => htmls.flatMap((h) => JSON.parse(h) as Found[]) };
     await readDueSource(env.DB, [helpresearch], serving([celerion("CA48121-6"), celerion("CA48121-6A"), celerion("CA49982-3"), celerion("CB48121-21")]), DAY1, noWait);

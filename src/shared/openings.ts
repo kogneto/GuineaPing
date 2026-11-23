@@ -3,7 +3,8 @@
  * - "Not this time": the reason will change (the dates, a waiting period). It covers one entry as
  *   it stood, so the same study listed again shows again.
  * - "Not for me": the reason won't change (an age limit, what the study tests). It covers the
- *   study itself at that Clinic, every group of it, now and later.
+ *   study itself at that one Clinic, every group of it, now and later. The same study at another
+ *   of the company's Clinics is left alone.
  */
 
 export const OPENING_MARKS = ["not_this_time", "not_for_me"] as const;

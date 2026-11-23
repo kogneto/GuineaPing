@@ -11,9 +11,10 @@ import { OPENING_MARKS, roundSeen, studyOf, type OpeningMark } from "../shared/o
 type Row = { id: string; source: string; clinic_id: string; title: string; pay: string | null; when_text: string | null; stay: string | null; who: string | null; code: string | null; url: string; first_seen_at: string };
 type MarkRow = { kind: "round" | "study"; key: string; seen: string | null };
 
-const studyKey = (r: { source: string; code: string | null }) => {
+/** A study at one Clinic. One source can list several Clinics (Fortrea's four cities), and "Not for me" in one city says nothing about another. */
+const studyKey = (r: { source: string; clinic_id: string; code: string | null }) => {
   const study = studyOf(r.source, r.code);
-  return study ? `${r.source}:${study}` : null;
+  return study ? `${r.clinic_id}:${study}` : null;
 };
 const seenOf = (r: { code: string | null; when_text: string | null; first_seen_at: string }) => roundSeen({ code: r.code, when: r.when_text, firstSeen: r.first_seen_at.slice(0, 10) });
 
@@ -62,7 +63,7 @@ export async function listClinics(db: D1Database, near: Near | null, memberId: s
  */
 export async function markOpening(db: D1Database, memberId: string, openingId: unknown, mark: unknown, now: string): Promise<{ ok: true } | { error: string; status: 400 | 404 }> {
   if (mark !== null && !OPENING_MARKS.includes(mark as OpeningMark)) return { error: "Unknown mark", status: 400 };
-  const row = typeof openingId === "string" ? await db.prepare("SELECT id, source, code, when_text, first_seen_at FROM clinic_openings WHERE id = ?").bind(openingId).first<Pick<Row, "id" | "source" | "code" | "when_text" | "first_seen_at">>() : null;
+  const row = typeof openingId === "string" ? await db.prepare("SELECT id, source, clinic_id, code, when_text, first_seen_at FROM clinic_openings WHERE id = ?").bind(openingId).first<Pick<Row, "id" | "source" | "clinic_id" | "code" | "when_text" | "first_seen_at">>() : null;
   if (!row) return { error: "No such Opening", status: 404 };
   const study = studyKey(row);
   if (mark === "not_for_me" && !study) return { error: "This Clinic gives this entry no study code, so it can only be set aside this time.", status: 400 };
