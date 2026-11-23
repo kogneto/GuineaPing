@@ -1,3 +1,4 @@
+import { Link } from "../router";
 import { useEffect, useState, type FormEvent } from "react";
 import { DISTANCES, type Profile, type Sex } from "../../shared/api";
 import { api } from "../api";
@@ -76,6 +77,9 @@ export function ProfilePage() {
   if (!loaded) return message ? <p className="error">{message.text}</p> : <p className="muted">Loading…</p>;
   return (
     <div className="narrow">
+      <p className="crumb">
+        <Link to="/settings">← Settings</Link>
+      </p>
       <h1>Your profile</h1>
       <p className="muted">
         Only you see this. It fills in new Watches for you, and shows how far each trial's nearest site is from you. Everything is optional.

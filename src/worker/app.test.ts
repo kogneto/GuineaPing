@@ -488,14 +488,34 @@ describe("Updates", () => {
 
 describe("Members joining and leaving", () => {
   const members = async (who: ReturnType<typeof as>) => (await who<MemberList>("/api/members")).json.members;
+  /** The Member who has been in the test group longest. */
+  const organiser = async () => {
+    await as(app, env, `anyone${n}@x.org`)("/api/me");
+    const row = await env.DB.prepare("SELECT email FROM members WHERE removed_at IS NULL ORDER BY created_at, id LIMIT 1").first<{ email: string }>();
+    return as(app, env, row!.email);
+  };
 
-  it("lets any Member invite someone, who can then sign in and is listed", async () => {
-    const mum = as(app, env, `inviter${n}@x.org`);
+  it("keeps the group to the Organiser: nobody else sees the list, invites or removes", async () => {
+    const boss = await organiser();
+    const other = as(app, env, `nosy${n}@x.org`);
+    expect((await boss<{ organiser: boolean }>("/api/me")).json.organiser).toBe(true);
+    expect((await other<{ organiser: boolean }>("/api/me")).json.organiser).toBe(false);
+    expect((await members(boss)).length).toBeGreaterThan(1);
+    expect((await members(other)).map((m) => m.email)).toEqual([`nosy${n}@x.org`]);
+    expect((await other("/api/members", "POST", { email: `friend${n}@x.org` })).status).toBe(403);
+    const someone = (await members(boss)).find((m) => !m.isYou && m.email !== `nosy${n}@x.org`)!;
+    expect((await other(`/api/members/${someone.id}`, "DELETE")).status).toBe(403);
+    expect((await members(boss)).some((m) => m.id === someone.id)).toBe(true);
+  });
+
+  it("lets the Organiser invite someone, who can then sign in and is listed", async () => {
+    const mum = await organiser();
+    const inviter = (await mum<{ email: string }>("/api/me")).json.email;
     expect((await mum("/api/members", "POST", { email: ` Gran${n}@X.org ` })).status).toBe(201);
     expect((await mum("/api/members", "POST", { email: `gran${n}@x.org` })).status).toBe(409);
     expect((await mum("/api/members", "POST", { email: "not an email" })).status).toBe(400);
     const gran = (await members(mum)).find((m) => m.email === `gran${n}@x.org`);
-    expect(gran).toMatchObject({ invitedBy: `inviter${n}@x.org`, isYou: false });
+    expect(gran).toMatchObject({ invitedBy: inviter, isYou: false });
     expect((await as(app, env, `gran${n}@x.org`)<{ email: string }>("/api/me")).status).toBe(200);
   });
 
@@ -508,9 +528,10 @@ describe("Members joining and leaving", () => {
     const { json: secret } = await owner<Watch>("/api/watches", "POST", watchBody(`secret${n}`, { private: true }));
     await first(`/api/watches/${shared.id}/follow`, "POST");
     await second(`/api/watches/${shared.id}/follow`, "POST");
-    const leaver = (await members(first)).find((m) => m.email === `leaver${n}@x.org`)!;
+    const boss = await organiser();
+    const leaver = (await members(boss)).find((m) => m.email === `leaver${n}@x.org`)!;
 
-    expect((await second(`/api/members/${leaver.id}`, "DELETE")).status).toBe(204);
+    expect((await boss(`/api/members/${leaver.id}`, "DELETE")).status).toBe(204);
 
     expect((await first<Watch>(`/api/watches/${shared.id}`)).json).toMatchObject({ isOwner: true, following: true });
     expect((await second<Watch>(`/api/watches/${shared.id}`)).json).toMatchObject({ isOwner: false, following: true });
@@ -521,14 +542,14 @@ describe("Members joining and leaving", () => {
 
     // Removed: refused even with a valid sign-in, not listed, and no longer alerted.
     expect((await owner("/api/watches")).status).toBe(403);
-    expect((await members(first)).some((m) => m.id === leaver.id)).toBe(false);
+    expect((await members(boss)).some((m) => m.id === leaver.id)).toBe(false);
     catalog[`shared${n}`] = [study("NCT92000001")];
     await check();
     const row = await env.DB.prepare("SELECT count(*) AS n FROM alerts WHERE member_id = ?").bind(leaver.id).first<{ n: number }>();
     expect(row?.n).toBe(0);
 
     // Invited again, they're back, without their old Watches.
-    await first("/api/members", "POST", { email: `leaver${n}@x.org` });
+    await boss("/api/members", "POST", { email: `leaver${n}@x.org` });
     expect((await owner<Watch[]>("/api/watches")).json.some((w) => w.isOwner)).toBe(false);
   });
 
@@ -537,7 +558,7 @@ describe("Members joining and leaving", () => {
     const mine = (await members(me)).find((m) => m.isYou)!;
     expect((await me(`/api/members/${mine.id}`, "DELETE")).status).toBe(204);
     expect((await me("/api/me")).status).toBe(403);
-    expect((await as(app, env, `other${n}@x.org`)(`/api/members/${mine.id}`, "DELETE")).status).toBe(404);
+    expect((await (await organiser())(`/api/members/${mine.id}`, "DELETE")).status).toBe(404);
   });
 });
 
@@ -830,8 +851,9 @@ describe("Past studies and waiting periods", () => {
     const vol = as(app, env, `waitleaver${n}@x.org`);
     const mum = as(app, env, `waitmum${n}@x.org`);
     await vol("/api/past-studies", "POST", { endedOn: addDays(today(), -3) });
-    const leaver = (await mum<MemberList>("/api/members")).json.members.find((m) => m.email === `waitleaver${n}@x.org`)!;
-    expect((await mum(`/api/members/${leaver.id}`, "DELETE")).status).toBe(204);
+    await mum("/api/me");
+    const leaver = (await vol<MemberList>("/api/members")).json.members.find((m) => m.isYou)!;
+    expect((await vol(`/api/members/${leaver.id}`, "DELETE")).status).toBe(204);
     const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM past_studies WHERE member_id = ?").bind(leaver.id).first<{ n: number }>();
     expect(left?.n).toBe(0);
   });

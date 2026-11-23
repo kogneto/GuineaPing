@@ -24,8 +24,10 @@
   --card-line: transparent;
   color-scheme: light;
 }
+/* Dark: when the device asks for it and the Member hasn't chosen light, or when they chose dark
+   (Settings; theme.ts). The two lists below must stay the same. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #17171a;
     --surface: #1f1f22;     /* ink 900 */
     --text: #e8e6e1;
@@ -46,6 +48,27 @@
     --card-line: #323236;
     color-scheme: dark;
   }
+}
+:root[data-theme="dark"] {
+  --bg: #17171a;
+  --surface: #1f1f22;     /* ink 900 */
+  --text: #e8e6e1;
+  --muted: #a4a4a8;       /* ink 300 */
+  --line: #323236;        /* ink 800 */
+  --accent: #76b2a9;      /* teal 300 */
+  --accent-text: #001310; /* teal 950 */
+  --accent-soft: #003d37; /* teal 800 */
+  --highlight: #dd8c7f;   /* coral 300 */
+  --highlight-text: #250000;
+  --highlight-soft: #400603;
+  --highlight-ink: #ffc2b5;
+  --warn-bg: #351600;     /* tan 900 */
+  --warn-text: #f9cfa4;   /* tan 100 */
+  --danger: #ff8a80;
+  /* A shadow doesn't show on a dark page, so cards keep their outline there. */
+  --card-shadow: none;
+  --card-line: #323236;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -196,6 +219,10 @@ button.chevron { flex: none; background: none; border: none; color: var(--muted)
 .tips ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; }
 .tips .button { background: var(--surface); }
 .tip-handle { overflow-wrap: anywhere; }
+.settings-list { display: grid; gap: 0.6rem; }
+.settings-list a { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 1.1rem; background: var(--surface); border: 1px solid var(--card-line); border-radius: var(--card-radius); box-shadow: var(--card-shadow); color: var(--text); text-decoration: none; }
+.settings-list a > span:first-child { display: grid; gap: 0.1rem; }
+.settings-list a > span:last-child { color: var(--muted); font-size: 1.4rem; }
 .about { margin-top: 2rem; font-size: 0.875rem; color: var(--muted); }
 .about summary, .more summary { cursor: pointer; font-weight: 600; color: var(--accent); padding: 0.65rem 0; }
 .trial-heading { font-size: 1.4rem; }
@@ -251,7 +278,7 @@ legend { font-weight: 600; padding: 0 0.3rem; }
 
   /* The sections move to a bar along the foot of the screen, in reach of a thumb. */
   .top { flex-wrap: nowrap; padding: 0.5rem 16px; }
-  .top nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  .top nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; background: var(--surface); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
   .top nav { padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); }
   .top nav a { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 0.35rem 0 0.3rem; font-size: 0.72rem; font-weight: 600; border: none; border-radius: 14px; }
   .top nav a.active { color: var(--accent); font-weight: 800; background: var(--accent-soft); }

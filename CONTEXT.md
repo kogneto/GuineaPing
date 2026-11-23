@@ -7,7 +7,7 @@ Alerts a small group of people, mostly healthy volunteers, when a clinical trial
 ### People
 
 **Member**:
-A person in the group, allowed in by email address. Every person who uses GuineaPing is a Member. Any Member can invite someone or remove a Member, themselves included; Members can see who the other Members are.
+A person in the group, allowed in by email address. Every person who uses GuineaPing is a Member. Any Member can leave. Only the Organiser can invite someone, remove a Member, or see who the other Members are.
 _Avoid_: User, subscriber, account, patient
 
 **Profile**:
@@ -95,6 +95,10 @@ _Avoid_: Inbox, feed, history, notifications
 **Clinic**:
 A research unit that pays healthy volunteers and advertises its studies on its own website, such as Celerion in Lincoln or Fortrea in Madison. GuineaPing keeps the list of Clinics by hand: name, city, and a link to the Clinic’s own list of studies. Every Member starts with the same Clinics, nearest first when their Profile has a ZIP code. A Member can take a Clinic off their own list, for instance one too far to travel to: it and its Openings no longer show for them, their Push for new Openings there is turned off, and only they can see that they did it. Clinics taken off are counted at the foot of the list and can be put back. A Trial is at a Clinic when its listing names a site by one of the names the Clinic goes by, in the Clinic’s city; a Trial that names no site is not tied to any Clinic.
 _Avoid_: Site (a site is one place a Trial runs), facility, CRO, unit
+
+**Organiser**:
+The Member who runs the group: whoever has been a Member longest. Only the Organiser sees the list of Members, invites people and removes them. If the Organiser leaves, the Member who has been in the group longest after them becomes the Organiser. A Tip goes to the person who runs GuineaPing, who is named in the Worker’s settings and need not be the same.
+_Avoid_: Owner (an Owner is of a Watch), admin, moderator
 
 **Tip**:
 Money a Member chooses to send the person who runs GuineaPing, through a payment service of the Member’s own. GuineaPing shows only where to send it: it moves no money, and never learns who tipped or how much. Nothing a Member sees or is sent depends on whether they tip.

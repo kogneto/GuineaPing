@@ -6,7 +6,7 @@ import { AlertPage } from "./pages/AlertPage";
 import { AlertsPage } from "./pages/AlertsPage";
 import { ClinicsPage } from "./pages/ClinicsPage";
 import { DevicesPage } from "./pages/DevicesPage";
-import { MembersPage } from "./pages/MembersPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { WatchEditorPage } from "./pages/WatchEditorPage";
 import { WatchesPage } from "./pages/WatchesPage";
@@ -14,12 +14,13 @@ import { WatchPage } from "./pages/WatchPage";
 import { TabIcon } from "./components/TabIcon";
 import { Link, usePath } from "./router";
 
-function route(path: string) {
+function route(path: string, me: Me | null) {
   let m: RegExpExecArray | null;
   if ((m = /^\/alerts\/([\w-]+)$/.exec(path))) return <AlertPage id={m[1]!} />;
   if (path === "/clinics") return <ClinicsPage />;
   if (path === "/devices") return <DevicesPage />;
-  if (path === "/members") return <MembersPage />;
+  // "/members" is where the group list used to live; old links and Home Screen shortcuts still land somewhere.
+  if (path === "/settings" || path === "/members") return <SettingsPage me={me} />;
   if (path === "/profile") return <ProfilePage />;
   if (path === "/watches") return <WatchesPage />;
   if (path === "/watches/new") return <WatchEditorPage />;
@@ -78,7 +79,7 @@ export function App() {
     );
   }
 
-  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/clinics") ? "clinics" : path.startsWith("/devices") ? "devices" : path.startsWith("/members") ? "members" : path.startsWith("/profile") ? "profile" : "alerts";
+  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/clinics") ? "clinics" : ["/settings", "/members", "/devices", "/profile"].some((p) => path.startsWith(p)) ? "settings" : "alerts";
   return (
     <>
       <header className="top">
@@ -96,19 +97,15 @@ export function App() {
           </Link>
           <Link to="/clinics" className={section === "clinics" ? "active" : ""}>
             <TabIcon name="clinics" />
-            Clinics
+            Openings
           </Link>
-          <Link to="/devices" className={section === "devices" ? "active" : ""}>
-            <TabIcon name="devices" />
-            Devices
-          </Link>
-          <Link to="/members" className={section === "members" ? "active" : ""}>
-            <TabIcon name="members" />
-            Members
+          <Link to="/settings" className={section === "settings" ? "active" : ""}>
+            <TabIcon name="settings" />
+            Settings
           </Link>
         </nav>
         {me && (
-          <Link to="/profile" className={section === "profile" ? "who active" : "who"} aria-label={`Your profile, ${me.email}`}>
+          <Link to="/profile" className={path.startsWith("/profile") ? "who active" : "who"} aria-label={`Your profile, ${me.email}`}>
             <span className="who-initial" aria-hidden="true">
               {me.email.slice(0, 1).toUpperCase()}
             </span>
@@ -124,7 +121,7 @@ export function App() {
             : "Checks of ClinicalTrials.gov are failing. New trials will appear once they work again."}
         </div>
       )}
-      <main className="page">{route(path)}</main>
+      <main className="page">{route(path, me)}</main>
       <footer className="foot">
         {status?.lastCheckedAt ? `Last checked ${ago(status.lastCheckedAt)}` : "Not checked yet"}
         {isLocal && <DevCheckButton onDone={setStatus} />}

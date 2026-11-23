@@ -442,10 +442,10 @@ describe("setting an Opening aside", () => {
     await mark(bob, "fortrea:778951", null);
     expect(await marksOf(carol)).toEqual({ "fortrea:778951": "not_for_me", "fortrea:781236": "not_this_time" });
 
-    const members = (await bob<{ members: { id: string; email: string }[] }>("/api/members")).json.members;
+    const members = (await carol<{ members: { id: string; email: string }[] }>("/api/members")).json.members;
     const carolId = members.find((m) => m.email === "carol@example.com")!.id;
     expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM opening_marks WHERE member_id = ?").bind(carolId).first<{ n: number }>())?.n).toBe(2);
-    expect((await bob(`/api/members/${carolId}`, "DELETE")).status).toBe(204);
+    expect((await carol(`/api/members/${carolId}`, "DELETE")).status).toBe(204);
     const left = await env.DB.prepare("SELECT COUNT(*) AS n FROM opening_marks WHERE member_id = ?").bind(carolId).first<{ n: number }>();
     expect(left?.n).toBe(0);
   });
