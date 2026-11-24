@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ClinicItem, Opening } from "../../shared/api";
-import { OPENING_MARK_LABELS, inOrder, payAmount, type OpeningMark } from "../../shared/openings";
+import { FOLLOW_UP_LIMITS, OPENING_MARK_LABELS, inOrder, limitedTo, payAmount, type FollowUpLimit, type Limited, type OpeningMark } from "../../shared/openings";
 import { ago, api } from "../api";
 import { Greeting } from "../components/Greeting";
 import { Illustration } from "../components/Illustration";
@@ -109,28 +109,49 @@ const VIEWS = [
 ] as const;
 type View = (typeof VIEWS)[number]["view"];
 
-const VIEW_KEY = "guineaping.clinics.view";
-/** The view the Member last chose on this device, if the browser will say. */
-function rememberedView(): View {
+/** What the Member last chose on this device under `key`: null if nothing, or if the browser won't say. */
+function remembered(key: string): string | null {
   try {
-    const v = localStorage.getItem(VIEW_KEY);
-    return VIEWS.some((x) => x.view === v) ? (v as View) : "pay";
+    return localStorage.getItem(key);
   } catch {
-    return "pay";
+    return null;
+  }
+}
+/** Keeps a choice on this device, or forgets it when given null. */
+function remember(key: string, choice: string | null): void {
+  try {
+    if (choice === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, choice);
+  } catch {
+    // The choice just isn't remembered.
   }
 }
 
+const VIEW_KEY = "guineaping.clinics.view";
+function rememberedView(): View {
+  const was = remembered(VIEW_KEY);
+  return VIEWS.find((x) => x.view === was)?.view ?? "pay";
+}
+
+const LIMIT_KEY = "guineaping.clinics.followUps";
+/** The limit on Follow-up visits the Member last chose on this device, or none. */
+function rememberedLimit(): FollowUpLimit | null {
+  const was = remembered(LIMIT_KEY);
+  return FOLLOW_UP_LIMITS.find((n) => String(n) === was) ?? null;
+}
+const limitLabel = (limit: FollowUpLimit | null) => (limit === null ? "Any" : limit === 0 ? "None" : `Up to ${limit}`);
+
 /** Every Opening from every Clinic on the Member's list as one list, each naming its Clinic. */
-function AllOpenings({ clinics, by, onMark }: { clinics: ClinicItem[]; by: Exclude<View, "clinics">; onMark: SetAside }) {
+function AllOpenings({ clinics, by, onMark, empty }: { clinics: ClinicItem[]; by: Exclude<View, "clinics">; onMark: SetAside; empty: string }) {
   const clinicOf = new Map(clinics.flatMap((c) => c.openings.map((o) => [o.id, c] as const)));
   const all = clinics.flatMap((c) => c.openings);
   // `clinics` arrives nearest first, so "nearest" keeps that order and sorts only within a Clinic.
   const ordered = by === "nearest" ? clinics.flatMap((c) => inOrder(c.openings, "pay")) : inOrder(all, by);
-  return <OpeningList openings={ordered} onMark={onMark} clinicOf={clinicOf} empty="No Clinic's list has been read yet." />;
+  return <OpeningList openings={ordered} onMark={onMark} clinicOf={clinicOf} empty={empty} />;
 }
 
 /** One Clinic as a row that opens: its Openings, and what the Member can do about the Clinic. */
-function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: ClinicItem; onMark: SetAside } & ClinicActions) {
+function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: Limited<ClinicItem>; onMark: SetAside } & ClinicActions) {
   const [open, setOpen] = useState(false);
   const listed = clinic.openings.filter((o) => !o.mark);
   const fresh = listed.filter(isNew).length;
@@ -142,6 +163,7 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: ClinicItem; 
     clinic.miles !== null ? `${clinic.miles} miles` : null,
     !clinic.read ? "not read by GuineaPing" : clinic.refused ? "its site stopped letting GuineaPing read it" : !clinic.lastReadAt ? "not read yet" : listed.length === 1 ? "1 Opening" : `${listed.length} Openings`,
     reading && fresh ? `${fresh} new` : null,
+    clinic.heldBack ? `${clinic.heldBack} hidden` : null,
   ].filter(Boolean);
   const label = `${clinic.name}, ${clinic.place}`;
   return (
@@ -170,7 +192,13 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: ClinicItem; 
       {open && (
         <div className="clinic-row-body">
           {reading && clinic.lastReadAt && <p className="muted small">Read {ago(clinic.lastReadAt)}</p>}
-          {clinic.read && <OpeningList openings={clinic.openings} onMark={onMark} empty={reading && clinic.lastReadAt ? "Nothing on its list right now." : undefined} />}
+          {clinic.read && (
+            <OpeningList
+              openings={clinic.openings}
+              onMark={onMark}
+              empty={clinic.heldBack ? "Your choice of follow-up visits hides every Opening here." : reading && clinic.lastReadAt ? "Nothing on its list right now." : undefined}
+            />
+          )}
           <p className="clinic-row-actions">
             <a href={clinic.url} target="_blank" rel="noreferrer">
               Open its list
@@ -189,11 +217,11 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: ClinicItem; 
 /** How many link-only Clinics show before "Show more": the nearest few are the ones worth a look. */
 const LINK_ONLY_SHOWN = 3;
 
-function ByClinic({ clinics, onMark, onPush, onOffList }: { clinics: ClinicItem[]; onMark: SetAside } & ClinicActions) {
+function ByClinic({ clinics, onMark, onPush, onOffList }: { clinics: Limited<ClinicItem>[]; onMark: SetAside } & ClinicActions) {
   const [allLinkOnly, setAllLinkOnly] = useState(false);
   const read = clinics.filter((c) => c.read);
   const linkOnly = clinics.filter((c) => !c.read);
-  const row = (c: ClinicItem) => <ClinicRow key={c.id} clinic={c} onMark={onMark} onPush={onPush} onOffList={onOffList} />;
+  const row = (c: Limited<ClinicItem>) => <ClinicRow key={c.id} clinic={c} onMark={onMark} onPush={onPush} onOffList={onOffList} />;
   return (
     <>
       {read.length > 0 && (
@@ -223,6 +251,7 @@ function ByClinic({ clinics, onMark, onPush, onOffList }: { clinics: ClinicItem[
 
 export function ClinicsPage() {
   const [view, setView] = useState<View>(rememberedView);
+  const [limit, setLimit] = useState<FollowUpLimit | null>(rememberedLimit);
   const [clinics, setClinics] = useState<ClinicItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [markError, setMarkError] = useState<string | null>(null);
@@ -234,11 +263,11 @@ export function ClinicsPage() {
 
   const choose = (v: View) => {
     setView(v);
-    try {
-      localStorage.setItem(VIEW_KEY, v);
-    } catch {
-      // The choice just isn't remembered.
-    }
+    remember(VIEW_KEY, v);
+  };
+  const chooseLimit = (l: FollowUpLimit | null) => {
+    setLimit(l);
+    remember(LIMIT_KEY, l === null ? null : String(l));
   };
   /** Sends one change, then shows the page as the server now has it. */
   const change = (path: string, body: object) => {
@@ -263,8 +292,10 @@ export function ClinicsPage() {
   const mine = clinics.filter((c) => !c.offList);
   const off = clinics.filter((c) => c.offList);
   const lastRead = mine.map((c) => c.lastReadAt).filter((x): x is string => !!x).sort().pop();
-  // The greeting counts what the Member would see: on their list and not set aside.
-  const listed = mine.flatMap((c) => c.openings).filter((o) => !o.mark);
+  // The Member's limit on Follow-up visits applies to everything below: the greeting and every view.
+  const { clinics: within, heldBack, dontSay } = limitedTo(mine, limit);
+  // The greeting counts what the Member would see: on their list, within their limit, and not set aside.
+  const listed = within.flatMap((c) => c.openings).filter((o) => !o.mark);
   const today = new Date().toISOString().slice(0, 10);
   const newToday = listed.filter((o) => o.firstSeen === today).length;
   // The highest figure in any Clinic's wording, as "Highest pay" orders them. The cards keep the Clinic's own words.
@@ -284,6 +315,29 @@ export function ClinicsPage() {
           </button>
         ))}
       </p>
+      <p className="views scroll limits" aria-label="Follow-up visits">
+        <span className="views-label">Follow-up visits</span>
+        {[null, ...FOLLOW_UP_LIMITS].map((l) => (
+          <button type="button" key={String(l)} className="chip" aria-pressed={limit === l} onClick={() => chooseLimit(l)}>
+            {limitLabel(l)}
+          </button>
+        ))}
+      </p>
+      {limit !== null && (
+        <p className="muted small">
+          {heldBack ? (
+            <>
+              {heldBack === 1 ? "1 Opening" : `${heldBack} Openings`} with {limit === 0 ? "follow-up visits" : `more than ${limit} follow-up visits`} {heldBack === 1 ? "is" : "are"} hidden.{" "}
+              <button type="button" className="link" onClick={() => chooseLimit(null)}>
+                Show all
+              </button>
+            </>
+          ) : (
+            "That hides no Opening right now."
+          )}
+          {dontSay > 0 && ` ${dontSay} of those shown ${dontSay === 1 ? "doesn't" : "don't"} say how many.`}
+        </p>
+      )}
       {view !== "clinics" && <p className="muted small">{VIEWS.find((v) => v.view === view)!.says}</p>}
       {!measured && (view === "nearest" || view === "clinics") && (
         <p className="muted small">
@@ -291,7 +345,11 @@ export function ClinicsPage() {
         </p>
       )}
       {markError && <p className="error">{markError}</p>}
-      {view === "clinics" ? <ByClinic clinics={mine} onMark={setAside} onPush={setPush} onOffList={setOffList} /> : <AllOpenings clinics={mine} by={view} onMark={setAside} />}
+      {view === "clinics" ? (
+        <ByClinic clinics={within} onMark={setAside} onPush={setPush} onOffList={setOffList} />
+      ) : (
+        <AllOpenings clinics={within} by={view} onMark={setAside} empty={heldBack ? "Your choice of follow-up visits hides every Opening." : "No Clinic's list has been read yet."} />
+      )}
       {off.length > 0 && (
         <p className="muted small aside-count">
           {off.length === 1 ? "1 Clinic" : `${off.length} Clinics`} taken off your list.{" "}
@@ -324,6 +382,11 @@ export function ClinicsPage() {
         <p>
           Set an Opening aside when it isn't one you'd take. "Not this time" is for a reason that will change, such as the dates: the Opening shows again if the Clinic lists the study again. "Not for me" is for a reason
           that won't: that study stays set aside at that Clinic, later groups too. Only you see what you set aside, and you can always show it and put it back.
+        </p>
+        <p>
+          "Follow-up visits" shows only Openings that ask for no more of them than you choose. It counts outpatient, return and follow-up visits, not screening visits or phone calls. GuineaPing reads the number from the
+          Clinic's own words and takes the lowest it could mean, so check the Clinic's page before you count on it. An Opening that doesn't say how many is always shown. The choice is kept on this phone or computer, and
+          a Push about a new Opening is sent whatever you choose here.
         </p>
         <p>
           Under "By Clinic", open a Clinic to find "Take off my list". It removes the Clinic from this page for you alone, for instance one too far to travel to. Its Openings leave every list, and your Push for it is
