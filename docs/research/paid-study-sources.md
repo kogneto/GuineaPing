@@ -124,6 +124,8 @@ Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide the
 - **Worldwide Clinical Trials** (San Antonio TX), **Floridian Clinical Research** (Miami Lakes FL): no volunteer site found [V].
 - **Axis Clinicals** (Dilworth MN): blocked [V].
 
+Listed as Clinics since 2026-11-24, with no link, so that a Member can find them and watch for their Trials: QUEST, Clinical Pharmacology of Miami, Frontage, Genesis, Charter (Orlando and Winter Park only), Worldwide Clinical Trials, Floridian and Axis, together with QPS in Springfield MO, Parexel in Glendale CA and CenExel in Englewood CO from the table in section 1. Johns Hopkins BPRU (section C) is listed with the link above. Each gets a link once an address for its own list has been confirmed. K2 is listed too, with no link, since its robots.txt refuses all crawlers.
+
 ### Notes
 
 - **robots.txt** allows the study list on every site except K2. It says what crawlers may fetch. It does not override terms of use.
