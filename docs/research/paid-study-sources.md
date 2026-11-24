@@ -86,6 +86,7 @@ Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide the
 | **Pfizer Clinical Research Unit** (New Haven CT) | [pfizerclinicaltrials.com/our-research/pcru-new-haven](https://www.pfizerclinicaltrials.com/our-research/pcru-new-haven) [V] | "Up to $3,350 upon completion"; age; sex; visits on detail page. 3 listings | **Sponsor's protocol number** (C6381001), which can match a Trial; no NCT shown | Plain HTML. Allowed | No bot clause. Has a copying limit: "may not be copied other than for noncommercial individual reference" ([Terms](https://www.pfizer.com/general/terms)) [V] |
 | **Novum** (Las Vegas NV) | [gonovum.com/location/las-vegas](https://www.gonovum.com/location/las-vegas/) [V] | Pay "$2,700"; dates "01/13/27 - 02/22/27"; age; sex; visits on detail. Outpatient studies | Yes ("12641901 Group6"); no NCT | Plain HTML. Allowed | No terms page found [V] |
 | **TKL Research** (Fair Lawn NJ) | [tklresearch.com/studies](https://tklresearch.com/studies/) [V] | "$6,400 FOR TIME AND TRAVEL"; start date; "15 OVERNIGHTS AND 4 OUTPATIENT VISITS"; age; sex | Yes (P1980126); no NCT | Plain HTML. Allowed | [Terms](https://tklresearch.com/privacy-policy-terms-use/) have no bot or scraping clause [V] |
+| **AbbVie** (Grayslake IL), added 2026-11-24 | [abbviephase1.com/#/available-trials](https://abbviephase1.com/#/available-trials) [owner, browser] | Pay "4200.00"; check-in "13 or 14 December 2026"; "Overnight"; sex; age; BMI. 1 listing | No code in the list | The page fetches its list as JSON from `/API/api/Data/GetTrials` and sends a sign-in token with it. The call answered without one in a browser [owner]. No robots.txt [V] | Not checked |
 
 "Nothing found that forbids it" is not permission. Fortrea and Celerion have no website terms at all that we could find; that is silence, not consent.
 
@@ -115,7 +116,7 @@ Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide the
 
 ### D. No public list of studies
 
-- **AbbVie** (Grayslake IL): its study pages use protocol numbers that match Trials (section 4) [V]. Its volunteer list is at the address the owner gave on 2026-11-24, [abbviephase1.com/#/available-trials](https://abbviephase1.com/#/available-trials). The note that AbbVie blocks scripts was about another AbbVie site. That page draws its studies from a data call, `abbviephase1.com/API/api/Data/GetTrials`, which the page sends with a sign-in token. The owner opened the call in a browser the same day, with no token, and it answered: one study, “Champagne”, $4,200, men and women 18–45, BMI 18–32, an overnight stay with check-in on 13 or 14 December 2026. Each entry also carries the study’s flyer as a PDF. Read from 2026-11-24.
+- **AbbVie** (Grayslake IL): moved to section A on 2026-11-24. The note that it blocked scripts was about another AbbVie site. Its codes elsewhere are protocol numbers that match Trials (section 4) [V].
 - **QUEST Research Institute** (Farmington Hills MI): sign-up and FAQ only [V, browser].
 - **Clinical Pharmacology of Miami**: the studies page was empty; it points volunteers to an app [V, browser].
 - **Frontage** (Secaucus NJ): general sign-up cards; study details only in PDF flyers [V].
@@ -129,7 +130,7 @@ Listed as Clinics since 2026-11-24, with no link, so that a Member can find them
 ### Notes
 
 - **robots.txt** allows the study list on every site except K2. It says what crawlers may fetch. It does not override terms of use.
-- **AI crawler rules.** Syneos, an AbbVie site other than abbviephase1.com (which has no robots.txt), K2 and ClinicalConnection name AI crawlers (GPTBot, ClaudeBot and others) in robots.txt and refuse them [V].
+- **AI crawler rules.** Syneos, AbbVie, K2 and ClinicalConnection name AI crawlers (GPTBot, ClaudeBot and others) in robots.txt and refuse them [V]. For AbbVie that was another of its sites: abbviephase1.com has no robots.txt (checked 2026-11-24).
 - **Pay is "up to"** almost everywhere [V]. It is probably the amount for finishing the whole study [U].
 - **Closed studies stay listed** on some sites; Altasciences marks them "Recruitment Complete" [V].
 - **Feeds.** No site offers its studies as data for others to use (no study RSS). AbbVie's list page fetches its own studies as JSON, and that call is what GuineaPing reads (2026-11-24). Fortrea's RSS and the sitemaps at Fortrea, Altasciences LA and Orlando Clinical Research Center show when a study page was added or changed [V].

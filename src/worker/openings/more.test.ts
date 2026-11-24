@@ -251,12 +251,21 @@ describe("AbbVie", () => {
     expect(abbvie.parse(['[{"Title":"No number"},{"TrialID":7176},{"TrialID":7177,"Title":"  "},null]'])).toEqual([]);
   });
 
-  it("gives pay as dollars, with cents only where the Clinic has them, and leaves out what it doesn't give", () => {
+  it("gives a bare sum as dollars, with cents only where it has them, and other pay as the Clinic wrote it", () => {
     const one = (entry: object) => abbvie.parse([JSON.stringify([{ TrialID: 1, Title: "A study", ...entry }])])[0];
     expect(one({ Stipend: "1234.50" })?.pay).toBe("$1,234.50");
     expect(one({ Stipend: "950" })?.pay).toBe("$950");
+    expect(one({ Stipend: 4200 })?.pay).toBe("$4,200");
+    expect(one({ Stipend: "Up to $4,200" })?.pay).toBe("Up to $4,200");
+    // A sum of nothing is no pay given, not a study that pays nothing.
+    expect(one({ Stipend: "0.00" })?.pay).toBeNull();
+  });
+
+  it("keeps the Clinic's words as they are, and leaves out what it doesn't give", () => {
+    const one = (entry: object) => abbvie.parse([JSON.stringify([{ TrialID: 1, Title: "A study", ...entry }])])[0];
     expect(one({ Stipend: "" })).toMatchObject({ pay: null, when: null, stay: null, who: null });
-    expect(one({ Stipend: "TBD", Gender: "Women", Age: "", BMI: null })).toMatchObject({ pay: null, who: "Women" });
+    expect(one({ Gender: "Women", Age: "", BMI: "<32 and >18" })?.who).toBe("Women, BMI <32 and >18");
+    expect(one({ Title: "  Champagne &amp;\n Brut " })?.title).toBe("Champagne &amp; Brut");
   });
 });
 

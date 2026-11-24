@@ -462,6 +462,8 @@ describe("the day an Opening starts, in a Clinic's wording", () => {
   it("gives no start day for AbbVie's either-or check-in", () => {
     // Either day may be the start: taking one could hide the Opening from a Member whose timeframe holds the other.
     expect(startDay("13 or 14 December 2026", SEEN)).toBeNull();
+    expect(startDay("Dec 13 or 14, 2026", SEEN)).toBeNull();
+    expect(startDay("13/14 December 2026", SEEN)).toBeNull();
   });
 
   it("reads Syneos's dates, and nothing from its note where a date would be", () => {
