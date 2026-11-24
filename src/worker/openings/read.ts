@@ -16,12 +16,12 @@ export type Fetcher = (url: string) => Promise<Response>;
 export const plainFetch: Fetcher = (url) => fetch(url, { redirect: "follow" });
 
 /**
- * How long a source rests between reads. The runs are six minutes apart and each source's turn
+ * How long a source rests between reads. The runs are three minutes apart and each source's turn
  * comes round once an hour, so this is a little under the hour to let a turn that starts a few
  * seconds early still count. It is still once an hour: the run before a source's own turn comes
- * 54 minutes after its last read, and is too soon.
+ * 57 minutes after its last read, and is too soon.
  */
-const REST_MS = 55 * 60 * 1000;
+const REST_MS = 58 * 60 * 1000;
 /** Between two pages of the same source. */
 const GAP_MS = 3000;
 const MAX_TEXT = 300;
