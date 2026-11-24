@@ -84,6 +84,9 @@ export const CLINICS: Clinic[] = [
   c("prosciento", "ProSciento", "Chula Vista, CA", 32.6401, -117.0842, "https://myproscientostudy.com/current-studies/", null, ["ProSciento"]),
   c("nucleus-saint-paul", "Nucleus Network", "Saint Paul, MN", 44.9444, -93.0933, "https://www.nucleusnetwork.com/participants/find-a-trial/", null, ["Nucleus Network", "Prism Research"]),
   c("nih-clinical-center", "NIH Clinical Center", "Bethesda, MD", 38.9807, -77.1003, "https://www.cc.nih.gov/recruit/protocols", null, ["National Institutes of Health Clinical Center", "NIH Clinical Center"]),
+  // AbbVie's site turns automated tools away (docs/research/paid-study-sources.md). Listings mostly
+  // call this Clinic "Acpru /Id# …" and seldom use AbbVie's name (checked 2026-11-24).
+  c("abbvie-grayslake", "AbbVie", "Grayslake, IL", 42.3445, -88.0418, "https://abbviephase1.com/#/available-trials", null, ["ACPRU", "AbbVie"]),
 ];
 
 /** A Clinic's distinct name for a sentence: "Fortrea, Madison, WI". */

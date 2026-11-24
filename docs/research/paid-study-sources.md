@@ -115,7 +115,7 @@ Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide the
 
 ### D. No public list of studies
 
-- **AbbVie** (Grayslake IL): blocked. Its study pages use protocol numbers that match Trials (section 4) [V].
+- **AbbVie** (Grayslake IL): blocked. Its study pages use protocol numbers that match Trials (section 4) [V]. Listed as a link-only Clinic since 2026-11-24, at the address the owner gave ([abbviephase1.com/#/available-trials](https://abbviephase1.com/#/available-trials)); that page has not been opened for GuineaPing.
 - **QUEST Research Institute** (Farmington Hills MI): sign-up and FAQ only [V, browser].
 - **Clinical Pharmacology of Miami**: the studies page was empty; it points volunteers to an app [V, browser].
 - **Frontage** (Secaucus NJ): general sign-up cards; study details only in PDF flyers [V].
