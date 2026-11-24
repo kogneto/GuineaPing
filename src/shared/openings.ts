@@ -70,3 +70,33 @@ export function inOrder<T extends Ordered>(openings: T[], by: OpeningOrder): T[]
 export function asItStood(o: { code: string | null; when: string | null; firstSeen: string }): string {
   return JSON.stringify([o.code, o.when, o.firstSeen]);
 }
+
+/**
+ * How many Follow-up visits an Opening asks for, read from the Clinic's wording about its stay:
+ * outpatient, return and follow-up visits, and the bare "15 visits" of a study that is all visits.
+ * Screening visits and phone calls are not counted, nor is a kind of visit no Clinic has been seen
+ * to use. Null when the Clinic gives no wording: that is "doesn't say", not none.
+ *
+ * It is only for filtering: what a Member reads is always the Clinic's own wording. So it reads
+ * low. A range counts as its lower end ("12 to 16" is 12), and of several figures the lowest
+ * counts, because a filter that guessed high would hide an Opening that might fit.
+ */
+export function followUpVisits(stay: string | null): number | null {
+  if (!stay?.trim()) return null;
+  const figures = [...stay.matchAll(/(\d+)(?:\s*(?:-|–|to)\s*(\d+))?\s+(?:(?:return|follow-up|out-?patient)\s+)*visits?\b/gi)].map((m) => Math.min(Number(m[1]), Number(m[2] ?? m[1])));
+  return figures.length ? Math.min(...figures) : 0;
+}
+
+/** The limits on Follow-up visits a Member can choose between. No limit is null. */
+export const FOLLOW_UP_LIMITS = [0, 2, 5, 10] as const;
+export type FollowUpLimit = (typeof FOLLOW_UP_LIMITS)[number];
+
+/**
+ * Whether an Opening passes a Member's limit on Follow-up visits, given its wording about its
+ * stay. An Opening that doesn't say how many always passes: holding it back would be a guess.
+ */
+export function withinFollowUps(stay: string | null, most: FollowUpLimit | null): boolean {
+  if (most === null) return true;
+  const visits = followUpVisits(stay);
+  return visits === null || visits <= most;
+}

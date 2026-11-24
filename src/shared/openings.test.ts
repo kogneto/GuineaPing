@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { inOrder, payAmount, asItStood, studyOf } from "./openings";
+import { asItStood, followUpVisits, inOrder, payAmount, studyOf, withinFollowUps } from "./openings";
 
 /** Every code on the lists GuineaPing had read by 2026-11-23, with the study each belongs to. */
 const CODES: Record<string, Record<string, string>> = {
@@ -138,5 +138,100 @@ describe("how an entry stood when it was set aside", () => {
     expect(asItStood({ ...entry, when: "Jan 04 2027 - Jan 13 2027" })).not.toBe(asItStood(entry));
     expect(asItStood({ ...entry, firstSeen: "2026-11-23T15:47:00.000Z" })).not.toBe(asItStood(entry));
     expect(asItStood({ ...entry, when: null })).not.toBe(asItStood(entry));
+  });
+});
+
+// Every "stay" wording below was on a Clinic's list in production on 2026-11-24, read by hand.
+describe("the follow-up visits in a Clinic's wording", () => {
+  it("counts return visits", () => {
+    expect(followUpVisits("4 return visits")).toBe(4);
+    expect(followUpVisits("1 return visit")).toBe(1);
+    expect(followUpVisits("5 return visits")).toBe(5);
+    expect(followUpVisits("0 return visits")).toBe(0);
+  });
+
+  it("counts outpatient and follow-up visits beside a stay", () => {
+    expect(followUpVisits("1 stay of 9 nights & 8 outpatient visits")).toBe(8);
+    expect(followUpVisits("1 stay of 9 nights & 10 follow-up visits")).toBe(10);
+    expect(followUpVisits("3 stays totaling 17 nights & 6 out-patient visits")).toBe(6);
+    expect(followUpVisits("3 stays totaling 21 nights, and 20 follow-up visits")).toBe(20);
+    expect(followUpVisits("2 stays of 5 nights each plus 1 follow-up visit")).toBe(1);
+    expect(followUpVisits("1 stay of 5 nights & 1 follow-up visit")).toBe(1);
+    expect(followUpVisits("1 stay of 20 nights & 1 follow-up visit")).toBe(1);
+    expect(followUpVisits("1 stay of 11 nights & 16 out-patient visits. (Approximately 14 weeks)")).toBe(16);
+    expect(followUpVisits("This study will include a 5 Day inpatient stay with 19 outpatient visits")).toBe(19);
+    expect(followUpVisits("Part 1: This study will include 1 inpatient stay of 5 days/4 nights, and 15 follow-up visits")).toBe(15);
+  });
+
+  it("tells an entry that doesn't say from one whose wording has no such visit", () => {
+    expect(followUpVisits(null)).toBeNull();
+    expect(followUpVisits("  ")).toBeNull();
+    expect(followUpVisits("1 stay of 2 nights")).toBe(0);
+    expect(followUpVisits("Able to attend 1 screening visit and a 12-night stay")).toBe(0);
+    expect(followUpVisits("Screening visit, 7-Night Stay")).toBe(0);
+  });
+
+  it("takes the lower end of a range, so an Opening that might fit is not hidden", () => {
+    expect(followUpVisits("1 stay of 4 to 8 nights & 12 to 16 outpatient visits")).toBe(12);
+    expect(followUpVisits("7 stays totaling 58 nights & 25-27 out-patient visits")).toBe(25);
+  });
+
+  it("takes the lowest figure when the wording gives several", () => {
+    // Two groups of one study: 23 visits for one, 11 for the other.
+    expect(followUpVisits("This study will include a 2 period inpatient stay of 5 days/4 nights each, with 23 follow-up visits (Cohort 1-4), or 2 days/1 night with 11 follow-up visits (Cohort 0).")).toBe(11);
+    // Visits listed twice. They may add up to 8; 4 is the lowest it could mean.
+    expect(followUpVisits("15 OVERNIGHTS AND 4 OUTPATIENT VISITS- 4 OUTPATIENT VISITS- 1 PHONE CALL")).toBe(4);
+  });
+
+  it("counts a visit the Clinic calls both follow-up and outpatient once", () => {
+    expect(followUpVisits("This study will include up to 2 screening visits, a 4 Day/3 Night in-patient stay as well as 8 follow-up outpatient visits")).toBe(8);
+  });
+
+  it("counts the visits of a study that is all visits", () => {
+    expect(followUpVisits("15 visits over 6 weeks, Hours: 8:00AM - 1:00PM")).toBe(15);
+  });
+
+  it("leaves out screening visits", () => {
+    expect(followUpVisits("Able to attend 1 screening visit, an 8-night stay, and 4 outpatient visits")).toBe(4);
+    expect(followUpVisits("Available for 1 screening visit, 2-night stay, and 10 outpatient visits")).toBe(10);
+    expect(followUpVisits("Able to attend 1 screening visit, a 2-night stay, and 10 outpatient visits")).toBe(10);
+    expect(followUpVisits("Able to attend 1 screening visit, a 15-night stay, and 16 outpatient visits")).toBe(16);
+    expect(followUpVisits("Able to attend 1 screening visit, a 15-night stay, and 1 outpatient visit")).toBe(1);
+    expect(followUpVisits("Able to attend one of the following schedules; 1 screening visit, a 12-night stay, and 1 outpatient visit")).toBe(1);
+    // Made up, to pin the rule where no stay follows: screening alone is no follow-up visit.
+    expect(followUpVisits("2 screening visits")).toBe(0);
+  });
+
+  it("leaves out phone calls", () => {
+    expect(followUpVisits("21 outpatient visits & 1 follow-up phone call")).toBe(21);
+    expect(followUpVisits("Able to attend 1 screening visit, three 4-night stays and 1 follow-up call")).toBe(0);
+    expect(followUpVisits("This study will include an inpatient period of 18 days/17 nights with a phone call on Day 28")).toBe(0);
+  });
+
+  it("does not count a kind of visit it has not seen a Clinic use for a follow-up", () => {
+    // Made up: no Clinic's list had these on 2026-11-24. Unknown kinds read low, so nothing is hidden by a guess.
+    expect(followUpVisits("1 stay of 3 nights & 4 dosing visits")).toBe(0);
+    expect(followUpVisits("3 consent visits and 2 return visits")).toBe(2);
+  });
+});
+
+describe("a Member's limit on follow-up visits", () => {
+  it("lets through an Opening with no more than the limit, and holds back one with more", () => {
+    expect(withinFollowUps("1 stay of 9 nights & 8 outpatient visits", 10)).toBe(true);
+    expect(withinFollowUps("1 stay of 9 nights & 8 outpatient visits", 5)).toBe(false);
+    expect(withinFollowUps("5 return visits", 5)).toBe(true);
+    expect(withinFollowUps("1 return visit", 0)).toBe(false);
+    expect(withinFollowUps("1 stay of 2 nights", 0)).toBe(true);
+  });
+
+  it("always lets through an Opening that doesn't say how many", () => {
+    expect(withinFollowUps(null, 0)).toBe(true);
+    expect(withinFollowUps(null, 10)).toBe(true);
+  });
+
+  it("lets every Opening through when the Member has chosen no limit", () => {
+    expect(withinFollowUps("7 stays totaling 58 nights & 25-27 out-patient visits", null)).toBe(true);
+    expect(withinFollowUps("1 stay of 2 nights", null)).toBe(true);
+    expect(withinFollowUps(null, null)).toBe(true);
   });
 });
