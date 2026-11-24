@@ -5,6 +5,7 @@ import { novum } from "./novum";
 import { ocrc } from "./ocrc";
 import { pfizer } from "./pfizer";
 import { pharmaron } from "./pharmaron";
+import { drVince } from "./drVince";
 import { tkl } from "./tkl";
 import type { Source } from "./types";
 
@@ -100,5 +101,27 @@ describe("tkl", () => {
     });
     expect(found.some((f) => f.code === "DS302226")).toBe(false);
     expect(found[0]?.when).toBeNull();
+  });
+});
+
+describe("Dr. Vince", () => {
+  it("reads each study card, in the Clinic's own words", () => {
+    const found = basics(drVince, "dr-vince.html", "drvince.com");
+    expect(found.map((f) => f.code)).toEqual(["12C", "10E", "13D", "11F", "18B"]);
+    expect(found[1]).toEqual({
+      key: "/current-studies/health-volunteers-10e/",
+      clinicId: "dr-vince",
+      title: "Healthy Volunteers",
+      pay: "Up to $3,775",
+      when: null,
+      stay: "1 Screening visit, 1 Stay of 4 nights, 2 Outpatient visits, 1 Phone call",
+      who: "Male/Female, Ages 18 to 55",
+      code: "10E",
+      url: "https://drvince.com/current-studies/health-volunteers-10e/",
+    });
+  });
+  it("keeps a card that gives no status line", () => {
+    const found = drVince.parse([fixture("dr-vince.html")]);
+    expect(found[4]).toMatchObject({ title: "Recreational Stimulant Users", pay: "Up to $13,500", stay: "1 Screening visit, 1 Stay of 24 nights, 1 Outpatient visit" });
   });
 });

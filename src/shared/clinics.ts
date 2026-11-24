@@ -7,7 +7,7 @@
  * GuineaPing has no address for its list. The Member opens the link, if there is one, and reads it
  * themselves. Every Clinic can be named in a Watch, which asks ClinicalTrials.gov, not the Clinic.
  */
-export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl";
+export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince";
 
 export type Clinic = {
   id: string;
@@ -82,7 +82,7 @@ export const CLINICS: Clinic[] = [
   c("medpace", "Medpace", "Cincinnati, OH", 39.1271, -84.5144, "https://www.medpace.com/study-participants/browse-studies/", null, ["Medpace"]),
   c("parexel-baltimore", "Parexel", "Baltimore, MD", 39.2904, -76.6122, "https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US", null, ["Parexel"]),
   c("syneos-miami", "Syneos Health", "Miami, FL", 25.7743, -80.1937, "https://www.us-participants.syneoshealth.com/en/avalaible-studies/", null, ["Syneos"]),
-  c("dr-vince", "Dr. Vince Clinical Research", "Overland Park, KS", 38.9822, -94.6708, "https://drvince.com/current-studies/", null, ["Vince"]),
+  c("dr-vince", "Dr. Vince Clinical Research", "Overland Park, KS", 38.9822, -94.6708, "https://drvince.com/current-studies/", "dr-vince", ["Vince"]),
   c("qps-miami", "QPS", "South Miami, FL", 25.7076, -80.2934, "https://miamiresearch.com/", null, ["QPS", "Quest Pharmaceutical Services"], ["South Miami", "Miami"]),
   c("quotient-miami", "Quotient Sciences", "Miami, FL", 25.7743, -80.1937, "https://www.weneedyoutrials.com/us/current-trials", null, ["Quotient"]),
   c("prosciento", "ProSciento", "Chula Vista, CA", 32.6401, -117.0842, "https://myproscientostudy.com/current-studies/", null, ["ProSciento"], ["Chula Vista", "San Diego"]),

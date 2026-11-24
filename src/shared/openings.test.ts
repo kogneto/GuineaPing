@@ -187,6 +187,14 @@ describe("the follow-up visits in a Clinic's wording", () => {
     expect(followUpVisits("This study will include up to 2 screening visits, a 4 Day/3 Night in-patient stay as well as 8 follow-up outpatient visits")).toBe(8);
   });
 
+  it("reads the visits as Dr. Vince lists them, one line each", () => {
+    // Dr. Vince's cards on 2026-11-24, their lines joined as the reader joins them.
+    expect(followUpVisits("1 Screening visit, 1 Stay of 5 nights, 1 Outpatient visit")).toBe(1);
+    expect(followUpVisits("1 Screening visit, 1 Stay of 4 nights, 2 Outpatient visits, 1 Phone call")).toBe(2);
+    expect(followUpVisits("1 Screening visit, 1 Stay of 7 nights, 4 Outpatient visits")).toBe(4);
+    expect(followUpVisits("1 Screening visit, 1 Stay of 24 nights, 1 Outpatient visit")).toBe(1);
+  });
+
   it("counts the visits of a study that is all visits", () => {
     expect(followUpVisits("15 visits over 6 weeks, Hours: 8:00AM - 1:00PM")).toBe(15);
   });
