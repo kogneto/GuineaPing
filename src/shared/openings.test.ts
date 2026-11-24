@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asItStood, followUpVisits, inOrder, limitedTo, payAmount, startDay, studyOf, withinFollowUps } from "./openings";
+import { asItStood, followUpVisits, inOrder, limitedTo, payAmount, startDay, startsWithin, studyOf, withinFollowUps } from "./openings";
 
 /** Every code on the lists GuineaPing had read by 2026-11-23, with the study each belongs to. */
 const CODES: Record<string, Record<string, string>> = {
@@ -262,38 +262,87 @@ describe("a Member's limit on follow-up visits", () => {
   });
 });
 
-describe("a Member's Clinics under their limit on follow-up visits", () => {
-  const o = (id: string, stay: string | null, mark: string | null = null) => ({ id, stay, mark });
+describe("a Member's Clinics under their limits", () => {
+  const o = (id: string, stay: string | null, mark: string | null = null, when: string | null = null) => ({ id, stay, mark, when, firstSeen: "2026-11-23" });
   const ids = (clinics: { openings: { id: string }[] }[]) => clinics.map((c) => c.openings.map((x) => x.id));
   const kc = { openings: [o("none", "0 return visits"), o("one", "1 return visit"), o("four", "4 return visits")] };
   const fortrea = { openings: [o("eight", "1 stay of 9 nights & 8 outpatient visits")] };
+  const ANY_TIME = { from: null, to: null };
+  const upTo = (followUps: 0 | 2 | 5 | 10 | null) => ({ followUps, starts: ANY_TIME });
 
-  it("keeps at each Clinic the Openings within the limit, and counts the ones it holds back", () => {
-    const under = limitedTo([kc, fortrea], 2);
+  it("keeps at each Clinic the Openings within the limit on follow-up visits, and counts the ones it holds back", () => {
+    const under = limitedTo([kc, fortrea], upTo(2));
     expect(ids(under.clinics)).toEqual([["none", "one"], []]);
     expect(under.clinics.map((c) => c.heldBack)).toEqual([1, 1]);
     expect(under.heldBack).toBe(2);
+    expect(under.followUps.heldBack).toBe(2);
   });
 
   it("leaves an Opening the Member set aside where it is, and out of the count", () => {
     // "aside" asks for 10, over the limit, but it is already out of the list and counted on its own.
     const madison = { openings: [o("eight", "1 stay of 9 nights & 8 outpatient visits"), o("aside", "1 stay of 9 nights & 10 follow-up visits", "not_this_time")] };
-    const under = limitedTo([madison], 5);
+    const under = limitedTo([madison], upTo(5));
     expect(ids(under.clinics)).toEqual([["aside"]]);
     expect(under.heldBack).toBe(1);
   });
 
-  it("counts the Openings left in the list that don't say how many", () => {
+  it("counts the Openings left in the list that don't say how many follow-up visits", () => {
     const celerion = { openings: [o("silent", null), o("silent too", null), o("silent, set aside", null, "not_for_me")] };
-    expect(limitedTo([kc, celerion], 0).dontSay).toBe(2);
+    expect(limitedTo([kc, celerion], upTo(0)).followUps.dontSay).toBe(2);
   });
 
-  it("holds nothing back, and has nothing to explain, when the Member chose no limit", () => {
+  it("holds nothing back, and has nothing to explain, when the Member chose no limits", () => {
     const celerion = { openings: [o("silent", null)] };
-    const under = limitedTo([kc, fortrea, celerion], null);
+    const under = limitedTo([kc, fortrea, celerion], upTo(null));
     expect(ids(under.clinics)).toEqual([["none", "one", "four"], ["eight"], ["silent"]]);
     expect(under.heldBack).toBe(0);
-    expect(under.dontSay).toBe(0);
+    expect(under.followUps).toEqual({ heldBack: 0, dontSay: 0 });
+    expect(under.starts).toEqual({ heldBack: 0, dontSay: 0 });
+  });
+
+  // Three Openings with dates, as Clinics word them, and one that gives none.
+  const dated = {
+    openings: [
+      o("early dec, no visits", "1 stay of 2 nights", null, "Dec 02 2026 - Dec 05 2026"),
+      o("january, no visits", "1 stay of 2 nights", null, "4 to 12 Jan"),
+      o("january, eight visits", "1 stay of 9 nights & 8 outpatient visits", null, "Jan 06 2027 - Feb 01 2027"),
+      o("no dates", "1 stay of 2 nights", null, null),
+    ],
+  };
+  const january = { from: "2027-01-01", to: "2027-01-31" };
+
+  it("keeps the Openings that start in the Member's timeframe, and those that give no start day", () => {
+    const under = limitedTo([dated], { followUps: null, starts: january });
+    expect(ids(under.clinics)).toEqual([["january, no visits", "january, eight visits", "no dates"]]);
+    expect(under.starts).toEqual({ heldBack: 1, dontSay: 1 });
+    expect(under.followUps).toEqual({ heldBack: 0, dontSay: 0 });
+    expect(under.heldBack).toBe(1);
+  });
+
+  it("lists an Opening only when it passes both limits, and has each limit count what it holds back by itself", () => {
+    const under = limitedTo([dated], { followUps: 2, starts: january });
+    expect(ids(under.clinics)).toEqual([["january, no visits", "no dates"]]);
+    // Two are held back, once each: one by the timeframe, one by the limit on visits.
+    expect(under.heldBack).toBe(2);
+    expect(under.clinics[0]!.heldBack).toBe(2);
+    expect(under.starts.heldBack).toBe(1);
+    expect(under.followUps.heldBack).toBe(1);
+  });
+
+  it("counts an Opening that fails both limits in both, but once for its Clinic", () => {
+    const both = { openings: [o("december, eight visits", "1 stay of 9 nights & 8 outpatient visits", null, "Dec 07 2026 - Dec 16 2026")] };
+    const under = limitedTo([both], { followUps: 2, starts: january });
+    expect(under.starts.heldBack).toBe(1);
+    expect(under.followUps.heldBack).toBe(1);
+    expect(under.heldBack).toBe(1);
+    expect(under.clinics[0]!.heldBack).toBe(1);
+  });
+
+  it("leaves a set-aside Opening alone under a timeframe too", () => {
+    const madison = { openings: [o("aside, december", "1 stay of 2 nights", "not_this_time", "Dec 02 2026 - Dec 05 2026")] };
+    const under = limitedTo([madison], { followUps: null, starts: january });
+    expect(ids(under.clinics)).toEqual([["aside, december"]]);
+    expect(under.starts).toEqual({ heldBack: 0, dontSay: 0 });
   });
 });
 
@@ -379,5 +428,42 @@ describe("the day an Opening starts, in a Clinic's wording", () => {
     expect(startDay("28 to 3 Feb", SEEN)).toBeNull();
     // A leap day that can be is read.
     expect(startDay("Feb 29 2028 - Mar 04 2028", SEEN)).toBe("2028-02-29");
+  });
+});
+
+describe("a Member's timeframe for when an Opening starts", () => {
+  const SEEN = "2026-11-23";
+  const midDecToJanuary = { from: "2026-12-15", to: "2027-01-31" };
+
+  it("lets through an Opening that starts inside it, the first and last days included", () => {
+    expect(startsWithin("Dec 16 2026 - Dec 18 2026", SEEN, midDecToJanuary)).toBe(true);
+    expect(startsWithin("4 to 12 Jan", SEEN, midDecToJanuary)).toBe(true);
+    expect(startsWithin("Dec 15 2026 - Dec 20 2026", SEEN, midDecToJanuary)).toBe(true);
+    expect(startsWithin("01/31/27 - 02/22/27", SEEN, midDecToJanuary)).toBe(true);
+  });
+
+  it("holds back one that starts before it or after it, however long it runs", () => {
+    expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, midDecToJanuary)).toBe(false);
+    expect(startsWithin("Dec 09 to Feb 19", SEEN, midDecToJanuary)).toBe(false);
+    expect(startsWithin("Feb 01 2027 - Feb 05 2027", SEEN, midDecToJanuary)).toBe(false);
+  });
+
+  it("can be left open at either end", () => {
+    const byNewYear = { from: null, to: "2026-12-31" };
+    const fromNewYear = { from: "2027-01-01", to: null };
+    expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, byNewYear)).toBe(true);
+    expect(startsWithin("Jan 06 2027 - Feb 01 2027", SEEN, byNewYear)).toBe(false);
+    expect(startsWithin("Jan 06 2027 - Feb 01 2027", SEEN, fromNewYear)).toBe(true);
+    expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, fromNewYear)).toBe(false);
+  });
+
+  it("always lets through an Opening that gives no start day", () => {
+    expect(startsWithin(null, SEEN, midDecToJanuary)).toBe(true);
+    expect(startsWithin("To be announced", SEEN, midDecToJanuary)).toBe(true);
+  });
+
+  it("lets every Opening through when no timeframe is set", () => {
+    expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, { from: null, to: null })).toBe(true);
+    expect(startsWithin(null, SEEN, { from: null, to: null })).toBe(true);
   });
 });

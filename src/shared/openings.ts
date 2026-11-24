@@ -113,29 +113,6 @@ export function withinFollowUps(stay: string | null, most: FollowUpLimit | null)
   return visits === null || visits <= most;
 }
 
-/** A Clinic under a Member's limit on Follow-up visits: with the Openings that pass, and how many of its others the limit holds back. */
-export type Limited<C> = C & { heldBack: number };
-
-/**
- * A Member's Clinics under their limit on Follow-up visits. Nothing is held back silently: each
- * Clinic says how many of its Openings are, and `heldBack` is the total. An Opening the Member set
- * aside is left where it is: it is already out of the list, and counted on its own. `dontSay` is
- * how many of the Openings still in the list don't say how many Follow-up visits they ask for,
- * which is why a limit lets them through; with no limit there is nothing to explain, so it is 0.
- */
-export function limitedTo<O extends { stay: string | null; mark: unknown }, C extends { openings: O[] }>(clinics: C[], most: FollowUpLimit | null): { clinics: Limited<C>[]; heldBack: number; dontSay: number } {
-  const under = clinics.map((c) => {
-    const openings = c.openings.filter((o) => o.mark || withinFollowUps(o.stay, most));
-    return { ...c, openings, heldBack: c.openings.length - openings.length };
-  });
-  const listed = under.flatMap((c) => c.openings).filter((o) => !o.mark);
-  return {
-    clinics: under,
-    heldBack: under.reduce((n, c) => n + c.heldBack, 0),
-    dontSay: most === null ? 0 : listed.filter((o) => followUpVisits(o.stay) === null).length,
-  };
-}
-
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 /** A month's name, whole or cut short, and nothing that merely begins like one. */
 const MONTH = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\b\\.?";
@@ -180,4 +157,54 @@ function yearFor(month: number, firstSeen: string): number {
   const seenMonth = Number(firstSeen.slice(5, 7));
   const monthsAhead = (month - seenMonth + 12) % 12;
   return monthsAhead <= 9 ? seenYear + (month < seenMonth ? 1 : 0) : seenYear - (month > seenMonth ? 1 : 0);
+}
+
+/** A Member's timeframe for when an Opening starts. Either end may be left open (null). Days are `YYYY-MM-DD`. */
+export type Timeframe = { from: string | null; to: string | null };
+
+/**
+ * Whether an Opening passes a Member's timeframe: it starts on or after `from` and on or before
+ * `to`, whichever are set, however long it then runs. An Opening that gives no start day always
+ * passes: holding it back would be a guess.
+ */
+export function startsWithin(when: string | null, firstSeen: string, frame: Timeframe): boolean {
+  if (!frame.from && !frame.to) return true;
+  const start = startDay(when, firstSeen);
+  return start === null || ((!frame.from || start >= frame.from) && (!frame.to || start <= frame.to));
+}
+
+/** The limits a Member can put on the Openings they see: on Follow-up visits, and on when an Opening starts. */
+export type Limits = { followUps: FollowUpLimit | null; starts: Timeframe };
+/** A Clinic under a Member's limits: with the Openings that pass them all, and how many of its others they hold back. */
+export type Limited<C> = C & { heldBack: number };
+/** What one limit does by itself: how many Openings it holds back, and how many still listed don't say what it asks about. */
+export type LimitCount = { heldBack: number; dontSay: number };
+
+/**
+ * A Member's Clinics under their limits. An Opening stays listed when it passes every limit.
+ * Nothing is held back silently: each Clinic says how many of its Openings are, `heldBack` is the
+ * total, and each limit says how many it holds back by itself (an Opening over both is counted
+ * by both). An Opening the Member set aside is left where it is and out of every count: it is
+ * already out of the list. `dontSay` is how many of the Openings still listed don't say what that
+ * limit asks about, which is why it lets them through; a limit that isn't set has nothing to
+ * explain, so its counts are 0.
+ */
+export function limitedTo<O extends { stay: string | null; when: string | null; firstSeen: string; mark: unknown }, C extends { openings: O[] }>(
+  clinics: C[],
+  limits: Limits,
+): { clinics: Limited<C>[]; heldBack: number; followUps: LimitCount; starts: LimitCount } {
+  const fewEnough = (o: O) => withinFollowUps(o.stay, limits.followUps);
+  const inTime = (o: O) => startsWithin(o.when, o.firstSeen, limits.starts);
+  const under = clinics.map((c) => {
+    const openings = c.openings.filter((o) => o.mark || (fewEnough(o) && inTime(o)));
+    return { ...c, openings, heldBack: c.openings.length - openings.length };
+  });
+  const notAside = clinics.flatMap((c) => c.openings).filter((o) => !o.mark);
+  const listed = under.flatMap((c) => c.openings).filter((o) => !o.mark);
+  return {
+    clinics: under,
+    heldBack: notAside.length - listed.length,
+    followUps: { heldBack: notAside.filter((o) => !fewEnough(o)).length, dontSay: limits.followUps === null ? 0 : listed.filter((o) => followUpVisits(o.stay) === null).length },
+    starts: { heldBack: notAside.filter((o) => !inTime(o)).length, dontSay: limits.starts.from || limits.starts.to ? listed.filter((o) => startDay(o.when, o.firstSeen) === null).length : 0 },
+  };
 }
