@@ -13,6 +13,7 @@ import { WatchesPage } from "./pages/WatchesPage";
 import { WatchPage } from "./pages/WatchPage";
 import { TabIcon } from "./components/TabIcon";
 import { Link, usePath } from "./router";
+import { useUnread } from "./unread";
 
 function route(path: string, me: Me | null) {
   let m: RegExpExecArray | null;
@@ -51,6 +52,7 @@ export function App() {
   const [status, setStatus] = useState<CheckStatus | null>(null);
   const [signedOut, setSignedOut] = useState(false);
   const [removed, setRemoved] = useState<string | null>(null);
+  const unread = useUnread(path);
 
   useEffect(() => {
     api<Me>("/api/me").then(setMe, (e: ApiError) => (e.status === 403 ? setRemoved(e.message) : setSignedOut(true)));
@@ -104,6 +106,12 @@ export function App() {
           <Link to="/alerts" className={section === "alerts" ? "active" : ""}>
             <TabIcon name="alerts" />
             Alerts
+            {unread > 0 && (
+              <span className="tab-count">
+                {unread > 9 ? "9+" : unread}
+                <span className="visually-hidden"> unread</span>
+              </span>
+            )}
           </Link>
           <Link to="/watches" className={section === "watches" ? "active" : ""}>
             <TabIcon name="watches" />
