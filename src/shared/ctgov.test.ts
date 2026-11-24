@@ -191,7 +191,7 @@ describe("Clinics", () => {
     expect(clinicsNamedBy([{ facility: "Celerion", city: "Belfast" }, { facility: "Research Site", city: "Lincoln" }, { city: "Lincoln" }])).toEqual([]);
   });
 
-  it("recognises AbbVie's unit by the short name most listings give it", () => {
+  it("recognises AbbVie's Clinic by the short name most listings give it", () => {
     // The three spellings ClinicalTrials.gov had for it in Grayslake on 2026-11-24.
     expect(clinicsNamedBy([{ facility: "Acpru /Id# 282128", city: "Grayslake" }])).toEqual(["abbvie-grayslake"]);
     expect(clinicsNamedBy([{ facility: "AbbVie Clinical Pharmacology Research Unit (ACPRU)", city: "Grayslake" }])).toEqual(["abbvie-grayslake"]);
