@@ -28,7 +28,7 @@ export const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 
  */
 export function messagesFor(alerts: NewAlert[]): PushMessage[] {
   if (alerts.length > MAX_SEPARATE_PUSHES) {
-    return [{ title: `${alerts.length} trial Alerts for you`, body: "Open GuineaPing to see them all.", url: "/", tag: "summary" }];
+    return [{ title: `${alerts.length} trial Alerts for you`, body: "Open GuineaPing to see them all.", url: "/alerts", tag: "summary" }];
   }
   return alerts.map((a) =>
     a.viaPrivateWatch
@@ -51,7 +51,7 @@ export function messagesFor(alerts: NewAlert[]): PushMessage[] {
  * say only that there is a note: what it is about could tell whoever glances at the phone that
  * the Member takes part in studies. One Push covers however many notes are waiting.
  */
-export const NOTE_MESSAGE: PushMessage = { title: "A note for you in GuineaPing", body: "Open GuineaPing to read it.", url: "/", tag: "note" };
+export const NOTE_MESSAGE: PushMessage = { title: "A note for you in GuineaPing", body: "Open GuineaPing to read it.", url: "/alerts", tag: "note" };
 
 export type DeviceRow = { id: string; member_id: string; endpoint: string; p256dh: string; auth: string };
 

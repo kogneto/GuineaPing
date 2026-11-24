@@ -219,7 +219,7 @@ describe("Pushes after a Check", () => {
 
     const { NOTE_MESSAGE } = await import("./push");
     expect(JSON.stringify(NOTE_MESSAGE)).not.toMatch(/wait|stud|clinic|trial|Secret/i);
-    expect(NOTE_MESSAGE.url).toBe("/");
+    expect(NOTE_MESSAGE.url).toBe("/alerts");
   });
 
   it("keeps a waiting-period Push apart from the Alerts it arrives with", async () => {

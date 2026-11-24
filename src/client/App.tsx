@@ -17,7 +17,8 @@ import { Link, usePath } from "./router";
 function route(path: string, me: Me | null) {
   let m: RegExpExecArray | null;
   if ((m = /^\/alerts\/([\w-]+)$/.exec(path))) return <AlertPage id={m[1]!} />;
-  if (path === "/clinics") return <ClinicsPage />;
+  // The app opens on Openings: they change every hour, and are what most Members come for.
+  if (path === "/" || path === "/clinics") return <ClinicsPage />;
   if (path === "/devices") return <DevicesPage />;
   // "/members" is where the group list used to live; old links and Home Screen shortcuts still land somewhere.
   if (path === "/settings" || path === "/members") return <SettingsPage me={me} />;
@@ -26,7 +27,7 @@ function route(path: string, me: Me | null) {
   if (path === "/watches/new") return <WatchEditorPage />;
   if ((m = /^\/watches\/([\w-]+)\/edit$/.exec(path))) return <WatchEditorPage id={m[1]!} />;
   if ((m = /^\/watches\/([\w-]+)$/.exec(path))) return <WatchPage id={m[1]!} />;
-  if (path === "/" || path === "/alerts") return <AlertsPage />;
+  if (path === "/alerts") return <AlertsPage />;
   return <NotFound />;
 }
 
@@ -36,7 +37,7 @@ function NotFound() {
       <Illustration name="lost" />
       <p className="empty-title">There's no page here</p>
       <p className="muted">
-        The link may be old or mistyped. <Link to="/">Go to your Alerts</Link>.
+        The link may be old or mistyped. <Link to="/">Go to Openings</Link>.
       </p>
     </div>
   );
@@ -79,7 +80,16 @@ export function App() {
     );
   }
 
-  const section = path.startsWith("/watches") ? "watches" : path.startsWith("/clinics") ? "clinics" : ["/settings", "/members", "/devices", "/profile"].some((p) => path.startsWith(p)) ? "settings" : "alerts";
+  const section =
+    path === "/" || path === "/clinics"
+      ? "clinics"
+      : path.startsWith("/alerts")
+        ? "alerts"
+        : path.startsWith("/watches")
+          ? "watches"
+          : ["/settings", "/members", "/devices", "/profile"].includes(path)
+            ? "settings"
+            : null;
   return (
     <>
       <header className="top">
@@ -87,7 +97,11 @@ export function App() {
           GuineaPing
         </Link>
         <nav>
-          <Link to="/" className={section === "alerts" ? "active" : ""}>
+          <Link to="/" className={section === "clinics" ? "active" : ""}>
+            <TabIcon name="clinics" />
+            Openings
+          </Link>
+          <Link to="/alerts" className={section === "alerts" ? "active" : ""}>
             <TabIcon name="alerts" />
             Alerts
           </Link>
@@ -95,17 +109,13 @@ export function App() {
             <TabIcon name="watches" />
             Watches
           </Link>
-          <Link to="/clinics" className={section === "clinics" ? "active" : ""}>
-            <TabIcon name="clinics" />
-            Openings
-          </Link>
           <Link to="/settings" className={section === "settings" ? "active" : ""}>
             <TabIcon name="settings" />
             Settings
           </Link>
         </nav>
         {me && (
-          <Link to="/profile" className={path.startsWith("/profile") ? "who active" : "who"} aria-label={`Your profile, ${me.email}`}>
+          <Link to="/settings" className={section === "settings" ? "who active" : "who"} aria-label={`Settings, signed in as ${me.email}`}>
             <span className="who-initial" aria-hidden="true">
               {me.email.slice(0, 1).toUpperCase()}
             </span>
