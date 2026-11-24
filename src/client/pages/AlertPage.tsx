@@ -35,7 +35,7 @@ export function AlertPage({ id }: { id: string }) {
   return (
     <article className="narrow">
       <p className="crumb">
-        <Link to="/">← Alerts</Link>
+        <Link to="/alerts">← Alerts</Link>
       </p>
       <div className="heading-row">
         {/* Celebrate only the first time this Alert is opened. */}
