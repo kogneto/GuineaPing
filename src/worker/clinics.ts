@@ -17,7 +17,10 @@ export const studyKey = (r: { source: string; clinic_id: string; code: string | 
   const study = studyOf(r.source, r.code);
   return study ? `${r.clinic_id}:${study}` : null;
 };
-const seenOf = (r: { code: string | null; when_text: string | null; first_seen_at: string }) => roundSeen({ code: r.code, when: r.when_text, firstSeen: r.first_seen_at.slice(0, 10) });
+type Stood = { code: string | null; when_text: string | null; first_seen_at: string };
+const seenOf = (r: Stood) => roundSeen({ code: r.code, when: r.when_text, firstSeen: r.first_seen_at });
+/** Marks kept before 2026-11-24 recorded the day an entry was first seen, not the moment. They still count. */
+const seenByDay = (r: Stood) => roundSeen({ code: r.code, when: r.when_text, firstSeen: r.first_seen_at.slice(0, 10) });
 
 export async function listClinics(db: D1Database, near: Near | null, memberId: string): Promise<ClinicItem[]> {
   const [openings, sources, marks, pushes, off] = await db.batch([
@@ -38,8 +41,9 @@ export async function listClinics(db: D1Database, near: Near | null, memberId: s
   const byClinic = new Map<string, Opening[]>();
   for (const r of (openings?.results ?? []) as Row[]) {
     const study = studyKey(r);
-    // "Not this time" holds only while the entry says what it said when it was marked.
-    const mark: OpeningMark | null = study && studies.has(study) ? "not_for_me" : rounds.get(r.id) === seenOf(r) ? "not_this_time" : null;
+    // "Not this time" holds only while the entry stands as it stood when it was marked.
+    const stood = rounds.get(r.id);
+    const mark: OpeningMark | null = study && studies.has(study) ? "not_for_me" : stood === seenOf(r) || stood === seenByDay(r) ? "not_this_time" : null;
     const list = byClinic.get(r.clinic_id) ?? [];
     list.push({ id: r.id, title: r.title, pay: r.pay, when: r.when_text, stay: r.stay, who: r.who, code: r.code, url: r.url, firstSeen: r.first_seen_at.slice(0, 10), mark, canMarkStudy: study !== null });
     byClinic.set(r.clinic_id, list);

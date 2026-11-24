@@ -62,7 +62,11 @@ export function inOrder<T extends Ordered>(openings: T[], by: OpeningOrder): T[]
   return [...openings].sort(by === "pay" ? byPay : byNewest);
 }
 
-/** What an entry said when a Member set it aside "Not this time". The mark holds while this stays the same. */
+/**
+ * How an entry stood when a Member set it aside "Not this time": its code, its dates, and when it
+ * was first seen. The mark holds while this stays the same. A Clinic read moves `firstSeen` when
+ * it calls the entry new, so give the moment, not the day: an entry can go and come back in a day.
+ */
 export function roundSeen(o: { code: string | null; when: string | null; firstSeen: string }): string {
   return JSON.stringify([o.code, o.when, o.firstSeen]);
 }

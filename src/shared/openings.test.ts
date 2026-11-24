@@ -129,14 +129,14 @@ describe("Openings in order", () => {
 });
 
 describe("what an entry said when it was set aside", () => {
-  const entry = { code: "778951 9b", when: "Dec 07 2026 - Dec 16 2026", firstSeen: "2026-11-23" };
+  const entry = { code: "778951 9b", when: "Dec 07 2026 - Dec 16 2026", firstSeen: "2026-11-23T09:47:00.000Z" };
   it("stays the same while the entry does", () => {
     expect(roundSeen({ ...entry })).toBe(roundSeen(entry));
   });
-  it("differs once its group, its dates, or the day it was first seen changes", () => {
+  it("differs once its group, its dates, or the moment it was first seen changes", () => {
     expect(roundSeen({ ...entry, code: "778951 10a" })).not.toBe(roundSeen(entry));
     expect(roundSeen({ ...entry, when: "Jan 04 2027 - Jan 13 2027" })).not.toBe(roundSeen(entry));
-    expect(roundSeen({ ...entry, firstSeen: "2026-12-20" })).not.toBe(roundSeen(entry));
+    expect(roundSeen({ ...entry, firstSeen: "2026-11-23T15:47:00.000Z" })).not.toBe(roundSeen(entry));
     expect(roundSeen({ ...entry, when: null })).not.toBe(roundSeen(entry));
   });
 });

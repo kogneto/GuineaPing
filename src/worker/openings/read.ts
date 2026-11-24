@@ -18,7 +18,8 @@ export const plainFetch: Fetcher = (url) => fetch(url, { redirect: "follow" });
 /**
  * How long a source rests between reads. The runs are six minutes apart and each source's turn
  * comes round once an hour, so this is a little under the hour to let a turn that starts a few
- * seconds early still count.
+ * seconds early still count. It is still once an hour: the run before a source's own turn comes
+ * 54 minutes after its last read, and is too soon.
  */
 const REST_MS = 55 * 60 * 1000;
 /** Between two pages of the same source. */
@@ -36,10 +37,17 @@ export type ReadResult = {
   detail?: string;
   /** The entries that are news since the last read. Empty unless the read was ok. */
   fresh: FreshOpening[];
-  /** Whether this outcome differs from the source's last one, so a lasting problem is reported once. */
+  /**
+   * Whether this outcome is of another kind than the source's last one, so a lasting problem is
+   * reported once. The detail is left out of it: a site that answers 502 one hour and 503 the next
+   * is still the one problem.
+   */
   statusChanged: boolean;
 };
 type Outcome = Omit<ReadResult, "fresh" | "statusChanged"> & { fresh?: FreshOpening[] };
+
+/** The kind of outcome in a stored status, which may carry a detail: "failed: answered 502" is "failed". */
+const kindOf = (stored: string | null | undefined) => stored?.split(": ")[0] ?? null;
 
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
@@ -90,7 +98,7 @@ export async function readDueSource(db: D1Database, sources: Source[], get: Fetc
       .prepare("UPDATE clinic_sources SET status = ?2, read_at = COALESCE(?3, read_at), refused_at = COALESCE(?4, refused_at) WHERE source = ?1")
       .bind(due.id, status, result.status === "ok" ? now : null, result.status === "refused" ? now : null)
       .run();
-    return { ...result, fresh: result.fresh ?? [], statusChanged: status !== (before?.status ?? null) };
+    return { ...result, fresh: result.fresh ?? [], statusChanged: result.status !== kindOf(before?.status) };
   };
 
   const pages: string[] = [];
