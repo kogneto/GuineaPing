@@ -201,6 +201,153 @@ describe("Clinics", () => {
     expect(clinicsNamedBy([{ facility: "AbbVie Inc. /ID# 123456", city: "North Chicago" }])).toEqual([]);
   });
 
+  it("recognises the Clinics added on 2026-11-24 by the spellings listings gave them that day", () => {
+    const SPELLINGS: Record<string, [facility: string, city: string][]> = {
+      "clinical-pharmacology-miami": [
+        ["Clinical Pharmacology of Miami, LLC", "Miami"],
+        ["Clinical Pharmacology Of Miami Inc.", "Miami"],
+        ["Clinical Pharmacology of Miami ( Site 0001)", "Hialeah"],
+        ["Clinical Pharmacology of Miami (CPMI)", "Miami"],
+      ],
+      "qps-springfield": [
+        ["QPS Bio-Kinetic", "Springfield"],
+        ["Bio-Kinetic Clinical Applications, LLC dba QPS-MO", "Springfield"],
+        ["BioKinetic Clinical Applications, Inc.", "Springfield"],
+        ["Bio-Kinetic Clinical Applications LLC DBA QPS_MO (Patient Screening Only)", "Springfield"],
+        ["QPS Missouri", "Springfield"],
+      ],
+      "worldwide-san-antonio": [
+        ["Worldwide Clinical Trials", "San Antonio"],
+        ["Worldwide Clinical Trial", "San Antonio"],
+        ["Worldwide Clinical Trails Early Phase Services", "San Antonio"],
+        ["WorldWide Clinical Trials", "San Antonio"],
+        ["Worldwide Clinical Trials Drug Development Solutions (formerly CEDRA Clinical Research)", "San Antonio"],
+      ],
+      "parexel-glendale": [
+        ["California Clinical Trials Medical Group", "Glendale"],
+        ["California Clinical Trials Medical Group (CCTMG)", "Glendale"],
+        ["PAREXEL Glendale/LA EPCU", "Glendale"],
+        ["Parexel Early Phase Unit at Glendale", "Glendale"],
+        ["Los Angeles EPCU", "Glendale"],
+      ],
+      "johns-hopkins-bpru": [
+        ["Behavioral Pharmacology Research Unit", "Baltimore"],
+        ["Johns Hopkins University (BPRU) Bayview Campus", "Baltimore"],
+        ["BPRU, Johns Hopkins Bayview Medical Center", "Baltimore"],
+      ],
+      "genesis-tampa": [
+        ["Genesis Clinical Research, LLC", "Tampa"],
+        ["Genesis Clinical Trials", "Tampa"],
+        ["Genesis Clinical Research - Tampa", "Tampa"],
+      ],
+      "frontage-secaucus": [
+        ["Frontage Clinical Services, Inc.", "Secaucus"],
+        ["Frontage Labs", "Secaucus"],
+        ["Frontage Cinical Services", "Hackensack"],
+      ],
+      "floridian-miami-lakes": [
+        ["Floridian Clinical Research, LLC", "Miami Lakes"],
+        ["Floridian Clinical Research - ClinEdge - PPDS", "Miami Lakes"],
+        ["Floridian Clinical Research", "Hialeah"],
+        ["Floridian Clinical Research", "Miami"],
+      ],
+      "axis-dilworth": [
+        ["AXIS Clinicals", "Dilworth"],
+        ["Axis", "Dilworth"],
+        ["Axis Clinicals, LCC", "Dilworth"],
+      ],
+      "quest-farmington-hills": [
+        ["QUEST Research Institute", "Farmington Hills"],
+        ["Quest Research Institue", "Farmington Hills"],
+        ["Quest Research Institute - Alcanza", "Farmington Hills"],
+        ["Quest Research", "Farmington Hills"],
+      ],
+      "k2-maitland": [
+        ["K2 Medical Research, LLC", "Maitland"],
+        ["K2 Medical Research ORLANDO", "Maitland"],
+        ["K2 South Orlando - South Orange Avenue- Site Number : 8401268", "Orlando"],
+      ],
+      "charter-orlando": [
+        ["Charter Research", "Orlando"],
+        ["Charter Research - Winter Park", "Orlando"],
+        ["Charter Research, LLC", "Winter Park"],
+      ],
+      "cenexel-englewood": [
+        ["CenExel Rocky Mountain Clinical Research, LLC", "Englewood"],
+        ["Cenexel Rocky Mountain Clinical Research", "Englewood"],
+        ["CenExcel Rocky Mountain Clinical Research, LLC", "Englewood"],
+      ],
+      "axis-los-angeles": [
+        ["Axis Clinical Trials", "Los Angeles"],
+        ["AXIS Clinical Trials Research Center", "Los Angeles"],
+        ["Axis Clinical Trial Network", "Los Angeles"],
+        ["Axis Clinical Tirals", "Los Angeles"],
+        ["ACTCA, Axis Clinical Trials", "Los Angeles"],
+      ],
+      // Already listed in Chula Vista; a few listings put it in San Diego.
+      prosciento: [
+        ["ProSciento, Inc.", "Chula Vista"],
+        ["Prosciento", "San Diego"],
+      ],
+    };
+    for (const [id, spellings] of Object.entries(SPELLINGS)) {
+      for (const [facility, city] of spellings) expect(clinicsNamedBy([{ facility, city }]), `${facility}, ${city}`).toEqual([id]);
+    }
+  });
+
+  it("does not take a neighbour for one of those Clinics", () => {
+    const NEIGHBOURS: [facility: string, city: string][] = [
+      // Tampa General Hospital's clinic, not Genesis Clinical Research.
+      ["TGH Health Park Genesis Clinic", "Tampa"],
+      ["Tampa General Hospital Genesis Clinic", "Tampa"],
+      // Other places in Englewood that begin "Rocky Mountain".
+      ["Rocky Mountain Cancer Centers - Swedish", "Englewood"],
+      ["Rocky Mountain Movement Disorders Center", "Englewood"],
+      ["Rocky Mountain Ear Center", "Englewood"],
+      // A university department, not the Clinic.
+      ["Division of Clinical Pharmacology, University of Miami", "Miami"],
+      // Left out on purpose: the spellings don't show these are the same operator or place.
+      ["Floridian Research Institute", "Miami"],
+      ["Floridian Neuroscience Institute", "Miami Lakes"],
+      ["Charter Research - Lady Lake", "The Villages"],
+      ["Charter Research", "Lady Lake"],
+    ];
+    for (const [facility, city] of NEIGHBOURS) expect(clinicsNamedBy([{ facility, city }]), `${facility}, ${city}`).toEqual([]);
+    // One operator in two cities is two Clinics.
+    expect(clinicsNamedBy([{ facility: "QPS", city: "Springfield" }])).toEqual(["qps-springfield"]);
+    expect(clinicsNamedBy([{ facility: "QPS Miami", city: "Miami" }])).toEqual(["qps-miami"]);
+    expect(clinicsNamedBy([{ facility: "Parexel", city: "Glendale" }])).toEqual(["parexel-glendale"]);
+    expect(clinicsNamedBy([{ facility: "Parexel", city: "Baltimore" }])).toEqual(["parexel-baltimore"]);
+    expect(clinicsNamedBy([{ facility: "AXIS Clinicals", city: "Dilworth" }])).toEqual(["axis-dilworth"]);
+    expect(clinicsNamedBy([{ facility: "Axis Clinical Trials", city: "Los Angeles" }])).toEqual(["axis-los-angeles"]);
+    // Axis Clinical Trials' other places are not on the list.
+    expect(clinicsNamedBy([{ facility: "Axis Clinical Trials", city: "New Hyde Park" }])).toEqual([]);
+  });
+
+  it("lists a Clinic without a link until an address for its own list has been confirmed", () => {
+    const withoutLink = CLINICS.filter((c) => c.url === null);
+    expect(withoutLink.map((c) => c.id).sort()).toEqual([
+      "axis-los-angeles",
+      "charter-orlando",
+      "floridian-miami-lakes",
+      "frontage-secaucus",
+      "genesis-tampa",
+      "k2-maitland",
+      "quest-farmington-hills",
+      "worldwide-san-antonio",
+    ]);
+    // With no list to open there is nothing to read either.
+    expect(withoutLink.filter((c) => c.source !== null)).toEqual([]);
+    // The one address the research had opened, and those the owner gave on 2026-11-24.
+    const linkOf = (id: string) => CLINICS.find((c) => c.id === id)?.url;
+    expect(linkOf("johns-hopkins-bpru")).toBe("https://www.hopkinsmedicine.org/psychiatry/research/bpru/research-volunteers");
+    expect(linkOf("clinical-pharmacology-miami")).toBe("https://cpmiclinical.com/studies/#!/");
+    expect(linkOf("qps-springfield")).toBe("https://417trials.com/");
+    expect(linkOf("parexel-glendale")).toBe("https://pxlcrs.my.site.com/portal/s/triallistla?loc=LA&language=en_US");
+    expect(linkOf("axis-dilworth")).toBe("https://axispays.com/browse-current-studies/");
+    expect(linkOf("cenexel-englewood")).toBe("https://cenexelclinicaltrials.com/search-result-new/");
+  });
+
   it("names the Clinics on a Trial without changing its places", () => {
     const t = toTrial({
       protocolSection: {

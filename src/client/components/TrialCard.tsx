@@ -17,11 +17,17 @@ export function TrialClinics({ trial }: { trial: Trial }) {
       {clinics.map((c, i) => (
         <span key={c.id}>
           {i > 0 && "; "}
-          {clinicLabel(c)} (
-          <a href={c.url} target="_blank" rel="noreferrer">
-            its own list
-          </a>
-          )
+          {clinicLabel(c)}
+          {c.url && (
+            <>
+              {" "}
+              (
+              <a href={c.url} target="_blank" rel="noreferrer">
+                its own list
+              </a>
+              )
+            </>
+          )}
         </span>
       ))}
       . The Clinic's list may give pay and dates, under its own name for the study.

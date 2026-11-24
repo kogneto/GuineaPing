@@ -198,7 +198,8 @@ export type ClinicItem = {
   id: string;
   name: string;
   place: string;
-  url: string;
+  /** The Clinic's own list of studies. Null when no address for it has been confirmed. */
+  url: string | null;
   /** Miles from the Member's Profile ZIP code; null when they have given none. */
   miles: number | null;
   /** False for a Clinic whose site GuineaPing never visits: the Member reads it themselves. */

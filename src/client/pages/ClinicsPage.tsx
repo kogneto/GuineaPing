@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { ClinicItem, Opening } from "../../shared/api";
 import { FOLLOW_UP_LIMITS, OPENING_MARK_LABELS, inOrder, limitedTo, payAmount, timeframeOf, type FollowUpLimit, type LimitCount, type Limited, type OpeningMark, type Timeframe, type Unapplied } from "../../shared/openings";
 import { ago, api } from "../api";
@@ -211,7 +211,7 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: Limited<Clin
   const hasSwitch = reading || (clinic.read && clinic.pushNew);
   const sub = [
     clinic.miles !== null ? `${clinic.miles} miles` : null,
-    !clinic.read ? "not read by GuineaPing" : clinic.refused ? "its site stopped letting GuineaPing read it" : !clinic.lastReadAt ? "not read yet" : listed.length === 1 ? "1 Opening" : `${listed.length} Openings`,
+    !clinic.read ? (clinic.url ? "not read by GuineaPing" : "no link to its list yet") : clinic.refused ? "its site stopped letting GuineaPing read it" : !clinic.lastReadAt ? "not read yet" : listed.length === 1 ? "1 Opening" : `${listed.length} Openings`,
     reading && fresh ? `${fresh} new` : null,
     clinic.heldBack ? `${clinic.heldBack} hidden` : null,
   ].filter(Boolean);
@@ -230,11 +230,11 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: Limited<Clin
             <input type="checkbox" role="switch" checked={clinic.pushNew} onChange={(e) => onPush(clinic, e.target.checked)} aria-label={`Push me new Openings at ${label}`} />
             <span aria-hidden="true" />
           </label>
-        ) : (
+        ) : clinic.url ? (
           <a href={clinic.url} target="_blank" rel="noreferrer" className="clinic-row-link">
             Open list ↗
           </a>
-        )}
+        ) : null}
         <button type="button" className="chevron" aria-label={open ? `Close ${label}` : `Open ${label}`} onClick={() => setOpen(!open)}>
           {open ? "⌄" : "›"}
         </button>
@@ -250,9 +250,11 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: Limited<Clin
             />
           )}
           <p className="clinic-row-actions">
-            <a href={clinic.url} target="_blank" rel="noreferrer">
-              Open its list
-            </a>
+            {clinic.url && (
+              <a href={clinic.url} target="_blank" rel="noreferrer">
+                Open its list
+              </a>
+            )}
             <Link to={`/watches/new?clinic=${clinic.id}`}>Watch for Trials</Link>
             <button type="button" className="link quiet" onClick={() => onOffList(clinic, true)}>
               Take off my list
@@ -264,13 +266,33 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: Limited<Clin
   );
 }
 
-/** How many link-only Clinics show before "Show more": the nearest few are the ones worth a look. */
-const LINK_ONLY_SHOWN = 3;
+/** How many Clinics GuineaPing doesn't read show before "Show more": the nearest few are the ones worth a look. */
+const UNREAD_SHOWN = 3;
+
+/** A group of Clinics that GuineaPing doesn't read: the nearest few, and the rest on asking. */
+function UnreadGroup({ label, says, clinics, row }: { label: string; says?: string; clinics: Limited<ClinicItem>[]; row: (c: Limited<ClinicItem>) => ReactNode }) {
+  const [all, setAll] = useState(false);
+  if (!clinics.length) return null;
+  return (
+    <>
+      <h2 className="group-label">{label}</h2>
+      <div className="stack">{(all ? clinics : clinics.slice(0, UNREAD_SHOWN)).map(row)}</div>
+      {clinics.length > UNREAD_SHOWN && (
+        <p className="show-more">
+          <button type="button" className="link" onClick={() => setAll(!all)}>
+            {all ? "Show fewer" : `Show ${clinics.length - UNREAD_SHOWN} more`}
+          </button>
+        </p>
+      )}
+      {says && <p className="muted small">{says}</p>}
+    </>
+  );
+}
 
 function ByClinic({ clinics, onMark, onPush, onOffList }: { clinics: Limited<ClinicItem>[]; onMark: SetAside } & ClinicActions) {
-  const [allLinkOnly, setAllLinkOnly] = useState(false);
   const read = clinics.filter((c) => c.read);
-  const linkOnly = clinics.filter((c) => !c.read);
+  const toOpen = clinics.filter((c) => !c.read && c.url);
+  const noLink = clinics.filter((c) => !c.read && !c.url);
   const row = (c: Limited<ClinicItem>) => <ClinicRow key={c.id} clinic={c} onMark={onMark} onPush={onPush} onOffList={onOffList} />;
   return (
     <>
@@ -281,19 +303,13 @@ function ByClinic({ clinics, onMark, onPush, onOffList }: { clinics: Limited<Cli
           <p className="muted small">The switch sends a Push to your Devices when that Clinic lists a new Opening. The Push names the Clinic and gives the study's title, pay, dates and stay, so it shows on your lock screen.</p>
         </>
       )}
-      {linkOnly.length > 0 && (
-        <>
-          <h2 className="group-label">Clinics you open yourself</h2>
-          <div className="stack">{(allLinkOnly ? linkOnly : linkOnly.slice(0, LINK_ONLY_SHOWN)).map(row)}</div>
-          {linkOnly.length > LINK_ONLY_SHOWN && (
-            <p className="show-more">
-              <button type="button" className="link" onClick={() => setAllLinkOnly(!allLinkOnly)}>
-                {allLinkOnly ? "Show fewer" : `Show ${linkOnly.length - LINK_ONLY_SHOWN} more`}
-              </button>
-            </p>
-          )}
-        </>
-      )}
+      <UnreadGroup label="Clinics you open yourself" clinics={toOpen} row={row} />
+      <UnreadGroup
+        label="Clinics with no list to open yet"
+        says="GuineaPing has no address for these Clinics' own lists of studies yet. “Watch for Trials” still tells you when a new Trial on ClinicalTrials.gov names one."
+        clinics={noLink}
+        row={row}
+      />
       {!clinics.length && <p className="muted">You have taken every Clinic off your list.</p>}
     </>
   );
@@ -452,7 +468,7 @@ export function ClinicsPage() {
       <details className="about">
         <summary>How this page works</summary>
         <p>Research clinics that pay healthy volunteers. What each one says about pay, dates and stays is in its own words; open it at the Clinic for the details.</p>
-        <p>GuineaPing reads only some Clinics' lists, once an hour. A list can change sooner than that, so check the Clinic's own page before you plan around it. The others are under "By Clinic", as "Clinics you open yourself".</p>
+        <p>GuineaPing reads only some Clinics' lists, once an hour. A list can change sooner than that, so check the Clinic's own page before you plan around it. The others are under "By Clinic": "Clinics you open yourself" link to their own lists, and "Clinics with no list to open yet" are those GuineaPing has no address for.</p>
         <p>
           Under "By Clinic", the switch beside a Clinic sends a Push to your Devices when its list shows a new Opening, or new dates or a new group for one it had. That Push names the Clinic and gives the study's title,
           pay, dates and stay.
