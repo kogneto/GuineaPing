@@ -67,6 +67,6 @@ export function inOrder<T extends Ordered>(openings: T[], by: OpeningOrder): T[]
  * was first seen. The mark holds while this stays the same. A Clinic read moves `firstSeen` when
  * it calls the entry new, so give the moment, not the day: an entry can go and come back in a day.
  */
-export function roundSeen(o: { code: string | null; when: string | null; firstSeen: string }): string {
+export function asItStood(o: { code: string | null; when: string | null; firstSeen: string }): string {
   return JSON.stringify([o.code, o.when, o.firstSeen]);
 }
