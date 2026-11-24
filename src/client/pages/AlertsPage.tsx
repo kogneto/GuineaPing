@@ -6,6 +6,7 @@ import { Greeting } from "../components/Greeting";
 import { Illustration } from "../components/Illustration";
 import { SortToggle } from "../components/TrialCard";
 import { Link } from "../router";
+import { alertsChanged, unreadCount } from "../unread";
 
 /** The Alert list: every Alert and note, newest first. */
 export function AlertsPage() {
@@ -22,6 +23,7 @@ export function AlertsPage() {
   const dismiss = async (id: string) => {
     await api(`/api/notes/${id}/read`, "POST");
     setItems((list) => list?.map((i) => (i.kind === "note" && i.id === id ? { ...i, read: true } : i)) ?? null);
+    alertsChanged();
   };
 
   if (error) return <p className="error">{error}</p>;
@@ -33,7 +35,7 @@ export function AlertsPage() {
   const measured = inView.some((i) => i.kind === "alert" && i.trial.nearest);
   // Nearest first is about Trials, so notes step aside while it is on.
   const shown = nearestFirst && measured ? inView.filter((i) => i.kind === "alert").sort((a, b) => (a.kind === "alert" && b.kind === "alert" ? byNearest(a.trial, b.trial) : 0)) : inView;
-  const unread = items.filter((i) => !i.read && (i.kind === "note" || i.mark !== "not_for_me")).length;
+  const unread = unreadCount(items);
   return (
     <>
       {items.length > 0 ? (

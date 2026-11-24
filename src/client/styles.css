@@ -99,6 +99,7 @@ h2 { font-size: 1.15rem; font-weight: 800; margin: 2rem 0 0.4rem; }
 .top nav { display: flex; gap: 1rem; }
 .top nav a { color: var(--muted); text-decoration: none; padding: 0.2rem 0; border-bottom: 2px solid transparent; }
 .top nav a.active { color: var(--text); border-bottom-color: var(--accent); }
+.tab-count { margin-left: 0.35rem; font-size: 0.72rem; font-weight: 800; line-height: 1; background: var(--accent); color: var(--accent-text); border-radius: 999px; padding: 0.15rem 0.4rem; }
 .who { margin-left: auto; color: var(--muted); text-decoration: underline; text-underline-offset: 2px; font-size: 0.85rem; overflow-wrap: anywhere; }
 .who.active { color: var(--text); }
 .who-initial { display: none; }
@@ -283,6 +284,8 @@ legend { font-weight: 600; padding: 0 0.3rem; }
   .top nav { padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); }
   .top nav a { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 0.35rem 0 0.3rem; font-size: 0.72rem; font-weight: 600; border: none; border-radius: 14px; }
   .top nav a.active { color: var(--accent); font-weight: 800; background: var(--accent-soft); }
+  .top nav a { position: relative; }
+  .tab-count { position: absolute; top: 2px; left: calc(50% + 6px); margin: 0; min-width: 1.1rem; text-align: center; }
   .tab-icon { display: block; }
   .greeting h1 { font-size: 1.25rem; }
   .who { text-decoration: none; }
@@ -316,3 +319,4 @@ button.chip { min-height: 36px; padding: 0.25rem 0.75rem; font-weight: 700; back
 .points .fact.missing { border-left-color: var(--line); font-weight: 400; }
 .views.scroll button { padding: 0.25rem 0.65rem; font-size: 0.875rem; }
 .show-more button { min-height: 44px; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

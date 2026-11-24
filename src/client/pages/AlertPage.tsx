@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { MARKS, MAX_NOTE_CHARS, type AlertItem, type Mark } from "../../shared/api";
 import { MARK_LABELS, agesText, criteriaSections, kindsText, locationsText, phaseText, sexText, statusText, type CriteriaSection } from "../../shared/plain";
 import { ago, api } from "../api";
+import { alertsChanged } from "../unread";
 import { PointsToCheck } from "../components/PointsToCheck";
 import { Illustration } from "../components/Illustration";
 import { TrialClinics } from "../components/TrialCard";
@@ -14,7 +15,7 @@ export function AlertPage({ id }: { id: string }) {
   useEffect(() => {
     api<AlertItem>(`/api/alerts/${id}`).then((a) => {
       setAlert(a);
-      if (!a.read) api(`/api/alerts/${id}/read`, "POST").catch(() => {});
+      if (!a.read) api(`/api/alerts/${id}/read`, "POST").then(alertsChanged, () => {});
     }, (e: Error) => setError(e.message));
   }, [id]);
 
@@ -152,7 +153,11 @@ function Sorting({ alert, onChange }: { alert: AlertItem; onChange: (a: AlertIte
       setBusy(false);
     }
   };
-  const mark = (m: Mark) => run(async () => onChange(await api<AlertItem>(`/api/alerts/${alert.id}`, "PUT", { mark: alert.mark === m ? null : m })));
+  const mark = (m: Mark) =>
+    run(async () => {
+      onChange(await api<AlertItem>(`/api/alerts/${alert.id}`, "PUT", { mark: alert.mark === m ? null : m }));
+      alertsChanged();
+    });
   const saveNote = () =>
     run(async () => {
       onChange(await api<AlertItem>(`/api/alerts/${alert.id}`, "PUT", { note }));
