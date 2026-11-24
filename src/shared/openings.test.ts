@@ -476,6 +476,29 @@ describe("the day an Opening starts, in a Clinic's wording", () => {
     expect(startDay("Dec 10 to Dec 01", SEEN)).toBeNull();
   });
 
+  it("gives no start day when a later stretch begins before the first, or cannot be read as a stretch itself", () => {
+    expect(startDay("11 Jan to 3 Feb; 20 to 23 Dec", SEEN)).toBeNull();
+    expect(startDay("Dec 1; Dec 5 - Dec 2", SEEN)).toBeNull();
+    // In order, as Altasciences Kansas City writes two stays, it is read.
+    expect(startDay("20 to 23 Dec; 11 Jan to 3 Feb", SEEN)).toBe("2026-12-20");
+  });
+
+  it("gives no start day for a range that runs backwards within a month, year or no year", () => {
+    expect(startDay("Dec 5 - Dec 3, 2027", SEEN)).toBeNull();
+    // With a year on each date it is a stretch of a year, and says so.
+    expect(startDay("Dec 5 2026 - Dec 3 2027", SEEN)).toBe("2026-12-05");
+  });
+
+  it("gives no start day when the year is far from the day the Opening was first seen", () => {
+    expect(startDay("01/13/99", SEEN)).toBeNull();
+    expect(startDay("Dec 02 2036 - Dec 09 2036", SEEN)).toBeNull();
+    expect(startDay("Jan 05 2024 - Jan 09 2024", SEEN)).toBeNull();
+    // A year back and five on are the edges: a study that began last year, or is planned far ahead.
+    expect(startDay("Dec 01 2025 - Jun 01 2027", SEEN)).toBe("2025-12-01");
+    expect(startDay("Mar 03 2031", SEEN)).toBe("2031-03-03");
+    expect(startDay("Mar 03 2032", SEEN)).toBeNull();
+  });
+
   it("is not put off by a full stop or a stray separator at the end", () => {
     expect(startDay("Dec 01 - Dec 10.", SEEN)).toBe("2026-12-01");
     expect(startDay("Dec 01 to Dec 10; ", SEEN)).toBe("2026-12-01");

@@ -176,28 +176,40 @@ const canBe = (month: number, day: number, year: number) => month >= 1 && month 
  * be something this knows how to read, one stretch of days or several with ";" between, and any
  * doubt gives null, which means the Opening is always shown. That covers no wording; anything in
  * front of, between or after the dates that is not a date; a date that cannot be; and a last date
- * before the first. It never skips what it cannot read to find a date further along.
+ * before the first, a later stretch that begins before the first one, or a year far from the day
+ * the Opening was first seen. It never skips what it cannot read to find a date further along.
  *
  * A year the Clinic writes is used, also when it is written once after the last date. Otherwise
  * it comes from `firstSeen` (see `yearFor`). Nothing here looks at the clock, and days are text,
  * so no time zone can move one.
  */
 export function startDay(when: string | null, firstSeen: string): string | null {
-  const stretches = (when ?? "")
+  const starts = (when ?? "")
     .split(";")
     .map((part) => part.trim().replace(/\.$/, ""))
     .filter(Boolean)
-    .map(stretch);
-  const whole = stretches[0];
-  if (!whole || stretches.some((s) => s === null)) return null;
-  const { first, last } = whole;
+    .map((part) => firstDayOf(stretch(part), firstSeen));
+  const first = starts[0];
+  // Every stretch must be read, and none may begin before the first, or the first is not the start.
+  return first && starts.every((s) => s !== null && s >= first) ? first : null;
+}
+
+/** How far a start may be from the year an Opening was first seen: further is more likely a slip than a study. */
+const YEARS_BACK = 1;
+const YEARS_ON = 5;
+
+/** The first day of one stretch, with its year settled: null when the stretch was not read, or its dates cannot both be right. */
+function firstDayOf(span: ReturnType<typeof stretch>, firstSeen: string): string | null {
+  if (!span) return null;
+  const { first, last } = span;
+  // An earlier day of the same month, with no year on the first date to say it is a year before: a slip.
+  if (last && first.year === null && last.month === first.month && last.day < first.day) return null;
   const year = first.year ?? (last?.year != null ? (isBefore(first, last) ? last.year : last.year - 1) : yearFor(first.month, firstSeen));
-  if (!canBe(first.month, first.day, year)) return null;
+  const seenYear = Number(firstSeen.slice(0, 4));
+  if (year < seenYear - YEARS_BACK || year > seenYear + YEARS_ON || !canBe(first.month, first.day, year)) return null;
   const start = dayText(year, first.month, first.day);
   if (!last) return start;
-  // With no year on the last date and an earlier day of the same month, it is a slip or a stretch of a year.
-  if (last.year === null && last.month === first.month && last.day < first.day) return null;
-  // Otherwise a last date with no year of its own is the next such day on or after the first.
+  // A last date with no year of its own is the next such day on or after the first.
   const lastYear = last.year ?? (isBefore(first, last) ? year : year + 1);
   return canBe(last.month, last.day, lastYear) && start <= dayText(lastYear, last.month, last.day) ? start : null;
 }
