@@ -115,7 +115,7 @@ export function App() {
           </Link>
         </nav>
         {me && (
-          <Link to="/settings" className={section === "settings" ? "who active" : "who"} aria-label={`Settings, signed in as ${me.email}`}>
+          <Link to="/settings" className={section === "settings" ? "who active" : "who"} aria-label="Settings">
             <span className="who-initial" aria-hidden="true">
               {me.email.slice(0, 1).toUpperCase()}
             </span>
