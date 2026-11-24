@@ -110,7 +110,7 @@ _Avoid_: Study, listing, Trial, posting
 
 **Follow-up visit**:
 A visit to the Clinic that an Opening asks for besides its stay: what Clinics call an outpatient, return or follow-up visit. A screening visit is not one, and nor is a phone call. A Member can limit the Openings they see to those with no more than a number of them, a choice kept on the phone or computer they made it on. GuineaPing reads the number from the Clinic’s own words only to apply that limit, and never shows it: where the words give a range or several figures the lowest counts, so that no Opening is hidden that might fit, and an Opening that doesn’t say how many is always shown.
-_Avoid_: Follow-up on its own, follow (a Follow is of a Watch), outpatient visit, return visit, check-up
+_Avoid_: Follow-up on its own, follow (a Follow is of a Watch), outpatient visit and return visit (the Clinics’ words: say them only to explain what counts), check-up
 
 **Clinic read**:
 One look at a Clinic’s list, at most once an hour, that records which Openings are there now and which of them are new: an entry the list did not have before, one that had gone and is back, or one whose study code or dates have changed. A Clinic’s first read finds nothing new. Only some Clinics are read. A Clinic whose terms forbid automated tools, or whose site turns them away, is never visited: Members open its list themselves.

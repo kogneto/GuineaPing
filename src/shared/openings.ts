@@ -71,6 +71,11 @@ export function asItStood(o: { code: string | null; when: string | null; firstSe
   return JSON.stringify([o.code, o.when, o.firstSeen]);
 }
 
+/** A number, or several the Clinic gives together ("12 to 16", "2 or 5", "14 and 28"), and the visits they count. */
+const VISITS = /(\d+(?:\s*(?:-|–|to|or|and|&|,)\s*\d+)*)\s+(?:(?:return|follow[- ]?up|out[- ]?patient)\s+)*visits?\b/gi;
+/** What stands just before a number that is a day, a week, a price or part of a code, not a count. */
+const LABELS_A_NUMBER = /(?:\b(?:days?|weeks?|months?|cycles?|periods?|visits?|cohorts?|parts?|groups?)\s*|[$#\w./-])$/i;
+
 /**
  * How many Follow-up visits an Opening asks for, read from the Clinic's wording about its stay:
  * outpatient, return and follow-up visits, and the bare "15 visits" of a study that is all visits.
@@ -78,12 +83,15 @@ export function asItStood(o: { code: string | null; when: string | null; firstSe
  * to use. Null when the Clinic gives no wording: that is "doesn't say", not none.
  *
  * It is only for filtering: what a Member reads is always the Clinic's own wording. So it reads
- * low. A range counts as its lower end ("12 to 16" is 12), and of several figures the lowest
- * counts, because a filter that guessed high would hide an Opening that might fit.
+ * low, because a filter that guessed high would hide an Opening that might fit:
+ * - of several numbers given together the lowest counts: "12 to 16" is 12, "2 or 5" is 2;
+ * - of several figures in one wording the lowest counts, though they may add up;
+ * - a number that something labels is not a count: "a Day 14 follow-up visit" is one visit, on
+ *   day 14, and is read as giving no count at all.
  */
 export function followUpVisits(stay: string | null): number | null {
   if (!stay?.trim()) return null;
-  const figures = [...stay.matchAll(/(\d+)(?:\s*(?:-|–|to)\s*(\d+))?\s+(?:(?:return|follow-up|out-?patient)\s+)*visits?\b/gi)].map((m) => Math.min(Number(m[1]), Number(m[2] ?? m[1])));
+  const figures = [...stay.matchAll(VISITS)].filter((m) => !LABELS_A_NUMBER.test(stay.slice(0, m.index))).map((m) => Math.min(...m[1]!.match(/\d+/g)!.map(Number)));
   return figures.length ? Math.min(...figures) : 0;
 }
 
@@ -99,4 +107,27 @@ export function withinFollowUps(stay: string | null, most: FollowUpLimit | null)
   if (most === null) return true;
   const visits = followUpVisits(stay);
   return visits === null || visits <= most;
+}
+
+/** A Clinic under a Member's limit on Follow-up visits: with the Openings that pass, and how many of its others the limit holds back. */
+export type Limited<C> = C & { heldBack: number };
+
+/**
+ * A Member's Clinics under their limit on Follow-up visits. Nothing is held back silently: each
+ * Clinic says how many of its Openings are, and `heldBack` is the total. An Opening the Member set
+ * aside is left where it is: it is already out of the list, and counted on its own. `dontSay` is
+ * how many of the Openings still in the list don't say how many Follow-up visits they ask for,
+ * which is why a limit lets them through; with no limit there is nothing to explain, so it is 0.
+ */
+export function limitedTo<O extends { stay: string | null; mark: unknown }, C extends { openings: O[] }>(clinics: C[], most: FollowUpLimit | null): { clinics: Limited<C>[]; heldBack: number; dontSay: number } {
+  const under = clinics.map((c) => {
+    const openings = c.openings.filter((o) => o.mark || withinFollowUps(o.stay, most));
+    return { ...c, openings, heldBack: c.openings.length - openings.length };
+  });
+  const listed = under.flatMap((c) => c.openings).filter((o) => !o.mark);
+  return {
+    clinics: under,
+    heldBack: under.reduce((n, c) => n + c.heldBack, 0),
+    dontSay: most === null ? 0 : listed.filter((o) => followUpVisits(o.stay) === null).length,
+  };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asItStood, followUpVisits, inOrder, payAmount, studyOf, withinFollowUps } from "./openings";
+import { asItStood, followUpVisits, inOrder, limitedTo, payAmount, studyOf, withinFollowUps } from "./openings";
 
 /** Every code on the lists GuineaPing had read by 2026-11-23, with the study each belongs to. */
 const CODES: Record<string, Record<string, string>> = {
@@ -213,6 +213,27 @@ describe("the follow-up visits in a Clinic's wording", () => {
     expect(followUpVisits("1 stay of 3 nights & 4 dosing visits")).toBe(0);
     expect(followUpVisits("3 consent visits and 2 return visits")).toBe(2);
   });
+
+  // The wordings from here to the end of this block are made up: a review asked what a Clinic
+  // could plausibly write that would make the reader count too high, and so hide an Opening.
+  it("does not take the number of a day, a week or a price for a count", () => {
+    expect(followUpVisits("1 stay of 5 nights with a Day 14 follow-up visit")).toBe(0);
+    expect(followUpVisits("1 stay of 3 nights and a Week 4 outpatient visit")).toBe(0);
+    expect(followUpVisits("2 return visits, then follow-up visits on Days 14 and 28")).toBe(2);
+    expect(followUpVisits("Follow-up visits: Days 14 and 28 follow-up visits")).toBe(0);
+    expect(followUpVisits("$100 follow-up visit")).toBe(0);
+    expect(followUpVisits("D14 follow-up visit")).toBe(0);
+  });
+
+  it("takes the lowest of the numbers a Clinic offers between", () => {
+    expect(followUpVisits("1 stay of 4 nights and 2 or 5 outpatient visits")).toBe(2);
+    expect(followUpVisits("2, 4 or 6 return visits")).toBe(2);
+  });
+
+  it("knows the same visits spelt with a space", () => {
+    expect(followUpVisits("1 stay of 4 nights and 6 follow up visits")).toBe(6);
+    expect(followUpVisits("1 stay of 4 nights and 6 out patient visits")).toBe(6);
+  });
 });
 
 describe("a Member's limit on follow-up visits", () => {
@@ -233,5 +254,40 @@ describe("a Member's limit on follow-up visits", () => {
     expect(withinFollowUps("7 stays totaling 58 nights & 25-27 out-patient visits", null)).toBe(true);
     expect(withinFollowUps("1 stay of 2 nights", null)).toBe(true);
     expect(withinFollowUps(null, null)).toBe(true);
+  });
+});
+
+describe("a Member's Clinics under their limit on follow-up visits", () => {
+  const o = (id: string, stay: string | null, mark: string | null = null) => ({ id, stay, mark });
+  const ids = (clinics: { openings: { id: string }[] }[]) => clinics.map((c) => c.openings.map((x) => x.id));
+  const kc = { openings: [o("none", "0 return visits"), o("one", "1 return visit"), o("four", "4 return visits")] };
+  const fortrea = { openings: [o("eight", "1 stay of 9 nights & 8 outpatient visits")] };
+
+  it("keeps at each Clinic the Openings within the limit, and counts the ones it holds back", () => {
+    const under = limitedTo([kc, fortrea], 2);
+    expect(ids(under.clinics)).toEqual([["none", "one"], []]);
+    expect(under.clinics.map((c) => c.heldBack)).toEqual([1, 1]);
+    expect(under.heldBack).toBe(2);
+  });
+
+  it("leaves an Opening the Member set aside where it is, and out of the count", () => {
+    // "aside" asks for 10, over the limit, but it is already out of the list and counted on its own.
+    const madison = { openings: [o("eight", "1 stay of 9 nights & 8 outpatient visits"), o("aside", "1 stay of 9 nights & 10 follow-up visits", "not_this_time")] };
+    const under = limitedTo([madison], 5);
+    expect(ids(under.clinics)).toEqual([["aside"]]);
+    expect(under.heldBack).toBe(1);
+  });
+
+  it("counts the Openings left in the list that don't say how many", () => {
+    const celerion = { openings: [o("silent", null), o("silent too", null), o("silent, set aside", null, "not_for_me")] };
+    expect(limitedTo([kc, celerion], 0).dontSay).toBe(2);
+  });
+
+  it("holds nothing back, and has nothing to explain, when the Member chose no limit", () => {
+    const celerion = { openings: [o("silent", null)] };
+    const under = limitedTo([kc, fortrea, celerion], null);
+    expect(ids(under.clinics)).toEqual([["none", "one", "four"], ["eight"], ["silent"]]);
+    expect(under.heldBack).toBe(0);
+    expect(under.dontSay).toBe(0);
   });
 });
