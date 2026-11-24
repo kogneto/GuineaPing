@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asItStood, followUpVisits, inOrder, lapsed, limitedTo, payAmount, startDay, startsWithin, studyOf, withEnd, withinFollowUps } from "./openings";
+import { asItStood, followUpVisits, inOrder, limitedTo, payAmount, startDay, startsWithin, studyOf, timeframeOf, withinFollowUps } from "./openings";
 
 /** Every code on the lists GuineaPing had read by 2026-11-23, with the study each belongs to. */
 const CODES: Record<string, Record<string, string>> = {
@@ -542,35 +542,42 @@ describe("a Member's timeframe for when an Opening starts", () => {
   });
 });
 
-describe("a Member setting their timeframe", () => {
-  const january = { from: "2027-01-01", to: "2027-01-31" };
+describe("the timeframe to apply for what a Member has put in the two date boxes", () => {
+  const TODAY = "2026-11-24";
+  const NONE = { from: null, to: null };
 
-  it("sets one end and keeps the other", () => {
-    expect(withEnd({ from: null, to: null }, "from", "2027-01-01")).toEqual({ from: "2027-01-01", to: null });
-    expect(withEnd({ from: "2027-01-01", to: null }, "to", "2027-01-31")).toEqual(january);
-    expect(withEnd(january, "to", "2027-01-01")).toEqual({ from: "2027-01-01", to: "2027-01-01" });
+  it("is the days in the boxes, either of which may be empty", () => {
+    expect(timeframeOf("", "", TODAY)).toEqual({ frame: NONE, unapplied: null });
+    expect(timeframeOf("2027-01-01", "", TODAY)).toEqual({ frame: { from: "2027-01-01", to: null }, unapplied: null });
+    expect(timeframeOf("", "2027-01-31", TODAY)).toEqual({ frame: { from: null, to: "2027-01-31" }, unapplied: null });
+    expect(timeframeOf("2027-01-01", "2027-01-31", TODAY)).toEqual({ frame: { from: "2027-01-01", to: "2027-01-31" }, unapplied: null });
+    expect(timeframeOf("2027-01-01", "2027-01-01", TODAY)).toEqual({ frame: { from: "2027-01-01", to: "2027-01-01" }, unapplied: null });
   });
 
-  it("clears an end", () => {
-    expect(withEnd(january, "from", null)).toEqual({ from: null, to: "2027-01-31" });
-    expect(withEnd(january, "to", null)).toEqual({ from: "2027-01-01", to: null });
+  it("takes no notice of a box while its year is being typed", () => {
+    // Typing 2027 one key at a time, a date box holds the years 0002, 0020 and 0202 on the way.
+    expect(timeframeOf("2027-01-01", "0002-01-31", TODAY)).toEqual({ frame: { from: "2027-01-01", to: null }, unapplied: null });
+    expect(timeframeOf("2027-01-01", "0020-01-31", TODAY)).toEqual({ frame: { from: "2027-01-01", to: null }, unapplied: null });
+    expect(timeframeOf("0202-01-01", "2027-01-31", TODAY)).toEqual({ frame: { from: null, to: "2027-01-31" }, unapplied: null });
+    expect(timeframeOf("not a day", "", TODAY)).toEqual({ frame: NONE, unapplied: null });
   });
 
-  it("drops the other end when the two would cross: the day just set is the one they mean", () => {
-    expect(withEnd(january, "from", "2027-02-10")).toEqual({ from: "2027-02-10", to: null });
-    expect(withEnd(january, "to", "2026-12-20")).toEqual({ from: null, to: "2026-12-20" });
-  });
-});
-
-describe("a timeframe whose last day has passed", () => {
-  it("has lapsed the day after its last day, and not before", () => {
-    expect(lapsed({ from: "2027-01-01", to: "2027-01-31" }, "2027-02-01")).toBe(true);
-    expect(lapsed({ from: "2027-01-01", to: "2027-01-31" }, "2027-01-31")).toBe(false);
-    expect(lapsed({ from: null, to: "2027-01-31" }, "2027-03-15")).toBe(true);
+  it("takes a year near today's, from last year to five years on", () => {
+    expect(timeframeOf("2025-06-01", "", TODAY).frame.from).toBe("2025-06-01");
+    expect(timeframeOf("2031-06-01", "", TODAY).frame.from).toBe("2031-06-01");
+    expect(timeframeOf("2024-06-01", "", TODAY).frame.from).toBeNull();
+    expect(timeframeOf("2032-06-01", "", TODAY).frame.from).toBeNull();
   });
 
-  it("never lapses when it has no last day", () => {
-    expect(lapsed({ from: "2026-01-01", to: null }, "2027-06-01")).toBe(false);
-    expect(lapsed({ from: null, to: null }, "2027-06-01")).toBe(false);
+  it("applies nothing, and says why, when the first day is after the last", () => {
+    expect(timeframeOf("2027-02-10", "2027-01-31", TODAY)).toEqual({ frame: NONE, unapplied: "crossed" });
+  });
+
+  it("applies nothing, and says why, once the last day has passed", () => {
+    expect(timeframeOf("2026-10-01", "2026-10-31", TODAY)).toEqual({ frame: NONE, unapplied: "passed" });
+    expect(timeframeOf("", "2026-11-23", TODAY)).toEqual({ frame: NONE, unapplied: "passed" });
+    // The last day itself still counts, and a timeframe with no last day never passes.
+    expect(timeframeOf("", "2026-11-24", TODAY)).toEqual({ frame: { from: null, to: "2026-11-24" }, unapplied: null });
+    expect(timeframeOf("2026-01-01", "", TODAY)).toEqual({ frame: { from: "2026-01-01", to: null }, unapplied: null });
   });
 });

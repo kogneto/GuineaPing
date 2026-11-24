@@ -236,21 +236,28 @@ export function startsWithin(when: string | null, firstSeen: string, frame: Time
   return start === null || ((!frame.from || start >= frame.from) && (!frame.to || start <= frame.to));
 }
 
-/**
- * A timeframe with one end set to a day, or cleared with null. If that would put the first day
- * after the last, the other end is dropped: the day the Member has just set is the one they mean,
- * and a timeframe that runs backwards would hold back every Opening with dates.
- */
-export function withEnd(frame: Timeframe, end: "from" | "to", day: string | null): Timeframe {
-  const set: Timeframe = { ...frame, [end]: day };
-  return set.from && set.to && set.from > set.to ? { from: null, to: null, [end]: day } : set;
-}
+/** Why the days in a Member's two date boxes are not applied as a timeframe, when they are not. */
+export type Unapplied = "crossed" | "passed" | null;
 
 /**
- * Whether a timeframe's last day has passed. It then holds back every Opening with dates, long
- * after the Member meant it, so it is no longer applied. One with no last day never lapses.
+ * The timeframe to apply for what a Member has put in the two date boxes, given the day it is.
+ * What the boxes hold is never changed here: it is only applied or not.
+ *
+ * A box counts when it holds a whole day in a year near today's (`YEARS_BACK`, `YEARS_ON`). A date
+ * box holds a whole day long before the Member has finished typing: 0002-01-31 on the way to
+ * 2027-01-31. Acting on that would undo the other box, so it is left alone until it means something.
+ *
+ * Nothing is applied when the first day is after the last ("crossed"), or when the last day has
+ * passed ("passed"): either would hold back every Opening with dates. The page says which, so it
+ * is never a silent nothing. A timeframe with no last day never passes.
  */
-export const lapsed = (frame: Timeframe, today: string): boolean => !!frame.to && frame.to < today;
+export function timeframeOf(from: string, to: string, today: string): { frame: Timeframe; unapplied: Unapplied } {
+  const thisYear = Number(today.slice(0, 4));
+  const meant = (box: string) => (/^\d{4}-\d{2}-\d{2}$/.test(box) && Number(box.slice(0, 4)) >= thisYear - YEARS_BACK && Number(box.slice(0, 4)) <= thisYear + YEARS_ON ? box : null);
+  const frame = { from: meant(from), to: meant(to) };
+  const unapplied = frame.from && frame.to && frame.from > frame.to ? "crossed" : frame.to && frame.to < today ? "passed" : null;
+  return { frame: unapplied ? { from: null, to: null } : frame, unapplied };
+}
 
 /** The limits a Member can put on the Openings they see: on Follow-up visits, and on when an Opening starts. */
 export type Limits = { followUps: FollowUpLimit | null; starts: Timeframe };

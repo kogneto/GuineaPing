@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ClinicItem, Opening } from "../../shared/api";
-import { FOLLOW_UP_LIMITS, OPENING_MARK_LABELS, inOrder, lapsed, limitedTo, payAmount, withEnd, type FollowUpLimit, type LimitCount, type Limited, type OpeningMark, type Timeframe } from "../../shared/openings";
+import { FOLLOW_UP_LIMITS, OPENING_MARK_LABELS, inOrder, limitedTo, payAmount, timeframeOf, type FollowUpLimit, type LimitCount, type Limited, type OpeningMark, type Timeframe, type Unapplied } from "../../shared/openings";
 import { ago, api } from "../api";
 import { Greeting } from "../components/Greeting";
 import { Illustration } from "../components/Illustration";
@@ -142,18 +142,30 @@ function rememberedFollowUps(): FollowUpLimit | null {
 const followUpsLabel = (most: FollowUpLimit | null) => (most === null ? "Any" : most === 0 ? "None" : `Up to ${most}`);
 
 const STARTS_KEY = "guineaping.clinics.starts";
-const NO_TIMEFRAME: Timeframe = { from: null, to: null };
-const isDay = (s: string | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+/** What the two date boxes hold, as the browser writes it: a day as YYYY-MM-DD, or nothing. */
+type DateBoxes = { from: string; to: string };
+const EMPTY_BOXES: DateBoxes = { from: "", to: "" };
 /** The day it is where the Member is, written as the date boxes write a day. */
 function todayHere(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
-/** The timeframe the Member last set on this device, kept as "first day/last day", or none. */
-function rememberedTimeframe(): Timeframe {
-  const [from, to] = (remembered(STARTS_KEY) ?? "").split("/");
-  return { from: isDay(from) ? from : null, to: isDay(to) ? to : null };
+/**
+ * What the Member last put in the date boxes on this device, kept as "first day/last day". A box
+ * left half typed comes back empty, and so do both once the last day has passed: those are done with.
+ */
+function rememberedDates(): DateBoxes {
+  const [from = "", to = ""] = (remembered(STARTS_KEY) ?? "").split("/");
+  const today = todayHere();
+  if (timeframeOf(from, to, today).unapplied === "passed") return EMPTY_BOXES;
+  const whole = (box: string) => (timeframeOf(box, "", today).frame.from === box ? box : "");
+  return { from: whole(from), to: whole(to) };
 }
+/** Why the dates in the boxes are not applied, said where the Member sees them. */
+const UNAPPLIED_SAYS: Record<Exclude<Unapplied, null>, string> = {
+  crossed: "The first date is after the last, so these dates are not applied.",
+  passed: "The last of these dates has passed, so they are no longer applied.",
+};
 /** How the line about hidden Openings names where they start, for the ends of the timeframe that are set. */
 const outside = (starts: Timeframe) => (starts.from && starts.to ? "outside those dates" : starts.from ? "before that date" : "after that date");
 
@@ -290,9 +302,9 @@ function ByClinic({ clinics, onMark, onPush, onOffList }: { clinics: Limited<Cli
 export function ClinicsPage() {
   const [view, setView] = useState<View>(rememberedView);
   const [followUps, setFollowUps] = useState<FollowUpLimit | null>(rememberedFollowUps);
-  const [timeframe, setTimeframe] = useState<Timeframe>(rememberedTimeframe);
-  // A timeframe whose last day has passed is no longer applied: it would hide every Opening with dates.
-  const starts = lapsed(timeframe, todayHere()) ? NO_TIMEFRAME : timeframe;
+  const [dates, setDates] = useState<DateBoxes>(rememberedDates);
+  // The boxes keep whatever the Member types. It is applied only once it makes a timeframe.
+  const { frame: starts, unapplied } = timeframeOf(dates.from, dates.to, todayHere());
   const [clinics, setClinics] = useState<ClinicItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [markError, setMarkError] = useState<string | null>(null);
@@ -310,9 +322,9 @@ export function ClinicsPage() {
     setFollowUps(most);
     remember(FOLLOW_UPS_KEY, most === null ? null : String(most));
   };
-  const chooseStarts = (frame: Timeframe) => {
-    setTimeframe(frame);
-    remember(STARTS_KEY, frame.from || frame.to ? `${frame.from ?? ""}/${frame.to ?? ""}` : null);
+  const chooseDates = (boxes: DateBoxes) => {
+    setDates(boxes);
+    remember(STARTS_KEY, boxes.from || boxes.to ? `${boxes.from}/${boxes.to}` : null);
   };
   /** Sends one change, then shows the page as the server now has it. */
   const change = (path: string, body: object) => {
@@ -380,20 +392,29 @@ export function ClinicsPage() {
         <span className="views-label">Starts</span>
         <label className="date-limit">
           from
-          <input type="date" value={starts.from ?? ""} onChange={(e) => chooseStarts(withEnd(starts, "from", e.target.value || null))} />
+          <input type="date" value={dates.from} onChange={(e) => chooseDates({ ...dates, from: e.target.value })} />
         </label>
         <label className="date-limit">
           to
-          <input type="date" value={starts.to ?? ""} onChange={(e) => chooseStarts(withEnd(starts, "to", e.target.value || null))} />
+          <input type="date" value={dates.to} onChange={(e) => chooseDates({ ...dates, to: e.target.value })} />
         </label>
       </p>
-      {(starts.from || starts.to) && (
-        <LimitLine
-          count={byStart}
-          hides={(n) => `${n === 1 ? "1 Opening that starts" : `${n} Openings that start`} ${outside(starts)} ${n === 1 ? "is" : "are"} hidden.`}
-          unsaid={(n) => `${n} of those shown ${n === 1 ? "gives" : "give"} no start date.`}
-          onShowAll={() => chooseStarts(NO_TIMEFRAME)}
-        />
+      {unapplied ? (
+        <p className="muted small">
+          {UNAPPLIED_SAYS[unapplied]}{" "}
+          <button type="button" className="link" onClick={() => chooseDates(EMPTY_BOXES)}>
+            Clear them
+          </button>
+        </p>
+      ) : (
+        (starts.from || starts.to) && (
+          <LimitLine
+            count={byStart}
+            hides={(n) => `${n === 1 ? "1 Opening that starts" : `${n} Openings that start`} ${outside(starts)} ${n === 1 ? "is" : "are"} hidden.`}
+            unsaid={(n) => `${n} of those shown ${n === 1 ? "gives" : "give"} no start date.`}
+            onShowAll={() => chooseDates(EMPTY_BOXES)}
+          />
+        )
       )}
       {view !== "clinics" && <p className="muted small">{VIEWS.find((v) => v.view === view)!.says}</p>}
       {!measured && (view === "nearest" || view === "clinics") && (
