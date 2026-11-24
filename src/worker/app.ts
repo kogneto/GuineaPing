@@ -312,7 +312,8 @@ async function syncAccess(c: Context<AppEnv>, email: string, allowed: boolean) {
 
 const accessTrouble = { error: "Couldn't change the sign-in list at Cloudflare just now, so nothing was changed. Please try again in a minute." };
 
-const organiserOnly = { error: "Only the person who runs GuineaPing can do that." };
+// "The person who runs GuineaPing" is someone else: whoever Tips go to (CONTEXT.md, Organiser).
+const organiserOnly = { error: "Only the Member who runs the group can do that." };
 
 /** The group, for the Organiser. Any other Member is sent only themselves. */
 app.get("/api/members", async (c) => {

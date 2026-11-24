@@ -18,7 +18,7 @@ type ClinicActions = { onPush: (clinic: ClinicItem, on: boolean) => void; onOffL
 /** What each mark means for an Opening that carries it, said where the Member sees it set aside. */
 const MARK_MEANS: Record<OpeningMark, string> = {
   not_this_time: "It shows again if the Clinic lists it again, with new dates or a new group.",
-  not_for_me: "Every listing of this study at this Clinic stays set aside, later groups too.",
+  not_for_me: "Every Opening of this study at this Clinic stays set aside, later groups too.",
 };
 
 const where = (clinic: ClinicItem) => `${clinic.name} · ${clinic.place}${clinic.miles !== null ? ` · ${clinic.miles} miles` : ""}`;
@@ -103,7 +103,7 @@ function OpeningList({ openings, onMark, clinicOf, empty }: { openings: Opening[
 
 const VIEWS = [
   { view: "pay", label: "Highest pay", says: "Highest pay first. Where a Clinic gives a range or several figures, the highest is used for ordering; Openings that name no figure come last." },
-  { view: "newest", label: "Newest", says: "Most recently listed first. Clinics give no listing date, so this is the day GuineaPing first saw each one." },
+  { view: "newest", label: "Newest", says: "Most recently listed first. Clinics don't say when they listed an Opening, so this is the day GuineaPing first saw each one." },
   { view: "nearest", label: "Nearest", says: "Nearest Clinic first, and the better paid first at each Clinic." },
   { view: "clinics", label: "By Clinic", says: "" },
 ] as const;
@@ -134,11 +134,14 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: ClinicItem; 
   const [open, setOpen] = useState(false);
   const listed = clinic.openings.filter((o) => !o.mark);
   const fresh = listed.filter(isNew).length;
-  const canPush = clinic.read && !clinic.refused;
+  // A Clinic whose site said no is not read again until someone clears that by hand.
+  const reading = clinic.read && !clinic.refused;
+  // A Member who has the Push on there keeps the switch, or they could not turn it off.
+  const hasSwitch = reading || (clinic.read && clinic.pushNew);
   const sub = [
     clinic.miles !== null ? `${clinic.miles} miles` : null,
     !clinic.read ? "not read by GuineaPing" : clinic.refused ? "its site stopped letting GuineaPing read it" : !clinic.lastReadAt ? "not read yet" : listed.length === 1 ? "1 Opening" : `${listed.length} Openings`,
-    canPush && fresh ? `${fresh} new` : null,
+    reading && fresh ? `${fresh} new` : null,
   ].filter(Boolean);
   const label = `${clinic.name}, ${clinic.place}`;
   return (
@@ -148,9 +151,9 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: ClinicItem; 
           <span className="clinic-row-name">
             {clinic.name} <span className="muted">· {clinic.place}</span>
           </span>
-          <span className={canPush && fresh ? "clinic-row-sub fresh" : "clinic-row-sub"}>{sub.join(" · ")}</span>
+          <span className={reading && fresh ? "clinic-row-sub fresh" : "clinic-row-sub"}>{sub.join(" · ")}</span>
         </button>
-        {canPush ? (
+        {hasSwitch ? (
           <label className="switch" title="Push me new Openings here">
             <input type="checkbox" role="switch" checked={clinic.pushNew} onChange={(e) => onPush(clinic, e.target.checked)} aria-label={`Push me new Openings at ${label}`} />
             <span aria-hidden="true" />
@@ -166,8 +169,8 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: ClinicItem; 
       </div>
       {open && (
         <div className="clinic-row-body">
-          {canPush && clinic.lastReadAt && <p className="muted small">Read {ago(clinic.lastReadAt)}</p>}
-          {clinic.read && <OpeningList openings={clinic.openings} onMark={onMark} empty={canPush && clinic.lastReadAt ? "Nothing on its list right now." : undefined} />}
+          {reading && clinic.lastReadAt && <p className="muted small">Read {ago(clinic.lastReadAt)}</p>}
+          {clinic.read && <OpeningList openings={clinic.openings} onMark={onMark} empty={reading && clinic.lastReadAt ? "Nothing on its list right now." : undefined} />}
           <p className="clinic-row-actions">
             <a href={clinic.url} target="_blank" rel="noreferrer">
               Open its list
@@ -319,7 +322,7 @@ export function ClinicsPage() {
           pay, dates and stay.
         </p>
         <p>
-          Set a listing aside when it isn't one you'd take. "Not this time" is for a reason that will change, such as the dates: the listing shows again if the Clinic lists the study again. "Not for me" is for a reason
+          Set an Opening aside when it isn't one you'd take. "Not this time" is for a reason that will change, such as the dates: the Opening shows again if the Clinic lists the study again. "Not for me" is for a reason
           that won't: that study stays set aside at that Clinic, later groups too. Only you see what you set aside, and you can always show it and put it back.
         </p>
         <p>

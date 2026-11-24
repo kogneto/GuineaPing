@@ -12,7 +12,7 @@ _Avoid_: User, subscriber, account, patient
 
 **Profile**:
 A few facts a Member gives about themselves: the year they were born, their sex, a ZIP code and how far they would travel, their conditions, whether they would join as a healthy volunteer, their height and weight, whether they use nicotine, and the day of their last blood or plasma donation. Every fact is optional. Only that Member sees it. It fills in new Watches for them, is where "near you" is measured from when a Watch has no ZIP code, and supplies the facts shown at Points to check. BMI is worked out from height and weight, never given. A donation is a fact here, not a Past study, and has no Waiting period.
-_Avoid_: Account, settings, preferences
+_Avoid_: Account, settings (Settings is a page; the Profile is one of the things reached from it), preferences
 
 **Past study**:
 A study a Member took part in, as they wrote it down: the day it ended, the day of their last dose if they know it, and how many days they must wait. Only that Member sees it.
@@ -84,7 +84,7 @@ _Avoid_: Change alert, second Alert, re-alert
 
 **Push**:
 What appears on a Member's Devices when Alerts are created or get an Update, or when a Waiting period ends. A Push carries a single Alert, or, when a Member has more than three Alerts waiting, one Push summarises them all and opens the Alert list. The Push for an ended Waiting period names no study, Clinic or waiting: it says there is a note to read, and is never counted as an Alert. A Push that reaches none of a Member's Devices is tried again with each Check for a day. A Push for a new Opening is the exception on three counts: it is sent only to a Member who asked for it at that Clinic, it names the Clinic and gives the entry in the Clinic's own words, and it is sent once, straight after the Clinic read, and not tried again. More than three at once become one Push. An Opening of a study the Member marked “Not for me” is left out.
-_Avoid_: Notification, ping, Alert (an Alert is the record; a Push is how it is announced)
+_Avoid_: Notification (the phone's or browser's own word for what a Member allows: say it only where they turn Pushes on), ping, Alert (an Alert is the record; a Push is how it is announced)
 
 **Alert list**:
 Every Alert a Member has received, newest first, each marked read or unread. The record of truth when a push is missed or a Member has no Device.
