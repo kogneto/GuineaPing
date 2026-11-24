@@ -429,6 +429,57 @@ describe("the day an Opening starts, in a Clinic's wording", () => {
     // A leap day that can be is read.
     expect(startDay("Feb 29 2028 - Mar 04 2028", SEEN)).toBe("2028-02-29");
   });
+
+  // The wordings from here to the end of this block are made up. A review ran the first reader on
+  // wordings a Clinic could plausibly write and found it sure of a wrong day in each group below.
+  it("gives no start day when the first date is one it cannot read, never the next date along", () => {
+    expect(startDay("Dec 2nd - Dec 20", SEEN)).toBeNull();
+    expect(startDay("2nd Dec - 20 Dec", SEEN)).toBeNull();
+    expect(startDay("2027-01-06 to Feb 3", SEEN)).toBeNull();
+    expect(startDay("Dec 2026 - Feb 5", SEEN)).toBeNull();
+    expect(startDay("12/3 - Dec 20", SEEN)).toBeNull();
+  });
+
+  it("gives no start day when anything stands in front of the date", () => {
+    expect(startDay("Day 1 Dec 05", SEEN)).toBeNull();
+    expect(startDay("Group 3 Dec 09", SEEN)).toBeNull();
+    expect(startDay("Group 3: Dec 09 to Dec 17", SEEN)).toBeNull();
+    expect(startDay("Screening Nov 20, check-in Dec 01", SEEN)).toBeNull();
+  });
+
+  it("takes the first day of a range however the Clinic joins it, and nothing from a list of days", () => {
+    expect(startDay("1-5 Dec", SEEN)).toBe("2026-12-01");
+    expect(startDay("5 - 9 Dec", SEEN)).toBe("2026-12-05");
+    expect(startDay("Dec 1-10", SEEN)).toBe("2026-12-01");
+    expect(startDay("Dec 28 - Jan 3", SEEN)).toBe("2026-12-28");
+    expect(startDay("28 Dec to 3 Jan", SEEN)).toBe("2026-12-28");
+    expect(startDay("1 and 5 Dec", SEEN)).toBeNull();
+    expect(startDay("5, 12 and 19 Dec", SEEN)).toBeNull();
+  });
+
+  it("uses the year the Clinic gives, wherever in the range it is written", () => {
+    expect(startDay("5 Dec 2027", SEEN)).toBe("2027-12-05");
+    expect(startDay("15 Jan 2028", SEEN)).toBe("2028-01-15");
+    expect(startDay("December 2, 2026", SEEN)).toBe("2026-12-02");
+    expect(startDay("Dec 5-9, 2027", SEEN)).toBe("2027-12-05");
+    expect(startDay("5 to 9 Dec 2027", SEEN)).toBe("2027-12-05");
+    // The year is written once, after the last date: the first date is the December before it.
+    expect(startDay("Dec 28 - Jan 3, 2028", SEEN)).toBe("2027-12-28");
+    expect(startDay("Dec 5 - Dec 9, 2027", SEEN)).toBe("2027-12-05");
+  });
+
+  it("gives no start day when the dates it reads cannot both be right", () => {
+    expect(startDay("Jan 05 2027 - Dec 20 2026", SEEN)).toBeNull();
+    expect(startDay("Dec 02 2026 - Feb 30 2027", SEEN)).toBeNull();
+    expect(startDay("20 to 23 Dec; sometime in January", SEEN)).toBeNull();
+    // No years, and the last day is earlier in the same month: either a slip or a stretch of a year.
+    expect(startDay("Dec 10 to Dec 01", SEEN)).toBeNull();
+  });
+
+  it("is not put off by a full stop or a stray separator at the end", () => {
+    expect(startDay("Dec 01 - Dec 10.", SEEN)).toBe("2026-12-01");
+    expect(startDay("Dec 01 to Dec 10; ", SEEN)).toBe("2026-12-01");
+  });
 });
 
 describe("a Member's timeframe for when an Opening starts", () => {

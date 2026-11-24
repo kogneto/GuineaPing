@@ -114,41 +114,92 @@ export function withinFollowUps(stay: string | null, most: FollowUpLimit | null)
 }
 
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-/** A month's name, whole or cut short, and nothing that merely begins like one. */
-const MONTH = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\\b\\.?";
 const monthOf = (name: string) => MONTHS.indexOf(name.slice(0, 3).toLowerCase()) + 1;
 const dayText = (year: number, month: number, day: number) => `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+const daysIn = (month: number, year: number) => (month === 2 ? (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28) : [4, 6, 9, 11].includes(month) ? 30 : 31);
+
+/** A month's name, whole or cut short, and nothing that merely begins like one. */
+const MON = "(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?![a-z])\\.?";
+/** A day of the month, and not the front of something longer: "2nd", "2026", "12/3". */
+const DAY = "(\\d{1,2})(?![\\da-z/])";
+/** A year, where a Clinic writes one after a date: " 2026" or ", 2026". */
+const YEAR = "(?:,?\\s+(\\d{4})(?!\\d))?";
+/** What joins the two ends of a range. Not "and" or a comma: those list separate days. */
+const JOIN = "\\s*(?:to|-|–)\\s*";
 
 type DateRead = { month: number; day: number; year: number | null };
-/** The ways a Clinic writes a date, and what each one's first date is: null when it can't be told. */
-const DATE_SHAPES: { shape: RegExp; read: (m: RegExpExecArray) => DateRead | null }[] = [
+const read = (month: number, day: string, year: string | undefined): DateRead => ({ month, day: Number(day), year: year ? Number(year) : null });
+/** The three ways a Clinic writes one date, each read from the front of the text. */
+const DATES: { shape: RegExp; date: (m: RegExpExecArray) => DateRead }[] = [
   // "01/13/27", "11/30/2026": month first.
-  { shape: /\b(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})\b/, read: (m) => ({ month: Number(m[1]), day: Number(m[2]), year: m[3]!.length === 2 ? 2000 + Number(m[3]) : Number(m[3]) }) },
-  // "Dec 02 2026", "Dec 01".
-  { shape: new RegExp(`\\b${MONTH}\\s+(\\d{1,2})(?:,?\\s+(\\d{4}))?\\b`, "i"), read: (m) => ({ month: monthOf(m[1]!), day: Number(m[2]), year: m[3] ? Number(m[3]) : null }) },
-  // "11 Jan", and "1 to 5 Dec", where the month comes after the last day. "28 to 3 Feb" must start
-  // in another month, which it does not name.
-  { shape: new RegExp(`\\b(\\d{1,2})(?:\\s+to\\s+(\\d{1,2}))?\\s+${MONTH}`, "i"), read: (m) => (m[2] && Number(m[1]) > Number(m[2]) ? null : { month: monthOf(m[3]!), day: Number(m[1]), year: null }) },
+  { shape: /^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?![\d/])/, date: (m) => read(Number(m[1]), m[2]!, m[3]!.length === 2 ? `20${m[3]}` : m[3]) },
+  // "Dec 02", "Dec 02 2026", "December 2, 2026".
+  { shape: new RegExp(`^${MON}\\s+${DAY}${YEAR}`, "i"), date: (m) => read(monthOf(m[1]!), m[2]!, m[3]) },
+  // "11 Jan", "5 Dec 2027".
+  { shape: new RegExp(`^${DAY}\\s+${MON}${YEAR}`, "i"), date: (m) => read(monthOf(m[2]!), m[1]!, m[3]) },
 ];
-const daysIn = (month: number, year: number) => (month === 2 ? (year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28) : [4, 6, 9, 11].includes(month) ? 30 : 31);
+/** A range of days in one month, with the month written once: "Dec 1-10", and "1 to 5 Dec". */
+const DAYS_AFTER_MONTH = new RegExp(`^${MON}\\s+${DAY}${JOIN}${DAY}${YEAR}$`, "i");
+const DAYS_BEFORE_MONTH = new RegExp(`^${DAY}${JOIN}${DAY}\\s+${MON}${YEAR}$`, "i");
+
+/** One stretch of days as a Clinic writes it, all of it: a date, or a first and a last date. Null when any part is not that. */
+function stretch(text: string): { first: DateRead; last: DateRead | null } | null {
+  // With the month written once both days are in it, so "28 to 3 Feb" names no month for its first day.
+  const oneMonth = (month: string, from: string, to: string, year: string | undefined) => (Number(from) > Number(to) ? null : { first: read(monthOf(month), from, year), last: read(monthOf(month), to, year) });
+  const after = DAYS_AFTER_MONTH.exec(text);
+  if (after) return oneMonth(after[1]!, after[2]!, after[3]!, after[4]);
+  const before = DAYS_BEFORE_MONTH.exec(text);
+  if (before) return oneMonth(before[3]!, before[1]!, before[2]!, before[4]);
+  const front = (rest: string) => {
+    for (const { shape, date } of DATES) {
+      const m = shape.exec(rest);
+      if (m) return { date: date(m), rest: rest.slice(m[0].length) };
+    }
+    return null;
+  };
+  const first = front(text);
+  if (!first) return null;
+  if (!first.rest) return { first: first.date, last: null };
+  const joined = new RegExp(`^${JOIN}`, "i").exec(first.rest);
+  const last = joined && front(first.rest.slice(joined[0].length));
+  return last && !last.rest ? { first: first.date, last: last.date } : null;
+}
+
+const isBefore = (a: DateRead, b: DateRead) => a.month < b.month || (a.month === b.month && a.day <= b.day);
+const canBe = (month: number, day: number, year: number) => month >= 1 && month <= 12 && day >= 1 && day <= daysIn(month, year);
 
 /**
  * The day an Opening starts, as `YYYY-MM-DD`: the first date in the Clinic's wording about when.
  * It is only for a Member's timeframe: what a Member reads is always the Clinic's own wording.
  *
- * A date has no safe guess, so any doubt gives null, and an Opening with no start day is always
- * shown: no wording, wording in none of the shapes above, or a date that cannot be. The year of a
- * date given without one comes from `firstSeen` (see `yearFor`). Nothing here looks at the clock,
- * and days are text, so no time zone can move one.
+ * A date has no safe guess: a wrong one could hide an Opening that fits. So the whole wording must
+ * be something this knows how to read, one stretch of days or several with ";" between, and any
+ * doubt gives null, which means the Opening is always shown. That covers no wording; anything in
+ * front of, between or after the dates that is not a date; a date that cannot be; and a last date
+ * before the first. It never skips what it cannot read to find a date further along.
+ *
+ * A year the Clinic writes is used, also when it is written once after the last date. Otherwise
+ * it comes from `firstSeen` (see `yearFor`). Nothing here looks at the clock, and days are text,
+ * so no time zone can move one.
  */
 export function startDay(when: string | null, firstSeen: string): string | null {
-  const first = DATE_SHAPES.map(({ shape, read }) => ({ m: shape.exec(when ?? ""), read }))
-    .filter((x): x is { m: RegExpExecArray; read: (m: RegExpExecArray) => DateRead | null } => x.m !== null)
-    .sort((a, b) => a.m.index - b.m.index)[0];
-  const date = first?.read(first.m);
-  if (!date || date.month < 1 || date.month > 12) return null;
-  const year = date.year ?? yearFor(date.month, firstSeen);
-  return date.day >= 1 && date.day <= daysIn(date.month, year) ? dayText(year, date.month, date.day) : null;
+  const stretches = (when ?? "")
+    .split(";")
+    .map((part) => part.trim().replace(/\.$/, ""))
+    .filter(Boolean)
+    .map(stretch);
+  const whole = stretches[0];
+  if (!whole || stretches.some((s) => s === null)) return null;
+  const { first, last } = whole;
+  const year = first.year ?? (last?.year != null ? (isBefore(first, last) ? last.year : last.year - 1) : yearFor(first.month, firstSeen));
+  if (!canBe(first.month, first.day, year)) return null;
+  const start = dayText(year, first.month, first.day);
+  if (!last) return start;
+  // With no year on the last date and an earlier day of the same month, it is a slip or a stretch of a year.
+  if (last.year === null && last.month === first.month && last.day < first.day) return null;
+  // Otherwise a last date with no year of its own is the next such day on or after the first.
+  const lastYear = last.year ?? (isBefore(first, last) ? year : year + 1);
+  return canBe(last.month, last.day, lastYear) && start <= dayText(lastYear, last.month, last.day) ? start : null;
 }
 
 /** The year of a date a Clinic gave without one: it falls between two months before the month the Opening was first seen and nine months after. */
