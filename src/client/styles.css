@@ -24,7 +24,8 @@
   color-scheme: light;
 }
 /* Dark: when the device asks for it and the Member hasn't chosen light, or when they chose dark
-   (Settings; theme.ts). The two lists below must stay the same. */
+   (Settings; theme.ts). CSS can't share one list between a media query and an attribute, so the
+   dark colours are written twice. The two lists must stay the same: styles.test.ts checks. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #17171a;

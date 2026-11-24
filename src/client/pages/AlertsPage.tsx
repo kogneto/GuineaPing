@@ -6,7 +6,7 @@ import { Greeting } from "../components/Greeting";
 import { Illustration } from "../components/Illustration";
 import { SortToggle } from "../components/TrialCard";
 import { Link } from "../router";
-import { alertsChanged, unreadCount } from "../unread";
+import { alertsChanged, underAll, unreadCount } from "../unread";
 
 /** The Alert list: every Alert and note, newest first. */
 export function AlertsPage() {
@@ -31,7 +31,7 @@ export function AlertsPage() {
 
   const counts = { interested: 0, not_for_me: 0 };
   for (const i of items) if (i.kind === "alert" && i.mark) counts[i.mark]++;
-  const inView = items.filter((i) => (view === "all" ? i.kind === "note" || i.mark !== "not_for_me" : i.kind === "alert" && i.mark === view));
+  const inView = items.filter((i) => (view === "all" ? underAll(i) : i.kind === "alert" && i.mark === view));
   const measured = inView.some((i) => i.kind === "alert" && i.trial.nearest);
   // Nearest first is about Trials, so notes step aside while it is on.
   const shown = nearestFirst && measured ? inView.filter((i) => i.kind === "alert").sort((a, b) => (a.kind === "alert" && b.kind === "alert" ? byNearest(a.trial, b.trial) : 0)) : inView;

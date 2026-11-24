@@ -6,7 +6,10 @@ import { useEffect, useState } from "react";
 import type { AlertListItem } from "../shared/api";
 import { api } from "./api";
 
-export const unreadCount = (items: AlertListItem[]): number => items.filter((i) => !i.read && (i.kind === "note" || i.mark !== "not_for_me")).length;
+/** What the Alerts page shows under "All": every note, and every Alert not marked "Not for me". */
+export const underAll = (i: AlertListItem): boolean => i.kind === "note" || i.mark !== "not_for_me";
+
+export const unreadCount = (items: AlertListItem[]): number => items.filter((i) => !i.read && underAll(i)).length;
 
 const listeners = new Set<() => void>();
 /** Call after reading or marking an Alert or note, so the tab's count follows. */

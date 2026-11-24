@@ -1,7 +1,8 @@
 /**
- * Members joining and leaving. Any Member may invite someone or remove a Member, themselves
- * included. When a Member leaves, each Watch they own passes to its longest-standing follower,
- * or is deleted if nobody else follows it.
+ * Members joining and leaving. Only the Organiser invites someone or removes another Member, and
+ * any Member can leave: app.ts decides who may, and these functions do what they are asked. When
+ * a Member leaves, each Watch they own passes to its longest-standing follower, or is deleted if
+ * nobody else follows it.
  */
 import type { Me, MemberItem } from "../shared/api";
 

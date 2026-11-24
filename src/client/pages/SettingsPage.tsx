@@ -38,7 +38,7 @@ export function SettingsPage({ me }: { me: Me | null }) {
       </section>
       <section>
         <h2>You</h2>
-        <nav className="settings-list" aria-label="Your settings">
+        <nav className="settings-list" aria-label="Your Devices and Profile">
           <Link to="/devices">
             <span>
               <strong>Notifications</strong>
@@ -59,7 +59,7 @@ export function SettingsPage({ me }: { me: Me | null }) {
       {me && !me.organiser && (
         <section>
           <h2>Leave the group</h2>
-          <p className="muted">You'll stop getting Alerts and can no longer sign in. The person who runs GuineaPing can invite you back.</p>
+          <p className="muted">You'll stop getting Alerts and can no longer sign in. The Member who runs the group can invite you back.</p>
           <p className="actions">
             <button type="button" className="danger" onClick={leave}>
               Leave GuineaPing

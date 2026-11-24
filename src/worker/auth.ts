@@ -57,7 +57,7 @@ export const requireMember: MiddlewareHandler<AppEnv> = async (c, next) => {
   const email = await accessEmail(c);
   if (!email) return c.json({ error: "Not signed in" }, 401);
   const me = await memberFor(c.env.DB, email);
-  if (!me) return c.json({ error: "You're no longer a Member of this group. Ask a Member to invite you again." }, 403);
+  if (!me) return c.json({ error: "You're no longer a Member of this group. Ask the Member who runs the group to invite you again." }, 403);
   c.set("me", me);
   await next();
 };

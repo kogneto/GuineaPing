@@ -41,9 +41,10 @@ const serving =
   };
 const noWait = async () => {};
 const DAY1 = "2026-11-22T09:47:00.000Z";
-const SAME_HOUR = "2026-11-22T10:41:00.000Z";
-const NEXT_HOUR = "2026-11-22T10:45:00.000Z";
-const LATER_DAY1 = "2026-11-22T20:47:00.000Z";
+/** The runs are six minutes apart: the one before a source's own turn, 54 minutes after DAY1. */
+const RUN_BEFORE = "2026-11-22T10:41:00.000Z";
+/** The source's own turn an hour after DAY1, starting three seconds early. */
+const OWN_TURN = "2026-11-22T10:46:57.000Z";
 const DAY2 = "2026-11-23T09:47:00.000Z";
 const current = async () => (await env.DB.prepare("SELECT id FROM clinic_openings WHERE gone_at IS NULL ORDER BY id").all<{ id: string }>()).results.map((r) => r.id);
 
@@ -208,9 +209,9 @@ describe("reading a Clinic's list", () => {
   it("reads a source at most once an hour, however often it is asked", async () => {
     const calls: string[] = [];
     await readDueSource(env.DB, [source()], serving([opening("a")], calls), DAY1, noWait);
-    expect(await readDueSource(env.DB, [source()], serving([opening("a")], calls), SAME_HOUR, noWait)).toBeNull();
+    expect(await readDueSource(env.DB, [source()], serving([opening("a")], calls), RUN_BEFORE, noWait)).toBeNull();
     expect(calls).toHaveLength(1);
-    expect(await readDueSource(env.DB, [source()], serving([opening("a")], calls), NEXT_HOUR, noWait)).toMatchObject({ status: "ok" });
+    expect(await readDueSource(env.DB, [source()], serving([opening("a")], calls), OWN_TURN, noWait)).toMatchObject({ status: "ok" });
     expect(calls).toHaveLength(2);
   });
 
@@ -265,6 +266,23 @@ describe("reading a Clinic's list", () => {
     expect(await readDueSource(env.DB, [source()], down, at(3), noWait)).toMatchObject({ status: "failed", statusChanged: true });
     expect(await readDueSource(env.DB, [source()], down, at(4), noWait)).toMatchObject({ status: "failed", statusChanged: false });
     expect(await readDueSource(env.DB, [source()], serving([opening("a")]), at(5), noWait)).toMatchObject({ status: "ok", statusChanged: true });
+  });
+
+  it("counts a problem as the same one while its kind is the same, whatever the site answers", async () => {
+    const answering = (status: number): Fetcher => async () => new Response("down", { status });
+    const at = (h: number) => `2026-11-22T${String(h).padStart(2, "0")}:47:00.000Z`;
+    await readDueSource(env.DB, [source()], serving([opening("a")]), at(1), noWait);
+    expect(await readDueSource(env.DB, [source()], answering(502), at(2), noWait)).toMatchObject({ status: "failed", detail: "answered 502", statusChanged: true });
+    expect(await readDueSource(env.DB, [source()], answering(503), at(3), noWait)).toMatchObject({ status: "failed", detail: "answered 503", statusChanged: false });
+    // A page with nothing on it is another kind of problem: the list has probably been redesigned.
+    expect(await readDueSource(env.DB, [source()], serving([]), at(4), noWait)).toMatchObject({ status: "nothing found", statusChanged: true });
+  });
+
+  it("counts every refusal as news: a person cleared the last one before this read could happen", async () => {
+    const refusing: Fetcher = async () => new Response("Forbidden", { status: 403 });
+    expect(await readDueSource(env.DB, [source()], refusing, DAY1, noWait)).toMatchObject({ status: "refused", statusChanged: true });
+    await env.DB.prepare("UPDATE clinic_sources SET refused_at = NULL WHERE source = 'fortrea'").run();
+    expect(await readDueSource(env.DB, [source()], refusing, DAY2, noWait)).toMatchObject({ status: "refused", statusChanged: true });
   });
 
   it("tries again the next day after an ordinary failure, keeping what it had", async () => {
@@ -369,6 +387,28 @@ describe("setting an Opening aside", () => {
     await mark(ann(), "fortrea:778951", "not_this_time");
     await read([group("778951", "9b", "Dec 07 - Dec 16"), other], DAY4);
     expect((await marksOf(ann()))["fortrea:778951"]).toBe("not_this_time");
+  });
+
+  it("shows a Not this time study again when it went and came back within one day", async () => {
+    const other = group("781236", "1", "Dec 03 - Dec 29");
+    const hour = (h: number) => `2026-11-22T${String(h).padStart(2, "0")}:47:00.000Z`;
+    await read([group("778951", "9b", "Dec 07 - Dec 16"), other], hour(1));
+    await mark(ann(), "fortrea:778951", "not_this_time");
+    await read([other], hour(5));
+    await read([group("778951", "9b", "Dec 07 - Dec 16"), other], hour(9));
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": null, "fortrea:781236": null });
+  });
+
+  it("still honours a Not this time kept when only the first-seen day was recorded", async () => {
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY1);
+    const me = (await ann()<{ members: { id: string; email: string }[] }>("/api/members")).json.members.find((m) => m.email === "ann@example.com")!;
+    // As marks were stored until 2026-11-24: the day the entry was first seen, not the moment.
+    const byDay = JSON.stringify(["778951 9b", "Dec 07 - Dec 16", DAY1.slice(0, 10)]);
+    await env.DB.prepare("INSERT INTO opening_marks (member_id, kind, key, seen, created_at) VALUES (?, 'round', 'fortrea:778951', ?, ?)").bind(me.id, byDay, DAY1).run();
+    await read([group("778951", "9b", "Dec 07 - Dec 16")], DAY2);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": "not_this_time" });
+    await read([group("778951", "9b", "Jan 04 - Jan 13")], DAY3);
+    expect(await marksOf(ann())).toEqual({ "fortrea:778951": null });
   });
 
   it("keeps Not for me through a new group, new dates, and going and coming back", async () => {

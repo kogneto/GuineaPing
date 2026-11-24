@@ -4,9 +4,9 @@
  * is the record, and an Opening that was not pushed is still there, marked New.
  */
 import { CLINICS } from "../../shared/clinics";
-import { studyKey } from "../clinics";
 import { clip, deliver, MAX_SEPARATE_PUSHES, type DeviceRow } from "../push";
 import type { PushMessage, Vapid } from "../webpush";
+import { studyAtClinic } from "./marks";
 import type { FreshOpening } from "./read";
 
 /**
@@ -50,7 +50,7 @@ export async function pushNewOpenings(db: D1Database, vapid: Vapid, source: stri
     [...chosen].map(async ([memberId, clinics]) => {
       const mine = allDevices.filter((d) => d.member_id === memberId);
       const theirs = fresh.filter((o) => {
-        const study = studyKey({ source, clinic_id: o.clinicId, code: o.code });
+        const study = studyAtClinic({ source, clinic_id: o.clinicId, code: o.code });
         return clinics.has(o.clinicId) && !(study && notForMe.has(`${memberId} ${study}`));
       });
       if (!mine.length || !theirs.length) return;
