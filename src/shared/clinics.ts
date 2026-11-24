@@ -7,7 +7,7 @@
  * GuineaPing has no address for its list. The Member opens the link, if there is one, and reads it
  * themselves. Every Clinic can be named in a Watch, which asks ClinicalTrials.gov, not the Clinic.
  */
-export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince";
+export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento";
 
 export type Clinic = {
   id: string;
@@ -73,19 +73,19 @@ export const CLINICS: Clinic[] = [
   c("icon-salt-lake-city", "ICON", "Salt Lake City, UT", 40.7608, -111.8911, ICON, null, ["ICON"]),
   c("icon-lenexa", "ICON", "Lenexa, KS", 38.9536, -94.7336, ICON, null, ["ICON"]),
   c("icon-san-antonio", "ICON", "San Antonio, TX", 29.4241, -98.4936, ICON, null, ["ICON"]),
-  c("cenexel-anaheim", "CenExel ACT", "Anaheim, CA", 33.8353, -117.9145, "https://cenexelresearch.com/act/all-studies/", null, ["CenExel", "Anaheim Clinical Trials"]),
-  c("cenexel-los-alamitos", "CenExel CNS", "Los Alamitos, CA", 33.8031, -118.0726, "https://cenexelresearch.com/cns/all-studies/", null, ["CenExel", "Collaborative Neuroscience"]),
-  c("cenexel-decatur", "CenExel iResearch", "Decatur, GA", 33.7748, -84.2963, "https://cenexelresearch.com/iresearch-atlanta/all-studies/", null, ["CenExel", "iResearch"]),
-  c("cenexel-marlton", "CenExel HRI", "Marlton, NJ", 39.8912, -74.9218, "https://cenexelresearch.com/hri/all-studies/", null, ["CenExel", "Hassman"]),
+  c("cenexel-anaheim", "CenExel ACT", "Anaheim, CA", 33.8353, -117.9145, "https://cenexelresearch.com/act/all-studies/", "cenexel", ["CenExel", "Anaheim Clinical Trials"]),
+  c("cenexel-los-alamitos", "CenExel CNS", "Los Alamitos, CA", 33.8031, -118.0726, "https://cenexelresearch.com/cns/all-studies/", "cenexel", ["CenExel", "Collaborative Neuroscience"]),
+  c("cenexel-decatur", "CenExel iResearch", "Decatur, GA", 33.7748, -84.2963, "https://cenexelresearch.com/iresearch-atlanta/all-studies/", "cenexel", ["CenExel", "iResearch"]),
+  c("cenexel-marlton", "CenExel HRI", "Marlton, NJ", 39.8912, -74.9218, "https://cenexelresearch.com/hri/all-studies/", "cenexel", ["CenExel", "Hassman"]),
   c("trialmed-austin", "Trialmed (PPD)", "Austin, TX", 30.2672, -97.7431, TRIALMED, null, TRIALMED_NAMES),
   c("trialmed-las-vegas", "Trialmed (PPD)", "Las Vegas, NV", 36.175, -115.1372, TRIALMED, null, TRIALMED_NAMES),
   c("medpace", "Medpace", "Cincinnati, OH", 39.1271, -84.5144, "https://www.medpace.com/study-participants/browse-studies/", null, ["Medpace"]),
   c("parexel-baltimore", "Parexel", "Baltimore, MD", 39.2904, -76.6122, "https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US", null, ["Parexel"]),
-  c("syneos-miami", "Syneos Health", "Miami, FL", 25.7743, -80.1937, "https://www.us-participants.syneoshealth.com/en/avalaible-studies/", null, ["Syneos"]),
+  c("syneos-miami", "Syneos Health", "Miami, FL", 25.7743, -80.1937, "https://www.us-participants.syneoshealth.com/en/avalaible-studies/", "syneos", ["Syneos"]),
   c("dr-vince", "Dr. Vince Clinical Research", "Overland Park, KS", 38.9822, -94.6708, "https://drvince.com/current-studies/", "dr-vince", ["Vince"]),
   c("qps-miami", "QPS", "South Miami, FL", 25.7076, -80.2934, "https://miamiresearch.com/", null, ["QPS", "Quest Pharmaceutical Services"], ["South Miami", "Miami"]),
   c("quotient-miami", "Quotient Sciences", "Miami, FL", 25.7743, -80.1937, "https://www.weneedyoutrials.com/us/current-trials", null, ["Quotient"]),
-  c("prosciento", "ProSciento", "Chula Vista, CA", 32.6401, -117.0842, "https://myproscientostudy.com/current-studies/", null, ["ProSciento"], ["Chula Vista", "San Diego"]),
+  c("prosciento", "ProSciento", "Chula Vista, CA", 32.6401, -117.0842, "https://myproscientostudy.com/current-studies/", "prosciento", ["ProSciento"], ["Chula Vista", "San Diego"]),
   c("nucleus-saint-paul", "Nucleus Network", "Saint Paul, MN", 44.9444, -93.0933, "https://www.nucleusnetwork.com/participants/find-a-trial/", null, ["Nucleus Network", "Prism Research"]),
   c("nih-clinical-center", "NIH Clinical Center", "Bethesda, MD", 38.9807, -77.1003, "https://www.cc.nih.gov/recruit/protocols", null, ["National Institutes of Health Clinical Center", "NIH Clinical Center"]),
   // AbbVie's site turns automated tools away (docs/research/paid-study-sources.md). Listings mostly
@@ -105,7 +105,7 @@ export const CLINICS: Clinic[] = [
   c("frontage-secaucus", "Frontage", "Secaucus, NJ", 40.7895, -74.0565, null, null, ["Frontage"], ["Secaucus", "Hackensack"]),
   // "Floridian Research Institute" and "Floridian Neuroscience Institute" are left out: the spellings don't show they are this Clinic.
   c("floridian-miami-lakes", "Floridian Clinical Research", "Miami Lakes, FL", 25.9087, -80.3087, null, null, ["Floridian Clinical Research"], ["Miami Lakes", "Hialeah", "Miami"]),
-  c("axis-dilworth", "Axis Clinicals", "Dilworth, MN", 46.8766, -96.7034, "https://axispays.com/browse-current-studies/", null, ["Axis"]),
+  c("axis-dilworth", "Axis Clinicals", "Dilworth, MN", 46.8766, -96.7034, "https://axispays.com/browse-current-studies/", "axis", ["Axis"]),
   // A different company from Axis Clinicals. Its other places (New Hyde Park NY, Westchester IL) are not listed.
   c("axis-los-angeles", "Axis Clinical Trials", "Los Angeles, CA", 34.0522, -118.2437, null, null, ["Axis Clinical", "ACTCA"]),
   c("quest-farmington-hills", "QUEST Research Institute", "Farmington Hills, MI", 42.4853, -83.3772, null, null, ["Quest Research"]),

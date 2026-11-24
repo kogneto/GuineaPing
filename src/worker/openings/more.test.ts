@@ -5,8 +5,13 @@ import { novum } from "./novum";
 import { ocrc } from "./ocrc";
 import { pfizer } from "./pfizer";
 import { pharmaron } from "./pharmaron";
+import { prosciento } from "./prosciento";
+import { syneos } from "./syneos";
+import { axis } from "./axis";
+import { cenexel } from "./cenexel";
 import { drVince } from "./drVince";
 import { tkl } from "./tkl";
+import { clean } from "./read";
 import type { Source } from "./types";
 
 const fixture = (name: string) => readFileSync(join(import.meta.dirname, "fixtures", name), "utf8");
@@ -123,5 +128,115 @@ describe("Dr. Vince", () => {
   it("keeps a card that gives no status line", () => {
     const found = drVince.parse([fixture("dr-vince.html")]);
     expect(found[4]).toMatchObject({ title: "Recreational Stimulant Users", pay: "Up to $13,500", stay: "1 Screening visit, 1 Stay of 24 nights, 1 Outpatient visit" });
+  });
+});
+
+describe("Syneos", () => {
+  it("reads each study card that is recruiting now or soon, in the Clinic's own words", () => {
+    const found = basics(syneos, "syneos.html", "www.us-participants.syneoshealth.com");
+    expect(found.map((f) => f.code)).toEqual(["7080413 Cohort A3", "7070094 SAD 7"]);
+    expect(found[0]).toEqual({
+      key: "/en/avalaible-studies/study-7080413-cohort-a3-2/",
+      clinicId: "syneos-miami",
+      title: "Study 7080413 Cohort A3",
+      pay: "$2,280",
+      when: "December 16 to 20, 2026",
+      stay: "The study includes 1 overnight stay (4 nights) and 1 return visit.",
+      who: "Men and surgically sterile or postmenopausal women, Non-smoker, Age 18 to 65",
+      code: "7080413 Cohort A3",
+      url: "https://www.us-participants.syneoshealth.com/en/avalaible-studies/study-7080413-cohort-a3-2/",
+    });
+  });
+  it("skips a study marked closed, and a card that names no study", () => {
+    const titles = syneos.parse([fixture("syneos.html")]).map((f) => f.title);
+    expect(titles).not.toContain("Study 7072457 SAD 2");
+    expect(titles).not.toContain("Study 7084093 Group 2");
+    expect(titles).not.toContain("Overweight Participants");
+  });
+});
+
+describe("Axis", () => {
+  it("reads each study, in the Clinic's own words", () => {
+    const found = basics(axis, "axis.html", "axispays.com");
+    expect(found.map((f) => f.code)).toEqual(["2213", "2099 P3", "2275 G6", "2078", "2099 P3.1", "2287 G3", "2229 G1", "2229 G2", "2078", "2272"]);
+    expect(found[2]).toEqual({
+      key: "/code-2275-g6/",
+      clinicId: "axis-dilworth",
+      title: "Looking for Healthy Volunteers",
+      pay: "Receive up to $7,500",
+      when: null,
+      stay: null,
+      who: "BMI 20.0 - 40.0, Age 18-65, Allows Light Smokers",
+      code: "2275 G6",
+      url: "https://axispays.com/code-2275-g6/",
+    });
+  });
+  it("skips the free health screens, which are not studies", () => {
+    const titles = axis.parse([fixture("axis.html")]).map((f) => f.title);
+    expect(titles).not.toContain("General Health Screen");
+    expect(titles).not.toContain("Testosterone Screen");
+  });
+});
+
+describe("CenExel", () => {
+  const pages = ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html"].map(fixture);
+  const found = cenexel.parse(pages);
+  it("reads each unit's list into its own Clinic, leaving out studies that have stopped enrolling", () => {
+    const count = (id: string) => found.filter((f) => f.clinicId === id).length;
+    // Enrolling or upcoming on 2026-11-24: 4 + 7 at ACT, 2 + 1 at CNS, 4 + 1 at iResearch, 12 at HRI. "Ongoing" ones are left out.
+    expect([count("cenexel-anaheim"), count("cenexel-los-alamitos"), count("cenexel-decatur"), count("cenexel-marlton")]).toEqual([11, 3, 5, 12]);
+    expect(new Set(found.map((f) => f.key)).size).toBe(found.length);
+    expect(found.every((f) => new URL(f.url).host === "cenexelresearch.com")).toBe(true);
+  });
+  it("keeps the Clinic's own words", () => {
+    expect(found.find((f) => f.key === "/act/trials/celiac-disease/")).toEqual({
+      key: "/act/trials/celiac-disease/",
+      clinicId: "cenexel-anaheim",
+      title: "Celiac Disease",
+      pay: "up to $2,800",
+      when: null,
+      stay: null,
+      who: "M / F, Age 18 -70",
+      code: null,
+      url: "https://cenexelresearch.com/act/trials/celiac-disease/",
+    });
+  });
+  it("finds nothing in a page that isn't a list", () => {
+    expect(cenexel.parse(["<html>nothing</html>"])).toEqual([]);
+  });
+});
+
+describe("ProSciento", () => {
+  it("reads each study once, though the page shows each twice", () => {
+    const found = basics(prosciento, "prosciento.html", "myproscientostudy.com");
+    expect(found.map((f) => f.key)).toEqual(["/pisa-ep/", "/cip358/", "/rona-t2/", "/rona-hov/"]);
+    expect(found[0]).toEqual({
+      key: "/pisa-ep/",
+      clinicId: "prosciento",
+      title: "Healthy volunteers needed for a clinical research study",
+      pay: "Up to $5,075",
+      when: null,
+      stay: "Up to 88 days",
+      who: "Healthy Men Ages 18\u201355 May Qualify",
+      code: null,
+      url: "https://myproscientostudy.com/pisa-ep/",
+    });
+  });
+});
+
+describe("the sources read since 2026-11-24", () => {
+  it("lose no Opening to the read's own checks of Clinic and link", () => {
+    const cases: [Source, string[]][] = [
+      [drVince, ["dr-vince.html"]],
+      [syneos, ["syneos.html"]],
+      [axis, ["axis.html"]],
+      [cenexel, ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html"]],
+      [prosciento, ["prosciento.html"]],
+    ];
+    for (const [source, files] of cases) {
+      const found = source.parse(files.map(fixture));
+      expect(found.length, source.id).toBeGreaterThan(0);
+      expect(clean(found, source), source.id).toHaveLength(found.length);
+    }
   });
 });

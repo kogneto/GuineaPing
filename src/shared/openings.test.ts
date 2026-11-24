@@ -195,6 +195,15 @@ describe("the follow-up visits in a Clinic's wording", () => {
     expect(followUpVisits("1 Screening visit, 1 Stay of 24 nights, 1 Outpatient visit")).toBe(1);
   });
 
+  it("reads the visits in the wording of the Clinics read since 2026-11-24", () => {
+    // Syneos, in the tip beside each study's dates.
+    expect(followUpVisits("The study includes 1 overnight stay (4 nights) and 1 return visit.")).toBe(1);
+    expect(followUpVisits("The study includes 1 overnight stay (5 nights) and 1 return visit.")).toBe(1);
+    // ProSciento gives only how long a study runs: no visit is named, so it counts as none.
+    expect(followUpVisits("Up to 88 days")).toBe(0);
+    expect(followUpVisits("Up to 10 months")).toBe(0);
+  });
+
   it("counts the visits of a study that is all visits", () => {
     expect(followUpVisits("15 visits over 6 weeks, Hours: 8:00AM - 1:00PM")).toBe(15);
   });
@@ -446,6 +455,11 @@ describe("the day an Opening starts, in a Clinic's wording", () => {
     expect(startDay("2027-01-06 to Feb 3", SEEN)).toBeNull();
     expect(startDay("Dec 2026 - Feb 5", SEEN)).toBeNull();
     expect(startDay("12/3 - Dec 20", SEEN)).toBeNull();
+  });
+
+  it("reads Syneos's dates, and nothing from its note where a date would be", () => {
+    expect(startDay("December 16 to 20, 2026", SEEN)).toBe("2026-12-16");
+    expect(startDay("Three groups available. More information available under study details.", SEEN)).toBeNull();
   });
 
   it("gives no start day when anything stands in front of the date", () => {
