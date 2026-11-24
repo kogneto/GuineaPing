@@ -81,7 +81,7 @@ describe("Points to check", () => {
     const me = profile({ heightIn: 69, weightLb: 165, nicotine: "no", lastDonationOn: "2026-10-12" });
     const today = "2026-11-22";
     expect(bmiOf(69, 165)).toBe(24.4);
-    expect(factFor("bmi", me, [], today)).toEqual({ topic: "bmi", text: "Your BMI: 24.4", missing: false });
+    expect(factFor("bmi", me, [], today)).toEqual({ topic: "bmi", text: "Your BMI: 24.4. At your height, 1 BMI point is about 6.8 lb", missing: false });
     expect(factFor("weight", me, [], today).text).toBe("Your weight: 165 lb (74.8 kg)");
     expect(factFor("nicotine", me, [], today).text).toBe("You said you don't use nicotine");
     expect(factFor("nicotine", profile({ nicotine: "yes" }), [], today).text).toBe("You said you use nicotine");

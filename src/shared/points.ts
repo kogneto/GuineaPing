@@ -68,6 +68,11 @@ export function bmiOf(heightIn: number, weightLb: number): number {
   return Math.round(((703 * weightLb) / (heightIn * heightIn)) * 10) / 10;
 }
 
+/** How many pounds change a BMI by one point, for someone of this height in inches. */
+export function lbPerBmiPoint(heightIn: number): number {
+  return Math.round(((heightIn * heightIn) / 703) * 10) / 10;
+}
+
 const KG_PER_LB = 0.45359237;
 /** What a Member sees beside a Point to check: their own fact, or what to add so there is one. */
 export type Fact = { topic: Topic; text: string; missing: boolean };
@@ -81,7 +86,11 @@ export function factFor(topic: Topic, profile: Profile, pastStudies: PastStudy[]
   const have = (text: string): Fact => ({ topic, text, missing: false });
   switch (topic) {
     case "bmi":
-      return profile.heightIn && profile.weightLb ? have(`Your BMI: ${bmiOf(profile.heightIn, profile.weightLb).toFixed(1)}`) : missing("Add your height and weight to your profile to see your BMI here");
+      // The pounds in one BMI point are a fact about the Member's height alone. They let the Member
+      // work out how far a range is from them, since weight can change; the app still compares nothing.
+      return profile.heightIn && profile.weightLb
+        ? have(`Your BMI: ${bmiOf(profile.heightIn, profile.weightLb).toFixed(1)}. At your height, 1 BMI point is about ${lbPerBmiPoint(profile.heightIn).toFixed(1)} lb`)
+        : missing("Add your height and weight to your profile to see your BMI here");
     case "weight":
       return profile.weightLb ? have(`Your weight: ${Math.round(profile.weightLb)} lb (${(profile.weightLb * KG_PER_LB).toFixed(1)} kg)`) : missing("Add your weight to your profile to see it here");
     case "nicotine":
