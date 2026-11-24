@@ -216,13 +216,18 @@ describe("the follow-up visits in a Clinic's wording", () => {
 
   // The wordings from here to the end of this block are made up: a review asked what a Clinic
   // could plausibly write that would make the reader count too high, and so hide an Opening.
-  it("does not take the number of a day, a week or a price for a count", () => {
-    expect(followUpVisits("1 stay of 5 nights with a Day 14 follow-up visit")).toBe(0);
-    expect(followUpVisits("1 stay of 3 nights and a Week 4 outpatient visit")).toBe(0);
+  it("takes a visit on a numbered day or week, or with a price, for one visit, not that many", () => {
+    expect(followUpVisits("1 stay of 5 nights with a Day 14 follow-up visit")).toBe(1);
+    expect(followUpVisits("1 stay of 3 nights and a Week 4 outpatient visit")).toBe(1);
     expect(followUpVisits("2 return visits, then follow-up visits on Days 14 and 28")).toBe(2);
-    expect(followUpVisits("Follow-up visits: Days 14 and 28 follow-up visits")).toBe(0);
-    expect(followUpVisits("$100 follow-up visit")).toBe(0);
-    expect(followUpVisits("D14 follow-up visit")).toBe(0);
+    expect(followUpVisits("Follow-up visits: Days 14 and 28 follow-up visits")).toBe(1);
+    expect(followUpVisits("$100 follow-up visit")).toBe(1);
+    expect(followUpVisits("D14 follow-up visit")).toBe(1);
+  });
+
+  it("never reads higher for doubting a number: a count it takes for a label still counts as one", () => {
+    // "4" follows the word "visit", so it looks like a label. Dropping it would leave 8, above the true 4.
+    expect(followUpVisits("1 screening visit 4 outpatient visits and 8 return visits")).toBe(1);
   });
 
   it("takes the lowest of the numbers a Clinic offers between", () => {

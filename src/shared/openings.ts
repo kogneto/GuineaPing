@@ -87,11 +87,15 @@ const LABELS_A_NUMBER = /(?:\b(?:days?|weeks?|months?|cycles?|periods?|visits?|c
  * - of several numbers given together the lowest counts: "12 to 16" is 12, "2 or 5" is 2;
  * - of several figures in one wording the lowest counts, though they may add up;
  * - a number that something labels is not a count: "a Day 14 follow-up visit" is one visit, on
- *   day 14, and is read as giving no count at all.
+ *   day 14. It counts as one, never as nothing, so that doubting a number cannot raise the
+ *   reading by leaving only a higher figure.
  */
 export function followUpVisits(stay: string | null): number | null {
   if (!stay?.trim()) return null;
-  const figures = [...stay.matchAll(VISITS)].filter((m) => !LABELS_A_NUMBER.test(stay.slice(0, m.index))).map((m) => Math.min(...m[1]!.match(/\d+/g)!.map(Number)));
+  const figures = [...stay.matchAll(VISITS)].map((m) => {
+    const lowest = Math.min(...m[1]!.match(/\d+/g)!.map(Number));
+    return LABELS_A_NUMBER.test(stay.slice(0, m.index)) ? Math.min(lowest, 1) : lowest;
+  });
   return figures.length ? Math.min(...figures) : 0;
 }
 
