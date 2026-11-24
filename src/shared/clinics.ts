@@ -93,25 +93,27 @@ export const CLINICS: Clinic[] = [
   c("abbvie-grayslake", "AbbVie", "Grayslake, IL", 42.3445, -88.0418, "https://abbviephase1.com/#/available-trials", null, ["ACPRU", "AbbVie"]),
   c("johns-hopkins-bpru", "Johns Hopkins BPRU", "Baltimore, MD", 39.2904, -76.6122, "https://www.hopkinsmedicine.org/psychiatry/research/bpru/research-volunteers", null, ["Behavioral Pharmacology Research Unit", "BPRU"]),
 
-  // Listed with no link: the research names each of these, but nobody has opened a page of theirs
-  // to link to (docs/research/paid-study-sources.md). Names are the spellings listings used on 2026-11-24.
-  c("clinical-pharmacology-miami", "Clinical Pharmacology of Miami", "Miami, FL", 25.7743, -80.1937, null, null, ["Clinical Pharmacology of Miami", "CPMI"], ["Miami", "Hialeah"]),
-  c("qps-springfield", "QPS", "Springfield, MO", 37.2153, -93.2982, null, null, ["QPS", "Bio-Kinetic", "BioKinetic"]),
+  // Added on 2026-11-24 from docs/research/paid-study-sources.md. Names are the spellings listings
+  // used that day. The links are the addresses the owner gave; GuineaPing has not opened them.
+  c("clinical-pharmacology-miami", "Clinical Pharmacology of Miami", "Miami, FL", 25.7743, -80.1937, "https://cpmiclinical.com/studies/#!/", null, ["Clinical Pharmacology of Miami", "CPMI"], ["Miami", "Hialeah"]),
+  c("qps-springfield", "QPS", "Springfield, MO", 37.2153, -93.2982, "https://417trials.com/", null, ["QPS", "Bio-Kinetic", "BioKinetic"]),
   // "Worldwide Clinical", not the whole name: listings also write "Trial" and "Trails".
   c("worldwide-san-antonio", "Worldwide Clinical Trials", "San Antonio, TX", 29.4241, -98.4936, null, null, ["Worldwide Clinical"]),
-  c("parexel-glendale", "Parexel", "Glendale, CA", 34.1425, -118.2551, null, null, ["Parexel", "California Clinical Trials", "CCTMG", "EPCU"]),
+  c("parexel-glendale", "Parexel", "Glendale, CA", 34.1425, -118.2551, "https://pxlcrs.my.site.com/portal/s/triallistla?loc=LA&language=en_US", null, ["Parexel", "California Clinical Trials", "CCTMG", "EPCU"]),
   // "Genesis Clinical", so that Tampa General Hospital's "Genesis Clinic" is not taken for it.
   c("genesis-tampa", "Genesis Clinical Research", "Tampa, FL", 27.9475, -82.4584, null, null, ["Genesis Clinical"]),
   c("frontage-secaucus", "Frontage", "Secaucus, NJ", 40.7895, -74.0565, null, null, ["Frontage"], ["Secaucus", "Hackensack"]),
   // "Floridian Research Institute" and "Floridian Neuroscience Institute" are left out: the spellings don't show they are this Clinic.
   c("floridian-miami-lakes", "Floridian Clinical Research", "Miami Lakes, FL", 25.9087, -80.3087, null, null, ["Floridian Clinical Research"], ["Miami Lakes", "Hialeah", "Miami"]),
-  c("axis-dilworth", "Axis Clinicals", "Dilworth, MN", 46.8766, -96.7034, null, null, ["Axis"]),
+  c("axis-dilworth", "Axis Clinicals", "Dilworth, MN", 46.8766, -96.7034, "https://axispays.com/browse-current-studies/", null, ["Axis"]),
+  // A different company from Axis Clinicals. Its other places (New Hyde Park NY, Westchester IL) are not listed.
+  c("axis-los-angeles", "Axis Clinical Trials", "Los Angeles, CA", 34.0522, -118.2437, null, null, ["Axis Clinical", "ACTCA"]),
   c("quest-farmington-hills", "QUEST Research Institute", "Farmington Hills, MI", 42.4853, -83.3772, null, null, ["Quest Research"]),
   c("k2-maitland", "K2 Medical Research", "Maitland, FL", 28.6278, -81.3631, null, null, ["K2"], ["Maitland", "Orlando"]),
   // Its other place, at Lady Lake and The Villages, is left out: it is sixty miles off.
   c("charter-orlando", "Charter Research", "Orlando, FL", 28.5383, -81.3792, null, null, ["Charter Research"], ["Orlando", "Winter Park"]),
   // Not "Rocky Mountain" alone: cancer, movement-disorder and ear centres in Englewood begin that way.
-  c("cenexel-englewood", "CenExel RMCR", "Englewood, CO", 39.6478, -104.9878, null, null, ["CenExel", "CenExcel", "Rocky Mountain Clinical Research"]),
+  c("cenexel-englewood", "CenExel RMCR", "Englewood, CO", 39.6478, -104.9878, "https://cenexelclinicaltrials.com/search-result-new/", null, ["CenExel", "CenExcel", "Rocky Mountain Clinical Research"]),
 ];
 
 /** A Clinic's distinct name for a sentence: "Fortrea, Madison, WI". */

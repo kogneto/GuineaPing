@@ -277,6 +277,13 @@ describe("Clinics", () => {
         ["Cenexel Rocky Mountain Clinical Research", "Englewood"],
         ["CenExcel Rocky Mountain Clinical Research, LLC", "Englewood"],
       ],
+      "axis-los-angeles": [
+        ["Axis Clinical Trials", "Los Angeles"],
+        ["AXIS Clinical Trials Research Center", "Los Angeles"],
+        ["Axis Clinical Trial Network", "Los Angeles"],
+        ["Axis Clinical Tirals", "Los Angeles"],
+        ["ACTCA, Axis Clinical Trials", "Los Angeles"],
+      ],
       // Already listed in Chula Vista; a few listings put it in San Diego.
       prosciento: [
         ["ProSciento, Inc.", "Chula Vista"],
@@ -311,28 +318,34 @@ describe("Clinics", () => {
     expect(clinicsNamedBy([{ facility: "QPS Miami", city: "Miami" }])).toEqual(["qps-miami"]);
     expect(clinicsNamedBy([{ facility: "Parexel", city: "Glendale" }])).toEqual(["parexel-glendale"]);
     expect(clinicsNamedBy([{ facility: "Parexel", city: "Baltimore" }])).toEqual(["parexel-baltimore"]);
+    expect(clinicsNamedBy([{ facility: "AXIS Clinicals", city: "Dilworth" }])).toEqual(["axis-dilworth"]);
+    expect(clinicsNamedBy([{ facility: "Axis Clinical Trials", city: "Los Angeles" }])).toEqual(["axis-los-angeles"]);
+    // Axis Clinical Trials' other places are not on the list.
+    expect(clinicsNamedBy([{ facility: "Axis Clinical Trials", city: "New Hyde Park" }])).toEqual([]);
   });
 
   it("lists a Clinic without a link until an address for its own list has been confirmed", () => {
     const withoutLink = CLINICS.filter((c) => c.url === null);
     expect(withoutLink.map((c) => c.id).sort()).toEqual([
-      "axis-dilworth",
-      "cenexel-englewood",
+      "axis-los-angeles",
       "charter-orlando",
-      "clinical-pharmacology-miami",
       "floridian-miami-lakes",
       "frontage-secaucus",
       "genesis-tampa",
       "k2-maitland",
-      "parexel-glendale",
-      "qps-springfield",
       "quest-farmington-hills",
       "worldwide-san-antonio",
     ]);
     // With no list to open there is nothing to read either.
     expect(withoutLink.filter((c) => c.source !== null)).toEqual([]);
-    // The one address the research had opened.
-    expect(CLINICS.find((c) => c.id === "johns-hopkins-bpru")?.url).toBe("https://www.hopkinsmedicine.org/psychiatry/research/bpru/research-volunteers");
+    // The one address the research had opened, and those the owner gave on 2026-11-24.
+    const linkOf = (id: string) => CLINICS.find((c) => c.id === id)?.url;
+    expect(linkOf("johns-hopkins-bpru")).toBe("https://www.hopkinsmedicine.org/psychiatry/research/bpru/research-volunteers");
+    expect(linkOf("clinical-pharmacology-miami")).toBe("https://cpmiclinical.com/studies/#!/");
+    expect(linkOf("qps-springfield")).toBe("https://417trials.com/");
+    expect(linkOf("parexel-glendale")).toBe("https://pxlcrs.my.site.com/portal/s/triallistla?loc=LA&language=en_US");
+    expect(linkOf("axis-dilworth")).toBe("https://axispays.com/browse-current-studies/");
+    expect(linkOf("cenexel-englewood")).toBe("https://cenexelclinicaltrials.com/search-result-new/");
   });
 
   it("names the Clinics on a Trial without changing its places", () => {
