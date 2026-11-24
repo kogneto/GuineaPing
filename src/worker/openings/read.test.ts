@@ -41,8 +41,8 @@ const serving =
   };
 const noWait = async () => {};
 const DAY1 = "2026-11-22T09:47:00.000Z";
-/** The runs are six minutes apart: the one before a source's own turn, 54 minutes after DAY1. */
-const RUN_BEFORE = "2026-11-22T10:41:00.000Z";
+/** The runs are three minutes apart: the one before a source's own turn, 57 minutes after DAY1. */
+const RUN_BEFORE = "2026-11-22T10:44:00.000Z";
 /** The source's own turn an hour after DAY1, starting three seconds early. */
 const OWN_TURN = "2026-11-22T10:46:57.000Z";
 const DAY2 = "2026-11-23T09:47:00.000Z";
