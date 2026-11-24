@@ -294,6 +294,8 @@ describe("Clinical Pharmacology of Miami", () => {
     expect(cpmi.parse([])).toEqual([]);
     expect(cpmi.parse(['[{"StudyID":"1","Title":"A study"}]'])).toEqual([]);
     expect(cpmi.parse(['{"studies":[{"Title":"No number"},{"StudyID":"2"},{"StudyID":"3","Title":" "},null]}'])).toEqual([]);
+    // However the wait-list is spelt.
+    expect(cpmi.parse(['{"studies":[{"StudyID":"4","Title":"Obesity","Protocol":"Wait List: Future Obesity Study"},{"StudyID":"5","Title":"Gout","Protocol":"Waitlist"}]}'])).toEqual([]);
   });
 
   it("links its Openings to the Clinic's own site, though the list comes from another company's", () => {

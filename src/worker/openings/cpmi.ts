@@ -37,7 +37,7 @@ export const cpmi: Source = {
       const key = field(study, "StudyID");
       const title = field(study, "Title");
       const code = field(study, "Protocol");
-      if (!key || !title || /^wait-?list\b/i.test(code ?? "")) continue;
+      if (!key || !title || /^wait[\s-]?list\b/i.test(code ?? "")) continue;
       found.push({ key, clinicId: "clinical-pharmacology-miami", title, pay: null, when: null, stay: null, who: null, code, url: LIST });
     }
     return found;
