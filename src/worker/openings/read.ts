@@ -4,7 +4,7 @@
  * - a site that says no (401, 403, 429, or a challenge page) is not tried again until someone
  *   clears the refusal by hand;
  * - requests carry no made-up browser identity: no headers are set at all;
- * - only https links on the source's own host are kept, and text is stored as plain text.
+ * - only https links on the Clinic's own site are kept, and text is stored as plain text.
  */
 import { CLINICS } from "../../shared/clinics";
 import { sameHost } from "./html";
@@ -54,9 +54,9 @@ const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 
 const looksLikeChallenge = (html: string) => /<title>\s*(Attention Required|Just a moment|Access denied)/i.test(html.slice(0, 2000));
 
-/** Keeps only what is safe to store and show: known Clinic, own-host https link, short plain text. */
+/** Keeps only what is safe to store and show: known Clinic, https link on the Clinic's own site, short plain text. */
 export function clean(found: Found[], source: Source): Found[] {
-  const base = source.pages[0] ?? "";
+  const base = source.site ?? source.pages[0] ?? "";
   const short = (s: string | null) => (s ? s.slice(0, MAX_TEXT) : null);
   const seen = new Set<string>();
   const out: Found[] = [];

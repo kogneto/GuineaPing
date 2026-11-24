@@ -3,6 +3,7 @@ import { altasciencesKc } from "./altasciencesKc";
 import { altasciencesLa } from "./altasciencesLa";
 import { axis } from "./axis";
 import { celerion } from "./celerion";
+import { cpmi } from "./cpmi";
 import { cenexel } from "./cenexel";
 import { drVince } from "./drVince";
 import { fortrea } from "./fortrea";
@@ -16,4 +17,4 @@ import { tkl } from "./tkl";
 import type { Source } from "./types";
 
 /** Every Clinic site GuineaPing reads. A Clinic not listed here is never visited. */
-export const SOURCES: Source[] = [fortrea, celerion, altasciencesKc, altasciencesLa, pharmaron, ocrc, pfizer, novum, tkl, drVince, syneos, axis, cenexel, prosciento, abbvie];
+export const SOURCES: Source[] = [fortrea, celerion, altasciencesKc, altasciencesLa, pharmaron, ocrc, pfizer, novum, tkl, drVince, syneos, axis, cenexel, prosciento, abbvie, cpmi];

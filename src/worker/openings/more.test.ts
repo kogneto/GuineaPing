@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { abbvie } from "./abbvie";
+import { cpmi } from "./cpmi";
 import { novum } from "./novum";
 import { ocrc } from "./ocrc";
 import { pfizer } from "./pfizer";
@@ -269,6 +270,40 @@ describe("AbbVie", () => {
   });
 });
 
+describe("Clinical Pharmacology of Miami", () => {
+  // A trimmed copy of the feed's answer on 2026-11-24: 6 of its 11 studies, without the doctors'
+  // names, the images and the long story text.
+  it("reads each study's name and code, leaving out the wait-lists for future studies", () => {
+    const found = cpmi.parse([fixture("cpmi.json")]);
+    expect(found.map((f) => f.title)).toEqual(["Healthy Volunteers", "Healthy Senior Volunteers", "Kidney Disease", "Abdominoplasty"]);
+    expect(found[0]).toEqual({
+      key: "408",
+      clinicId: "clinical-pharmacology-miami",
+      title: "Healthy Volunteers",
+      pay: null,
+      when: null,
+      stay: null,
+      who: null,
+      code: "M26-134",
+      url: "https://cpmiclinical.com/studies/#!/",
+    });
+  });
+
+  it("finds nothing in an answer that isn't the list, and skips an entry with no number or name", () => {
+    expect(cpmi.parse(["<html>nothing</html>"])).toEqual([]);
+    expect(cpmi.parse([])).toEqual([]);
+    expect(cpmi.parse(['[{"StudyID":"1","Title":"A study"}]'])).toEqual([]);
+    expect(cpmi.parse(['{"studies":[{"Title":"No number"},{"StudyID":"2"},{"StudyID":"3","Title":" "},null]}'])).toEqual([]);
+  });
+
+  it("links its Openings to the Clinic's own site, though the list comes from another company's", () => {
+    const found = cpmi.parse([fixture("cpmi.json")]);
+    expect(cpmi.pages.map((p) => new URL(p).host)).toEqual(["realtime-host01.com"]);
+    expect(clean(found, cpmi)).toHaveLength(found.length);
+    expect(clean([{ ...found[0]!, url: "https://realtime-host01.com/erg-cpm/web/v1/studies?" }], cpmi)).toEqual([]);
+  });
+});
+
 describe("the sources read since 2026-11-24", () => {
   it("lose no Opening to the read's own checks of Clinic and link", () => {
     const cases: [Source, string[]][] = [
@@ -278,6 +313,7 @@ describe("the sources read since 2026-11-24", () => {
       [cenexel, ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html"]],
       [prosciento, ["prosciento.html"]],
       [abbvie, ["abbvie.json"]],
+      [cpmi, ["cpmi.json"]],
     ];
     for (const [source, files] of cases) {
       const found = source.parse(files.map(fixture));

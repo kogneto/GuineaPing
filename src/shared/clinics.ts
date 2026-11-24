@@ -7,7 +7,7 @@
  * GuineaPing has no address for its list. The Member opens the link, if there is one, and reads it
  * themselves. Every Clinic can be named in a Watch, which asks ClinicalTrials.gov, not the Clinic.
  */
-export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento" | "abbvie";
+export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento" | "abbvie" | "cpmi";
 
 export type Clinic = {
   id: string;
@@ -94,7 +94,7 @@ export const CLINICS: Clinic[] = [
 
   // Added on 2026-11-24 from docs/research/paid-study-sources.md. Names are the spellings listings
   // used that day. The links are the addresses the owner gave; GuineaPing has not opened them.
-  c("clinical-pharmacology-miami", "Clinical Pharmacology of Miami", "Miami, FL", 25.7743, -80.1937, "https://cpmiclinical.com/studies/#!/", null, ["Clinical Pharmacology of Miami", "CPMI"], ["Miami", "Hialeah"]),
+  c("clinical-pharmacology-miami", "Clinical Pharmacology of Miami", "Miami, FL", 25.7743, -80.1937, "https://cpmiclinical.com/studies/#!/", "cpmi", ["Clinical Pharmacology of Miami", "CPMI"], ["Miami", "Hialeah"]),
   c("qps-springfield", "QPS", "Springfield, MO", 37.2153, -93.2982, "https://www.facebook.com/share/1PpbLQQ92a/", null, ["QPS", "Bio-Kinetic", "BioKinetic"]),
   // "Worldwide Clinical", not the whole name: listings also write "Trial" and "Trails".
   c("worldwide-san-antonio", "Worldwide Clinical Trials", "San Antonio, TX", 29.4241, -98.4936, null, null, ["Worldwide Clinical"]),

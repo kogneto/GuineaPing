@@ -87,6 +87,7 @@ Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide the
 | **Novum** (Las Vegas NV) | [gonovum.com/location/las-vegas](https://www.gonovum.com/location/las-vegas/) [V] | Pay "$2,700"; dates "01/13/27 - 02/22/27"; age; sex; visits on detail. Outpatient studies | Yes ("12641901 Group6"); no NCT | Plain HTML. Allowed | No terms page found [V] |
 | **TKL Research** (Fair Lawn NJ) | [tklresearch.com/studies](https://tklresearch.com/studies/) [V] | "$6,400 FOR TIME AND TRAVEL"; start date; "15 OVERNIGHTS AND 4 OUTPATIENT VISITS"; age; sex | Yes (P1980126); no NCT | Plain HTML. Allowed | [Terms](https://tklresearch.com/privacy-policy-terms-use/) have no bot or scraping clause [V] |
 | **AbbVie** (Grayslake IL), added 2026-11-24 | [abbviephase1.com/#/available-trials](https://abbviephase1.com/#/available-trials) [owner, browser] | Pay "4200.00"; check-in "13 or 14 December 2026"; "Overnight"; sex; age; BMI. 1 listing | No code in the list | The page fetches its list as JSON from `/API/api/Data/GetTrials` and sends a sign-in token with it. The call answered without one in a browser [owner]. No robots.txt [V] | Not checked |
+| **Clinical Pharmacology of Miami** (Miami FL), added 2026-11-24 | [cpmiclinical.com/studies](https://cpmiclinical.com/studies/#!/) [owner, browser] | Name, sponsor and protocol number; pay, dates and stay only in prose ("Compensation for time and participation"). 11 listings, 2 healthy, 3 wait-lists | Sponsor's protocol number (M26-134) | The page fetches its list as JSON from its recruitment company's host, `realtime-host01.com/erg-cpm/web/v1/studies`, with no sign-in. The call answered in a browser [owner] | Not checked |
 
 "Nothing found that forbids it" is not permission. Fortrea and Celerion have no website terms at all that we could find; that is silence, not consent.
 
@@ -118,7 +119,7 @@ Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide the
 
 - **AbbVie** (Grayslake IL): moved to section A on 2026-11-24. The note that it blocked scripts was about another AbbVie site. Its codes elsewhere are protocol numbers that match Trials (section 4) [V].
 - **QUEST Research Institute** (Farmington Hills MI): sign-up and FAQ only [V, browser].
-- **Clinical Pharmacology of Miami**: the studies page was empty; it points volunteers to an app [V, browser].
+- **Clinical Pharmacology of Miami**: moved to section A on 2026-11-24. Its studies page had looked empty because it draws its list with JavaScript.
 - **Frontage** (Secaucus NJ): general sign-up cards; study details only in PDF flyers [V].
 - **Genesis Clinical Research** (Tampa FL): general pages for healthy, kidney and liver volunteers [V].
 - **Charter Research** (Orlando FL): 11 listings, all patient studies [V].
