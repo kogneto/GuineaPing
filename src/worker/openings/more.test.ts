@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { abbvie } from "./abbvie";
 import { novum } from "./novum";
 import { ocrc } from "./ocrc";
 import { pfizer } from "./pfizer";
@@ -224,6 +225,41 @@ describe("ProSciento", () => {
   });
 });
 
+describe("AbbVie", () => {
+  // A copy of the feed's answer on 2026-11-24. The feed also sends each study's flyer as a PDF
+  // inside the list; that is left out here (AttachmentContent), as it names its author.
+  it("reads each study in the feed, in the Clinic's own words", () => {
+    const found = basics(abbvie, "abbvie.json", "abbviephase1.com");
+    expect(found).toEqual([
+      {
+        key: "7175",
+        clinicId: "abbvie-grayslake",
+        title: "Champagne",
+        pay: "$4,200",
+        when: "13 or 14 December 2026",
+        stay: "Overnight",
+        who: "Men and Women, Age 18-45, BMI 18-32",
+        code: null,
+        url: "https://abbviephase1.com/#/available-trials",
+      },
+    ]);
+  });
+
+  it("finds nothing in an answer that isn't the list, and skips an entry with no number or name", () => {
+    expect(abbvie.parse(['{"Message":"An error has occurred."}'])).toEqual([]);
+    expect(abbvie.parse(["<ArrayOfTrial><Trial><Title>Champagne</Title></Trial></ArrayOfTrial>"])).toEqual([]);
+    expect(abbvie.parse(['[{"Title":"No number"},{"TrialID":7176},{"TrialID":7177,"Title":"  "},null]'])).toEqual([]);
+  });
+
+  it("gives pay as dollars, with cents only where the Clinic has them, and leaves out what it doesn't give", () => {
+    const one = (entry: object) => abbvie.parse([JSON.stringify([{ TrialID: 1, Title: "A study", ...entry }])])[0];
+    expect(one({ Stipend: "1234.50" })?.pay).toBe("$1,234.50");
+    expect(one({ Stipend: "950" })?.pay).toBe("$950");
+    expect(one({ Stipend: "" })).toMatchObject({ pay: null, when: null, stay: null, who: null });
+    expect(one({ Stipend: "TBD", Gender: "Women", Age: "", BMI: null })).toMatchObject({ pay: null, who: "Women" });
+  });
+});
+
 describe("the sources read since 2026-11-24", () => {
   it("lose no Opening to the read's own checks of Clinic and link", () => {
     const cases: [Source, string[]][] = [
@@ -232,6 +268,7 @@ describe("the sources read since 2026-11-24", () => {
       [axis, ["axis.html"]],
       [cenexel, ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html"]],
       [prosciento, ["prosciento.html"]],
+      [abbvie, ["abbvie.json"]],
     ];
     for (const [source, files] of cases) {
       const found = source.parse(files.map(fixture));

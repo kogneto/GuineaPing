@@ -115,7 +115,7 @@ Unnamed sites are 99 of the 745 single-site Trials (13%). Whole clinics hide the
 
 ### D. No public list of studies
 
-- **AbbVie** (Grayslake IL): blocked. Its study pages use protocol numbers that match Trials (section 4) [V]. Listed as a link-only Clinic since 2026-11-24, at the address the owner gave ([abbviephase1.com/#/available-trials](https://abbviephase1.com/#/available-trials)); that page has not been opened for GuineaPing.
+- **AbbVie** (Grayslake IL): its study pages use protocol numbers that match Trials (section 4) [V]. Its volunteer list is at the address the owner gave on 2026-11-24, [abbviephase1.com/#/available-trials](https://abbviephase1.com/#/available-trials). The note that AbbVie blocks scripts was about another AbbVie site. That page draws its studies from a data call, `abbviephase1.com/API/api/Data/GetTrials`, which the page sends with a sign-in token. The owner opened the call in a browser the same day, with no token, and it answered: one study, “Champagne”, $4,200, men and women 18–45, BMI 18–32, an overnight stay with check-in on 13 or 14 December 2026. Each entry also carries the study’s flyer as a PDF. Read from 2026-11-24.
 - **QUEST Research Institute** (Farmington Hills MI): sign-up and FAQ only [V, browser].
 - **Clinical Pharmacology of Miami**: the studies page was empty; it points volunteers to an app [V, browser].
 - **Frontage** (Secaucus NJ): general sign-up cards; study details only in PDF flyers [V].
@@ -129,10 +129,10 @@ Listed as Clinics since 2026-11-24, with no link, so that a Member can find them
 ### Notes
 
 - **robots.txt** allows the study list on every site except K2. It says what crawlers may fetch. It does not override terms of use.
-- **AI crawler rules.** Syneos, AbbVie, K2 and ClinicalConnection name AI crawlers (GPTBot, ClaudeBot and others) in robots.txt and refuse them [V].
+- **AI crawler rules.** Syneos, an AbbVie site other than abbviephase1.com (which has no robots.txt), K2 and ClinicalConnection name AI crawlers (GPTBot, ClaudeBot and others) in robots.txt and refuse them [V].
 - **Pay is "up to"** almost everywhere [V]. It is probably the amount for finishing the whole study [U].
 - **Closed studies stay listed** on some sites; Altasciences marks them "Recruitment Complete" [V].
-- **Feeds.** No site offers its studies as data (no JSON, no study RSS). Fortrea's RSS and the sitemaps at Fortrea, Altasciences LA and Orlando Clinical Research Center show when a study page was added or changed [V].
+- **Feeds.** No site offers its studies as data for others to use (no study RSS). AbbVie's list page fetches its own studies as JSON, and that call is what GuineaPing reads (2026-11-24). Fortrea's RSS and the sitemaps at Fortrea, Altasciences LA and Orlando Clinical Research Center show when a study page was added or changed [V].
 
 ### One-day pay snapshot [V]
 
