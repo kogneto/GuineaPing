@@ -40,7 +40,8 @@ export type ReadResult = {
   /**
    * Whether this outcome is of another kind than the source's last one, so a lasting problem is
    * reported once. The detail is left out of it: a site that answers 502 one hour and 503 the next
-   * is still the one problem.
+   * is still the one problem. A refusal always counts: a refused source is not read again until a
+   * person clears it, so each refusal is a new one.
    */
   statusChanged: boolean;
 };
@@ -98,7 +99,7 @@ export async function readDueSource(db: D1Database, sources: Source[], get: Fetc
       .prepare("UPDATE clinic_sources SET status = ?2, read_at = COALESCE(?3, read_at), refused_at = COALESCE(?4, refused_at) WHERE source = ?1")
       .bind(due.id, status, result.status === "ok" ? now : null, result.status === "refused" ? now : null)
       .run();
-    return { ...result, fresh: result.fresh ?? [], statusChanged: result.status !== kindOf(before?.status) };
+    return { ...result, fresh: result.fresh ?? [], statusChanged: result.status === "refused" || result.status !== kindOf(before?.status) };
   };
 
   const pages: string[] = [];

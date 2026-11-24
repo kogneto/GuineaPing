@@ -278,6 +278,13 @@ describe("reading a Clinic's list", () => {
     expect(await readDueSource(env.DB, [source()], serving([]), at(4), noWait)).toMatchObject({ status: "nothing found", statusChanged: true });
   });
 
+  it("counts every refusal as news: a person cleared the last one before this read could happen", async () => {
+    const refusing: Fetcher = async () => new Response("Forbidden", { status: 403 });
+    expect(await readDueSource(env.DB, [source()], refusing, DAY1, noWait)).toMatchObject({ status: "refused", statusChanged: true });
+    await env.DB.prepare("UPDATE clinic_sources SET refused_at = NULL WHERE source = 'fortrea'").run();
+    expect(await readDueSource(env.DB, [source()], refusing, DAY2, noWait)).toMatchObject({ status: "refused", statusChanged: true });
+  });
+
   it("tries again the next day after an ordinary failure, keeping what it had", async () => {
     await readDueSource(env.DB, [source()], serving([opening("a")]), DAY1, noWait);
     const down: Fetcher = async () => new Response("down", { status: 503 });
