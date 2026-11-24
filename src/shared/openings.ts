@@ -224,6 +224,22 @@ export function startsWithin(when: string | null, firstSeen: string, frame: Time
   return start === null || ((!frame.from || start >= frame.from) && (!frame.to || start <= frame.to));
 }
 
+/**
+ * A timeframe with one end set to a day, or cleared with null. If that would put the first day
+ * after the last, the other end is dropped: the day the Member has just set is the one they mean,
+ * and a timeframe that runs backwards would hold back every Opening with dates.
+ */
+export function withEnd(frame: Timeframe, end: "from" | "to", day: string | null): Timeframe {
+  const set: Timeframe = { ...frame, [end]: day };
+  return set.from && set.to && set.from > set.to ? { from: null, to: null, [end]: day } : set;
+}
+
+/**
+ * Whether a timeframe's last day has passed. It then holds back every Opening with dates, long
+ * after the Member meant it, so it is no longer applied. One with no last day never lapses.
+ */
+export const lapsed = (frame: Timeframe, today: string): boolean => !!frame.to && frame.to < today;
+
 /** The limits a Member can put on the Openings they see: on Follow-up visits, and on when an Opening starts. */
 export type Limits = { followUps: FollowUpLimit | null; starts: Timeframe };
 /** A Clinic under a Member's limits: with the Openings that pass them all, and how many of its others they hold back. */
@@ -252,10 +268,15 @@ export function limitedTo<O extends { stay: string | null; when: string | null; 
   });
   const notAside = clinics.flatMap((c) => c.openings).filter((o) => !o.mark);
   const listed = under.flatMap((c) => c.openings).filter((o) => !o.mark);
+  /** What one limit does by itself. `says` is whether an Opening tells what the limit asks about. */
+  const count = (passes: (o: O) => boolean, isSet: boolean, says: (o: O) => boolean): LimitCount => ({
+    heldBack: notAside.filter((o) => !passes(o)).length,
+    dontSay: isSet ? listed.filter((o) => !says(o)).length : 0,
+  });
   return {
     clinics: under,
     heldBack: notAside.length - listed.length,
-    followUps: { heldBack: notAside.filter((o) => !fewEnough(o)).length, dontSay: limits.followUps === null ? 0 : listed.filter((o) => followUpVisits(o.stay) === null).length },
-    starts: { heldBack: notAside.filter((o) => !inTime(o)).length, dontSay: limits.starts.from || limits.starts.to ? listed.filter((o) => startDay(o.when, o.firstSeen) === null).length : 0 },
+    followUps: count(fewEnough, limits.followUps !== null, (o) => followUpVisits(o.stay) !== null),
+    starts: count(inTime, !!(limits.starts.from || limits.starts.to), (o) => startDay(o.when, o.firstSeen) !== null),
   };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asItStood, followUpVisits, inOrder, limitedTo, payAmount, startDay, startsWithin, studyOf, withinFollowUps } from "./openings";
+import { asItStood, followUpVisits, inOrder, lapsed, limitedTo, payAmount, startDay, startsWithin, studyOf, withEnd, withinFollowUps } from "./openings";
 
 /** Every code on the lists GuineaPing had read by 2026-11-23, with the study each belongs to. */
 const CODES: Record<string, Record<string, string>> = {
@@ -516,5 +516,38 @@ describe("a Member's timeframe for when an Opening starts", () => {
   it("lets every Opening through when no timeframe is set", () => {
     expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, { from: null, to: null })).toBe(true);
     expect(startsWithin(null, SEEN, { from: null, to: null })).toBe(true);
+  });
+});
+
+describe("a Member setting their timeframe", () => {
+  const january = { from: "2027-01-01", to: "2027-01-31" };
+
+  it("sets one end and keeps the other", () => {
+    expect(withEnd({ from: null, to: null }, "from", "2027-01-01")).toEqual({ from: "2027-01-01", to: null });
+    expect(withEnd({ from: "2027-01-01", to: null }, "to", "2027-01-31")).toEqual(january);
+    expect(withEnd(january, "to", "2027-01-01")).toEqual({ from: "2027-01-01", to: "2027-01-01" });
+  });
+
+  it("clears an end", () => {
+    expect(withEnd(january, "from", null)).toEqual({ from: null, to: "2027-01-31" });
+    expect(withEnd(january, "to", null)).toEqual({ from: "2027-01-01", to: null });
+  });
+
+  it("drops the other end when the two would cross: the day just set is the one they mean", () => {
+    expect(withEnd(january, "from", "2027-02-10")).toEqual({ from: "2027-02-10", to: null });
+    expect(withEnd(january, "to", "2026-12-20")).toEqual({ from: null, to: "2026-12-20" });
+  });
+});
+
+describe("a timeframe whose last day has passed", () => {
+  it("has lapsed the day after its last day, and not before", () => {
+    expect(lapsed({ from: "2027-01-01", to: "2027-01-31" }, "2027-02-01")).toBe(true);
+    expect(lapsed({ from: "2027-01-01", to: "2027-01-31" }, "2027-01-31")).toBe(false);
+    expect(lapsed({ from: null, to: "2027-01-31" }, "2027-03-15")).toBe(true);
+  });
+
+  it("never lapses when it has no last day", () => {
+    expect(lapsed({ from: "2026-01-01", to: null }, "2027-06-01")).toBe(false);
+    expect(lapsed({ from: null, to: null }, "2027-06-01")).toBe(false);
   });
 });
