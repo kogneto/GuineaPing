@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { asItStood, followUpVisits, inOrder, limitedTo, payAmount, studyOf, withinFollowUps } from "./openings";
+import { asItStood, followUpVisits, inOrder, limitedTo, payAmount, startDay, startsWithin, studyOf, timeframeOf, withinFollowUps } from "./openings";
 
 /** Every code on the lists GuineaPing had read by 2026-11-23, with the study each belongs to. */
 const CODES: Record<string, Record<string, string>> = {
@@ -262,37 +262,322 @@ describe("a Member's limit on follow-up visits", () => {
   });
 });
 
-describe("a Member's Clinics under their limit on follow-up visits", () => {
-  const o = (id: string, stay: string | null, mark: string | null = null) => ({ id, stay, mark });
+describe("a Member's Clinics under their limits", () => {
+  const o = (id: string, stay: string | null, mark: string | null = null, when: string | null = null) => ({ id, stay, mark, when, firstSeen: "2026-11-23" });
   const ids = (clinics: { openings: { id: string }[] }[]) => clinics.map((c) => c.openings.map((x) => x.id));
   const kc = { openings: [o("none", "0 return visits"), o("one", "1 return visit"), o("four", "4 return visits")] };
   const fortrea = { openings: [o("eight", "1 stay of 9 nights & 8 outpatient visits")] };
+  const ANY_TIME = { from: null, to: null };
+  const upTo = (followUps: 0 | 2 | 5 | 10 | null) => ({ followUps, starts: ANY_TIME });
 
-  it("keeps at each Clinic the Openings within the limit, and counts the ones it holds back", () => {
-    const under = limitedTo([kc, fortrea], 2);
+  it("keeps at each Clinic the Openings within the limit on follow-up visits, and counts the ones it holds back", () => {
+    const under = limitedTo([kc, fortrea], upTo(2));
     expect(ids(under.clinics)).toEqual([["none", "one"], []]);
     expect(under.clinics.map((c) => c.heldBack)).toEqual([1, 1]);
     expect(under.heldBack).toBe(2);
+    expect(under.followUps.heldBack).toBe(2);
   });
 
   it("leaves an Opening the Member set aside where it is, and out of the count", () => {
     // "aside" asks for 10, over the limit, but it is already out of the list and counted on its own.
     const madison = { openings: [o("eight", "1 stay of 9 nights & 8 outpatient visits"), o("aside", "1 stay of 9 nights & 10 follow-up visits", "not_this_time")] };
-    const under = limitedTo([madison], 5);
+    const under = limitedTo([madison], upTo(5));
     expect(ids(under.clinics)).toEqual([["aside"]]);
     expect(under.heldBack).toBe(1);
   });
 
-  it("counts the Openings left in the list that don't say how many", () => {
+  it("counts the Openings left in the list that don't say how many follow-up visits", () => {
     const celerion = { openings: [o("silent", null), o("silent too", null), o("silent, set aside", null, "not_for_me")] };
-    expect(limitedTo([kc, celerion], 0).dontSay).toBe(2);
+    expect(limitedTo([kc, celerion], upTo(0)).followUps.dontSay).toBe(2);
   });
 
-  it("holds nothing back, and has nothing to explain, when the Member chose no limit", () => {
+  it("holds nothing back, and has nothing to explain, when the Member chose no limits", () => {
     const celerion = { openings: [o("silent", null)] };
-    const under = limitedTo([kc, fortrea, celerion], null);
+    const under = limitedTo([kc, fortrea, celerion], upTo(null));
     expect(ids(under.clinics)).toEqual([["none", "one", "four"], ["eight"], ["silent"]]);
     expect(under.heldBack).toBe(0);
-    expect(under.dontSay).toBe(0);
+    expect(under.followUps).toEqual({ heldBack: 0, dontSay: 0 });
+    expect(under.starts).toEqual({ heldBack: 0, dontSay: 0 });
+  });
+
+  // Three Openings with dates, as Clinics word them, and one that gives none.
+  const dated = {
+    openings: [
+      o("early dec, no visits", "1 stay of 2 nights", null, "Dec 02 2026 - Dec 05 2026"),
+      o("january, no visits", "1 stay of 2 nights", null, "4 to 12 Jan"),
+      o("january, eight visits", "1 stay of 9 nights & 8 outpatient visits", null, "Jan 06 2027 - Feb 01 2027"),
+      o("no dates", "1 stay of 2 nights", null, null),
+    ],
+  };
+  const january = { from: "2027-01-01", to: "2027-01-31" };
+
+  it("keeps the Openings that start in the Member's timeframe, and those that give no start day", () => {
+    const under = limitedTo([dated], { followUps: null, starts: january });
+    expect(ids(under.clinics)).toEqual([["january, no visits", "january, eight visits", "no dates"]]);
+    expect(under.starts).toEqual({ heldBack: 1, dontSay: 1 });
+    expect(under.followUps).toEqual({ heldBack: 0, dontSay: 0 });
+    expect(under.heldBack).toBe(1);
+  });
+
+  it("lists an Opening only when it passes both limits, and has each limit count what it holds back by itself", () => {
+    const under = limitedTo([dated], { followUps: 2, starts: january });
+    expect(ids(under.clinics)).toEqual([["january, no visits", "no dates"]]);
+    // Two are held back, once each: one by the timeframe, one by the limit on visits.
+    expect(under.heldBack).toBe(2);
+    expect(under.clinics[0]!.heldBack).toBe(2);
+    expect(under.starts.heldBack).toBe(1);
+    expect(under.followUps.heldBack).toBe(1);
+  });
+
+  it("counts an Opening that fails both limits in both, but once for its Clinic", () => {
+    const both = { openings: [o("december, eight visits", "1 stay of 9 nights & 8 outpatient visits", null, "Dec 07 2026 - Dec 16 2026")] };
+    const under = limitedTo([both], { followUps: 2, starts: january });
+    expect(under.starts.heldBack).toBe(1);
+    expect(under.followUps.heldBack).toBe(1);
+    expect(under.heldBack).toBe(1);
+    expect(under.clinics[0]!.heldBack).toBe(1);
+  });
+
+  it("leaves a set-aside Opening alone under a timeframe too", () => {
+    const madison = { openings: [o("aside, december", "1 stay of 2 nights", "not_this_time", "Dec 02 2026 - Dec 05 2026")] };
+    const under = limitedTo([madison], { followUps: null, starts: january });
+    expect(ids(under.clinics)).toEqual([["aside, december"]]);
+    expect(under.starts).toEqual({ heldBack: 0, dontSay: 0 });
+  });
+});
+
+// Every "when" wording below was on a Clinic's list in production on 2026-11-24, read by hand.
+// Each Opening was first seen on 2026-11-23 or 2026-11-24.
+describe("the day an Opening starts, in a Clinic's wording", () => {
+  const SEEN = "2026-11-23";
+
+  it("is the first date, when the Clinic gives the year", () => {
+    expect(startDay("Dec 02 2026 - Apr 27 2028", SEEN)).toBe("2026-12-02");
+    expect(startDay("Dec 03 2026 - Dec 29 2026", SEEN)).toBe("2026-12-03");
+    expect(startDay("Dec 04 2026 - Mar 02 2027", SEEN)).toBe("2026-12-04");
+    expect(startDay("Dec 07 2026 - Apr 12 2027", SEEN)).toBe("2026-12-07");
+    expect(startDay("Dec 07 2026 - Dec 16 2026", SEEN)).toBe("2026-12-07");
+    expect(startDay("Dec 07 2026 - May 25 2027", SEEN)).toBe("2026-12-07");
+    expect(startDay("Dec 16 2026 - Dec 18 2026", SEEN)).toBe("2026-12-16");
+    expect(startDay("Jan 06 2027 - Feb 01 2027", SEEN)).toBe("2027-01-06");
+    expect(startDay("Nov 19 2026 - Jun 09 2027", SEEN)).toBe("2026-11-19");
+    expect(startDay("Nov 24 2026 - Jun 14 2027", "2026-11-24")).toBe("2026-11-24");
+    expect(startDay("Nov 28 2026 - Apr 23 2028", SEEN)).toBe("2026-11-28");
+    expect(startDay("Nov 30 2026 - Jun 15 2027", SEEN)).toBe("2026-11-30");
+  });
+
+  it("reads a date written with slashes month first", () => {
+    expect(startDay("01/13/27 - 02/22/27", SEEN)).toBe("2027-01-13");
+    expect(startDay("12/01/26 - 11/10/27", SEEN)).toBe("2026-12-01");
+    expect(startDay("11/30/2026", SEEN)).toBe("2026-11-30");
+    expect(startDay("12/07/2026", SEEN)).toBe("2026-12-07");
+  });
+
+  it("works the year out from the day the Opening was first seen, when the Clinic gives none", () => {
+    expect(startDay("Dec 01 to Dec 10", SEEN)).toBe("2026-12-01");
+    expect(startDay("Dec 01 to Dec 30", SEEN)).toBe("2026-12-01");
+    expect(startDay("Dec 01 to Jan 01", SEEN)).toBe("2026-12-01");
+    expect(startDay("Dec 02 to Dec 10", SEEN)).toBe("2026-12-02");
+    expect(startDay("Dec 02 to Dec 17", SEEN)).toBe("2026-12-02");
+    expect(startDay("Dec 04 to Jan 25", SEEN)).toBe("2026-12-04");
+    expect(startDay("Dec 06 to Dec 19", SEEN)).toBe("2026-12-06");
+    expect(startDay("Dec 06 to Dec 21", SEEN)).toBe("2026-12-06");
+    expect(startDay("Dec 08 to Dec 18", SEEN)).toBe("2026-12-08");
+    expect(startDay("Dec 09 to Dec 17", SEEN)).toBe("2026-12-09");
+    expect(startDay("Dec 09 to Dec 23", SEEN)).toBe("2026-12-09");
+    expect(startDay("Dec 09 to Dec 28", SEEN)).toBe("2026-12-09");
+    expect(startDay("Dec 09 to Feb 19", SEEN)).toBe("2026-12-09");
+    expect(startDay("Dec 10 to Dec 20", SEEN)).toBe("2026-12-10");
+    expect(startDay("Dec 10 to Dec 31", SEEN)).toBe("2026-12-10");
+    expect(startDay("Dec 13 to Dec 28", SEEN)).toBe("2026-12-13");
+    expect(startDay("Dec 16 to Dec 23", SEEN)).toBe("2026-12-16");
+    expect(startDay("Dec 17 to Dec 26", SEEN)).toBe("2026-12-17");
+    expect(startDay("Dec 20 to Jan 18", SEEN)).toBe("2026-12-20");
+    expect(startDay("Nov 29 to Dec 07", SEEN)).toBe("2026-11-29");
+    expect(startDay("Nov 29 to Dec 10", SEEN)).toBe("2026-11-29");
+  });
+
+  it("puts a date with no year in the past when it is just behind the day it was first seen, and next year when it is well ahead", () => {
+    // Made up, to pin the rule at its edges: two months back, nine months on.
+    expect(startDay("Nov 19 to Dec 02", "2026-11-23")).toBe("2026-11-19");
+    expect(startDay("Sep 28 to Dec 02", "2026-11-23")).toBe("2026-09-28");
+    expect(startDay("Aug 15 to Aug 30", "2026-11-23")).toBe("2027-08-15");
+    expect(startDay("Dec 28 to Jan 09", "2027-01-04")).toBe("2026-12-28");
+    expect(startDay("Feb 02 to Feb 09", "2027-01-04")).toBe("2027-02-02");
+  });
+
+  it("takes the first day when the Clinic writes the day before the month", () => {
+    expect(startDay("1 to 5 Dec", SEEN)).toBe("2026-12-01");
+    expect(startDay("9 to 13 Dec", SEEN)).toBe("2026-12-09");
+    expect(startDay("4 to 12 Jan", SEEN)).toBe("2027-01-04");
+    expect(startDay("7 to 15 Jan", SEEN)).toBe("2027-01-07");
+    expect(startDay("20 to 23 Dec; 11 Jan to 3 Feb", SEEN)).toBe("2026-12-20");
+  });
+
+  it("gives no start day when in any doubt: a date has no safe guess", () => {
+    expect(startDay(null, SEEN)).toBeNull();
+    expect(startDay("  ", SEEN)).toBeNull();
+    // Made up from here: wording no Clinic's list had on 2026-11-24.
+    expect(startDay("To be announced", SEEN)).toBeNull();
+    expect(startDay("Winter 2027", SEEN)).toBeNull();
+    expect(startDay("Marketing 12 studies", SEEN)).toBeNull();
+    // Dates that cannot be.
+    expect(startDay("13/45/27 - 14/02/27", SEEN)).toBeNull();
+    expect(startDay("Feb 30 2027 - Mar 04 2027", SEEN)).toBeNull();
+    expect(startDay("Feb 29 2027", SEEN)).toBeNull();
+    expect(startDay("28 to 3 Feb", SEEN)).toBeNull();
+    // A leap day that can be is read.
+    expect(startDay("Feb 29 2028 - Mar 04 2028", SEEN)).toBe("2028-02-29");
+  });
+
+  // The wordings from here to the end of this block are made up. A review ran the first reader on
+  // wordings a Clinic could plausibly write and found it sure of a wrong day in each group below.
+  it("gives no start day when the first date is one it cannot read, never the next date along", () => {
+    expect(startDay("Dec 2nd - Dec 20", SEEN)).toBeNull();
+    expect(startDay("2nd Dec - 20 Dec", SEEN)).toBeNull();
+    expect(startDay("2027-01-06 to Feb 3", SEEN)).toBeNull();
+    expect(startDay("Dec 2026 - Feb 5", SEEN)).toBeNull();
+    expect(startDay("12/3 - Dec 20", SEEN)).toBeNull();
+  });
+
+  it("gives no start day when anything stands in front of the date", () => {
+    expect(startDay("Day 1 Dec 05", SEEN)).toBeNull();
+    expect(startDay("Group 3 Dec 09", SEEN)).toBeNull();
+    expect(startDay("Group 3: Dec 09 to Dec 17", SEEN)).toBeNull();
+    expect(startDay("Screening Nov 20, check-in Dec 01", SEEN)).toBeNull();
+  });
+
+  it("takes the first day of a range however the Clinic joins it, and nothing from a list of days", () => {
+    expect(startDay("1-5 Dec", SEEN)).toBe("2026-12-01");
+    expect(startDay("5 - 9 Dec", SEEN)).toBe("2026-12-05");
+    expect(startDay("Dec 1-10", SEEN)).toBe("2026-12-01");
+    expect(startDay("Dec 28 - Jan 3", SEEN)).toBe("2026-12-28");
+    expect(startDay("28 Dec to 3 Jan", SEEN)).toBe("2026-12-28");
+    expect(startDay("1 and 5 Dec", SEEN)).toBeNull();
+    expect(startDay("5, 12 and 19 Dec", SEEN)).toBeNull();
+  });
+
+  it("uses the year the Clinic gives, wherever in the range it is written", () => {
+    expect(startDay("5 Dec 2027", SEEN)).toBe("2027-12-05");
+    expect(startDay("15 Jan 2028", SEEN)).toBe("2028-01-15");
+    expect(startDay("December 2, 2026", SEEN)).toBe("2026-12-02");
+    expect(startDay("Dec 5-9, 2027", SEEN)).toBe("2027-12-05");
+    expect(startDay("5 to 9 Dec 2027", SEEN)).toBe("2027-12-05");
+    // The year is written once, after the last date: the first date is the December before it.
+    expect(startDay("Dec 28 - Jan 3, 2028", SEEN)).toBe("2027-12-28");
+    expect(startDay("Dec 5 - Dec 9, 2027", SEEN)).toBe("2027-12-05");
+  });
+
+  it("gives no start day when the dates it reads cannot both be right", () => {
+    expect(startDay("Jan 05 2027 - Dec 20 2026", SEEN)).toBeNull();
+    expect(startDay("Dec 02 2026 - Feb 30 2027", SEEN)).toBeNull();
+    expect(startDay("20 to 23 Dec; sometime in January", SEEN)).toBeNull();
+    // No years, and the last day is earlier in the same month: either a slip or a stretch of a year.
+    expect(startDay("Dec 10 to Dec 01", SEEN)).toBeNull();
+  });
+
+  it("gives no start day when a later stretch begins before the first, or cannot be read as a stretch itself", () => {
+    expect(startDay("11 Jan to 3 Feb; 20 to 23 Dec", SEEN)).toBeNull();
+    expect(startDay("Dec 1; Dec 5 - Dec 2", SEEN)).toBeNull();
+    // In order, as Altasciences Kansas City writes two stays, it is read.
+    expect(startDay("20 to 23 Dec; 11 Jan to 3 Feb", SEEN)).toBe("2026-12-20");
+  });
+
+  it("gives no start day for a range that runs backwards within a month, year or no year", () => {
+    expect(startDay("Dec 5 - Dec 3, 2027", SEEN)).toBeNull();
+    // With a year on each date it is a stretch of a year, and says so.
+    expect(startDay("Dec 5 2026 - Dec 3 2027", SEEN)).toBe("2026-12-05");
+  });
+
+  it("gives no start day when the year is far from the day the Opening was first seen", () => {
+    expect(startDay("01/13/99", SEEN)).toBeNull();
+    expect(startDay("Dec 02 2036 - Dec 09 2036", SEEN)).toBeNull();
+    expect(startDay("Jan 05 2024 - Jan 09 2024", SEEN)).toBeNull();
+    // A year back and five on are the edges: a study that began last year, or is planned far ahead.
+    expect(startDay("Dec 01 2025 - Jun 01 2027", SEEN)).toBe("2025-12-01");
+    expect(startDay("Mar 03 2031", SEEN)).toBe("2031-03-03");
+    expect(startDay("Mar 03 2032", SEEN)).toBeNull();
+  });
+
+  it("is not put off by a full stop or a stray separator at the end", () => {
+    expect(startDay("Dec 01 - Dec 10.", SEEN)).toBe("2026-12-01");
+    expect(startDay("Dec 01 to Dec 10; ", SEEN)).toBe("2026-12-01");
+  });
+});
+
+describe("a Member's timeframe for when an Opening starts", () => {
+  const SEEN = "2026-11-23";
+  const midDecToJanuary = { from: "2026-12-15", to: "2027-01-31" };
+
+  it("lets through an Opening that starts inside it, the first and last days included", () => {
+    expect(startsWithin("Dec 16 2026 - Dec 18 2026", SEEN, midDecToJanuary)).toBe(true);
+    expect(startsWithin("4 to 12 Jan", SEEN, midDecToJanuary)).toBe(true);
+    expect(startsWithin("Dec 15 2026 - Dec 20 2026", SEEN, midDecToJanuary)).toBe(true);
+    expect(startsWithin("01/31/27 - 02/22/27", SEEN, midDecToJanuary)).toBe(true);
+  });
+
+  it("holds back one that starts before it or after it, however long it runs", () => {
+    expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, midDecToJanuary)).toBe(false);
+    expect(startsWithin("Dec 09 to Feb 19", SEEN, midDecToJanuary)).toBe(false);
+    expect(startsWithin("Feb 01 2027 - Feb 05 2027", SEEN, midDecToJanuary)).toBe(false);
+  });
+
+  it("can be left open at either end", () => {
+    const byNewYear = { from: null, to: "2026-12-31" };
+    const fromNewYear = { from: "2027-01-01", to: null };
+    expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, byNewYear)).toBe(true);
+    expect(startsWithin("Jan 06 2027 - Feb 01 2027", SEEN, byNewYear)).toBe(false);
+    expect(startsWithin("Jan 06 2027 - Feb 01 2027", SEEN, fromNewYear)).toBe(true);
+    expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, fromNewYear)).toBe(false);
+  });
+
+  it("always lets through an Opening that gives no start day", () => {
+    expect(startsWithin(null, SEEN, midDecToJanuary)).toBe(true);
+    expect(startsWithin("To be announced", SEEN, midDecToJanuary)).toBe(true);
+  });
+
+  it("lets every Opening through when no timeframe is set", () => {
+    expect(startsWithin("Dec 02 2026 - Apr 27 2028", SEEN, { from: null, to: null })).toBe(true);
+    expect(startsWithin(null, SEEN, { from: null, to: null })).toBe(true);
+  });
+});
+
+describe("the timeframe to apply for what a Member has put in the two date boxes", () => {
+  const TODAY = "2026-11-24";
+  const NONE = { from: null, to: null };
+
+  it("is the days in the boxes, either of which may be empty", () => {
+    expect(timeframeOf("", "", TODAY)).toEqual({ frame: NONE, unapplied: null });
+    expect(timeframeOf("2027-01-01", "", TODAY)).toEqual({ frame: { from: "2027-01-01", to: null }, unapplied: null });
+    expect(timeframeOf("", "2027-01-31", TODAY)).toEqual({ frame: { from: null, to: "2027-01-31" }, unapplied: null });
+    expect(timeframeOf("2027-01-01", "2027-01-31", TODAY)).toEqual({ frame: { from: "2027-01-01", to: "2027-01-31" }, unapplied: null });
+    expect(timeframeOf("2027-01-01", "2027-01-01", TODAY)).toEqual({ frame: { from: "2027-01-01", to: "2027-01-01" }, unapplied: null });
+  });
+
+  it("takes no notice of a box while its year is being typed", () => {
+    // Typing 2027 one key at a time, a date box holds the years 0002, 0020 and 0202 on the way.
+    expect(timeframeOf("2027-01-01", "0002-01-31", TODAY)).toEqual({ frame: { from: "2027-01-01", to: null }, unapplied: null });
+    expect(timeframeOf("2027-01-01", "0020-01-31", TODAY)).toEqual({ frame: { from: "2027-01-01", to: null }, unapplied: null });
+    expect(timeframeOf("0202-01-01", "2027-01-31", TODAY)).toEqual({ frame: { from: null, to: "2027-01-31" }, unapplied: null });
+    expect(timeframeOf("not a day", "", TODAY)).toEqual({ frame: NONE, unapplied: null });
+  });
+
+  it("takes a year near today's, from last year to five years on", () => {
+    expect(timeframeOf("2025-06-01", "", TODAY).frame.from).toBe("2025-06-01");
+    expect(timeframeOf("2031-06-01", "", TODAY).frame.from).toBe("2031-06-01");
+    expect(timeframeOf("2024-06-01", "", TODAY).frame.from).toBeNull();
+    expect(timeframeOf("2032-06-01", "", TODAY).frame.from).toBeNull();
+  });
+
+  it("applies nothing, and says why, when the first day is after the last", () => {
+    expect(timeframeOf("2027-02-10", "2027-01-31", TODAY)).toEqual({ frame: NONE, unapplied: "crossed" });
+  });
+
+  it("applies nothing, and says why, once the last day has passed", () => {
+    expect(timeframeOf("2026-10-01", "2026-10-31", TODAY)).toEqual({ frame: NONE, unapplied: "passed" });
+    expect(timeframeOf("", "2026-11-23", TODAY)).toEqual({ frame: NONE, unapplied: "passed" });
+    // The last day itself still counts, and a timeframe with no last day never passes.
+    expect(timeframeOf("", "2026-11-24", TODAY)).toEqual({ frame: { from: null, to: "2026-11-24" }, unapplied: null });
+    expect(timeframeOf("2026-01-01", "", TODAY)).toEqual({ frame: { from: "2026-01-01", to: null }, unapplied: null });
   });
 });

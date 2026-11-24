@@ -197,6 +197,10 @@ button.link.quiet { color: var(--muted); text-decoration: none; }
 /* The limit chips wrap on a narrow phone instead of scrolling, so the one chosen is never off the edge. */
 .views.limits { flex-wrap: wrap; overflow-x: visible; }
 .views-label { flex: none; font-size: 0.875rem; font-weight: 700; color: var(--muted); }
+/* The two date boxes of a timeframe, sized to sit in a row of chips. */
+.date-limit { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.875rem; color: var(--muted); }
+.date-limit input { font: inherit; min-height: 36px; padding: 0.2rem 0.6rem; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; }
+.date-limit input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* By Clinic: one row per Clinic that opens */
 .group-label { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 1.5rem 0 0.5rem; }

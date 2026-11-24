@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ClinicItem, Opening } from "../../shared/api";
-import { FOLLOW_UP_LIMITS, OPENING_MARK_LABELS, inOrder, limitedTo, payAmount, type FollowUpLimit, type Limited, type OpeningMark } from "../../shared/openings";
+import { FOLLOW_UP_LIMITS, OPENING_MARK_LABELS, inOrder, limitedTo, payAmount, timeframeOf, type FollowUpLimit, type LimitCount, type Limited, type OpeningMark, type Timeframe, type Unapplied } from "../../shared/openings";
 import { ago, api } from "../api";
 import { Greeting } from "../components/Greeting";
 import { Illustration } from "../components/Illustration";
@@ -133,13 +133,63 @@ function rememberedView(): View {
   return VIEWS.find((x) => x.view === was)?.view ?? "pay";
 }
 
-const LIMIT_KEY = "guineaping.clinics.followUps";
+const FOLLOW_UPS_KEY = "guineaping.clinics.followUps";
 /** The limit on Follow-up visits the Member last chose on this device, or none. */
-function rememberedLimit(): FollowUpLimit | null {
-  const was = remembered(LIMIT_KEY);
+function rememberedFollowUps(): FollowUpLimit | null {
+  const was = remembered(FOLLOW_UPS_KEY);
   return FOLLOW_UP_LIMITS.find((n) => String(n) === was) ?? null;
 }
-const limitLabel = (limit: FollowUpLimit | null) => (limit === null ? "Any" : limit === 0 ? "None" : `Up to ${limit}`);
+const followUpsLabel = (most: FollowUpLimit | null) => (most === null ? "Any" : most === 0 ? "None" : `Up to ${most}`);
+
+const STARTS_KEY = "guineaping.clinics.starts";
+/** What the two date boxes hold, as the browser writes it: a day as YYYY-MM-DD, or nothing. */
+type DateBoxes = { from: string; to: string };
+const EMPTY_BOXES: DateBoxes = { from: "", to: "" };
+/** The day it is where the Member is, written as the date boxes write a day. */
+function todayHere(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+/**
+ * What the Member last put in the date boxes on this device, kept as "first day/last day". A box
+ * left half typed comes back empty, and so do both once the last day has passed: those are done with.
+ */
+function rememberedDates(): DateBoxes {
+  const [from = "", to = ""] = (remembered(STARTS_KEY) ?? "").split("/");
+  const today = todayHere();
+  if (timeframeOf(from, to, today).unapplied === "passed") return EMPTY_BOXES;
+  const whole = (box: string) => (timeframeOf(box, "", today).frame.from === box ? box : "");
+  return { from: whole(from), to: whole(to) };
+}
+/** Why the dates in the boxes are not applied, said where the Member sees them. */
+const UNAPPLIED_SAYS: Record<Exclude<Unapplied, null>, string> = {
+  crossed: "The first date is after the last, so these dates are not applied.",
+  passed: "The last of these dates has passed, so they are no longer applied.",
+};
+/** How the line about hidden Openings names where they start, for the ends of the timeframe that are set. */
+const outside = (starts: Timeframe) => (starts.from && starts.to ? "outside those dates" : starts.from ? "before that date" : "after that date");
+
+/**
+ * The line under a limit that is set: how many Openings it hides, with a way to show them all,
+ * and how many it lets through only because they don't say. No limit hides anything without one.
+ */
+function LimitLine({ count, hides, unsaid, onShowAll }: { count: LimitCount; hides: (n: number) => string; unsaid: (n: number) => string; onShowAll: () => void }) {
+  return (
+    <p className="muted small">
+      {count.heldBack ? (
+        <>
+          {hides(count.heldBack)}{" "}
+          <button type="button" className="link" onClick={onShowAll}>
+            Show all
+          </button>
+        </>
+      ) : (
+        "That hides no Opening right now."
+      )}
+      {count.dontSay > 0 && ` ${unsaid(count.dontSay)}`}
+    </p>
+  );
+}
 
 /** Every Opening from every Clinic on the Member's list as one list, each naming its Clinic. */
 function AllOpenings({ clinics, by, onMark, empty }: { clinics: ClinicItem[]; by: Exclude<View, "clinics">; onMark: SetAside; empty: string }) {
@@ -196,7 +246,7 @@ function ClinicRow({ clinic, onMark, onPush, onOffList }: { clinic: Limited<Clin
             <OpeningList
               openings={clinic.openings}
               onMark={onMark}
-              empty={clinic.heldBack ? "Your choice of follow-up visits hides every Opening here." : reading && clinic.lastReadAt ? "Nothing on its list right now." : undefined}
+              empty={clinic.heldBack ? "Every Opening here is hidden by what you set under “Follow-up visits” or “Starts”." : reading && clinic.lastReadAt ? "Nothing on its list right now." : undefined}
             />
           )}
           <p className="clinic-row-actions">
@@ -251,7 +301,10 @@ function ByClinic({ clinics, onMark, onPush, onOffList }: { clinics: Limited<Cli
 
 export function ClinicsPage() {
   const [view, setView] = useState<View>(rememberedView);
-  const [limit, setLimit] = useState<FollowUpLimit | null>(rememberedLimit);
+  const [followUps, setFollowUps] = useState<FollowUpLimit | null>(rememberedFollowUps);
+  const [dates, setDates] = useState<DateBoxes>(rememberedDates);
+  // The boxes keep whatever the Member types. It is applied only once it makes a timeframe.
+  const { frame: starts, unapplied } = timeframeOf(dates.from, dates.to, todayHere());
   const [clinics, setClinics] = useState<ClinicItem[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [markError, setMarkError] = useState<string | null>(null);
@@ -265,9 +318,13 @@ export function ClinicsPage() {
     setView(v);
     remember(VIEW_KEY, v);
   };
-  const chooseLimit = (l: FollowUpLimit | null) => {
-    setLimit(l);
-    remember(LIMIT_KEY, l === null ? null : String(l));
+  const chooseFollowUps = (most: FollowUpLimit | null) => {
+    setFollowUps(most);
+    remember(FOLLOW_UPS_KEY, most === null ? null : String(most));
+  };
+  const chooseDates = (boxes: DateBoxes) => {
+    setDates(boxes);
+    remember(STARTS_KEY, boxes.from || boxes.to ? `${boxes.from}/${boxes.to}` : null);
   };
   /** Sends one change, then shows the page as the server now has it. */
   const change = (path: string, body: object) => {
@@ -292,9 +349,9 @@ export function ClinicsPage() {
   const mine = clinics.filter((c) => !c.offList);
   const off = clinics.filter((c) => c.offList);
   const lastRead = mine.map((c) => c.lastReadAt).filter((x): x is string => !!x).sort().pop();
-  // The Member's limit on Follow-up visits applies to everything below: the greeting and every view.
-  const { clinics: within, heldBack, dontSay } = limitedTo(mine, limit);
-  // The greeting counts what the Member would see: on their list, within their limit, and not set aside.
+  // The Member's limits apply to everything below: the greeting and every view.
+  const { clinics: within, heldBack, followUps: byVisits, starts: byStart } = limitedTo(mine, { followUps, starts });
+  // The greeting counts what the Member would see: on their list, within their limits, and not set aside.
   const listed = within.flatMap((c) => c.openings).filter((o) => !o.mark);
   const today = new Date().toISOString().slice(0, 10);
   const newToday = listed.filter((o) => o.firstSeen === today).length;
@@ -317,26 +374,47 @@ export function ClinicsPage() {
       </p>
       <p className="views scroll limits" aria-label="Follow-up visits">
         <span className="views-label">Follow-up visits</span>
-        {[null, ...FOLLOW_UP_LIMITS].map((l) => (
-          <button type="button" key={String(l)} className="chip" aria-pressed={limit === l} onClick={() => chooseLimit(l)}>
-            {limitLabel(l)}
+        {[null, ...FOLLOW_UP_LIMITS].map((most) => (
+          <button type="button" key={String(most)} className="chip" aria-pressed={followUps === most} onClick={() => chooseFollowUps(most)}>
+            {followUpsLabel(most)}
           </button>
         ))}
       </p>
-      {limit !== null && (
+      {followUps !== null && (
+        <LimitLine
+          count={byVisits}
+          hides={(n) => `${n === 1 ? "1 Opening" : `${n} Openings`} with ${followUps === 0 ? "follow-up visits" : `more than ${followUps} follow-up visits`} ${n === 1 ? "is" : "are"} hidden.`}
+          unsaid={(n) => `${n} of those shown ${n === 1 ? "doesn't" : "don't"} say how many.`}
+          onShowAll={() => chooseFollowUps(null)}
+        />
+      )}
+      <p className="views limits" aria-label="Starts">
+        <span className="views-label">Starts</span>
+        <label className="date-limit">
+          from
+          <input type="date" value={dates.from} onChange={(e) => chooseDates({ ...dates, from: e.target.value })} />
+        </label>
+        <label className="date-limit">
+          to
+          <input type="date" value={dates.to} onChange={(e) => chooseDates({ ...dates, to: e.target.value })} />
+        </label>
+      </p>
+      {unapplied ? (
         <p className="muted small">
-          {heldBack ? (
-            <>
-              {heldBack === 1 ? "1 Opening" : `${heldBack} Openings`} with {limit === 0 ? "follow-up visits" : `more than ${limit} follow-up visits`} {heldBack === 1 ? "is" : "are"} hidden.{" "}
-              <button type="button" className="link" onClick={() => chooseLimit(null)}>
-                Show all
-              </button>
-            </>
-          ) : (
-            "That hides no Opening right now."
-          )}
-          {dontSay > 0 && ` ${dontSay} of those shown ${dontSay === 1 ? "doesn't" : "don't"} say how many.`}
+          {UNAPPLIED_SAYS[unapplied]}{" "}
+          <button type="button" className="link" onClick={() => chooseDates(EMPTY_BOXES)}>
+            Clear them
+          </button>
         </p>
+      ) : (
+        (starts.from || starts.to) && (
+          <LimitLine
+            count={byStart}
+            hides={(n) => `${n === 1 ? "1 Opening that starts" : `${n} Openings that start`} ${outside(starts)} ${n === 1 ? "is" : "are"} hidden.`}
+            unsaid={(n) => `${n} of those shown ${n === 1 ? "gives" : "give"} no start date.`}
+            onShowAll={() => chooseDates(EMPTY_BOXES)}
+          />
+        )
       )}
       {view !== "clinics" && <p className="muted small">{VIEWS.find((v) => v.view === view)!.says}</p>}
       {!measured && (view === "nearest" || view === "clinics") && (
@@ -348,7 +426,7 @@ export function ClinicsPage() {
       {view === "clinics" ? (
         <ByClinic clinics={within} onMark={setAside} onPush={setPush} onOffList={setOffList} />
       ) : (
-        <AllOpenings clinics={within} by={view} onMark={setAside} empty={heldBack ? "Your choice of follow-up visits hides every Opening." : "No Clinic's list has been read yet."} />
+        <AllOpenings clinics={within} by={view} onMark={setAside} empty={heldBack ? "Every Opening is hidden by what you set under “Follow-up visits” or “Starts”." : "No Clinic's list has been read yet."} />
       )}
       {off.length > 0 && (
         <p className="muted small aside-count">
@@ -387,6 +465,11 @@ export function ClinicsPage() {
           "Follow-up visits" shows only Openings that ask for no more of them than you choose. It counts outpatient, return and follow-up visits, not screening visits or phone calls. GuineaPing reads the number from the
           Clinic's own words and takes the lowest it could mean, so check the Clinic's page before you count on it. An Opening that doesn't say how many is always shown. The choice is kept on this phone or computer, and
           a Push about a new Opening is sent whatever you choose here.
+        </p>
+        <p>
+          "Starts" shows only Openings that start between the two dates you give. Leave either one empty to leave that side open. An Opening passes by its first date, however long it then runs. GuineaPing reads that
+          date from the Clinic's own words, so check the Clinic's page before you count on it. An Opening that gives no date, or one GuineaPing can't be sure of, is always shown. The dates are kept on this phone or computer until the last one has passed, and a Push about a new Opening takes no notice
+          of them.
         </p>
         <p>
           Under "By Clinic", open a Clinic to find "Take off my list". It removes the Clinic from this page for you alone, for instance one too far to travel to. Its Openings leave every list, and your Push for it is
