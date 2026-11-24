@@ -194,6 +194,9 @@ button.link.quiet { color: var(--muted); text-decoration: none; }
 .aside-count { margin: 0.75rem 0; }
 .views.scroll { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .views.scroll button { flex: none; }
+/* The limit chips wrap on a narrow phone instead of scrolling, so the one chosen is never off the edge. */
+.views.limits { flex-wrap: wrap; overflow-x: visible; }
+.views-label { flex: none; font-size: 0.875rem; font-weight: 700; color: var(--muted); }
 
 /* By Clinic: one row per Clinic that opens */
 .group-label { font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); margin: 1.5rem 0 0.5rem; }
