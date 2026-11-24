@@ -23,10 +23,10 @@ describe("the sources that are read", () => {
   it("are fetched over https only", () => {
     for (const s of SOURCES) for (const page of s.pages) expect(page).toMatch(/^https:\/\//);
   });
-  it("never include a Clinic whose robots.txt forbids its list, or whose site turned a plain request away", () => {
+  it("never include a Clinic whose site turned a plain request away", () => {
     const hosts = SOURCES.flatMap((s) => s.pages).map((p) => new URL(p).host);
-    // K2's robots.txt forbids everything. The rest answered a plain request with 403 or a challenge page on 2026-11-24.
-    for (const no of ["www.k2medicalresearch.com", "iconstudies.com", "trialmed.com", "miamiresearch.com", "www.cc.nih.gov", "www.hopkinsmedicine.org"]) expect(hosts).not.toContain(no);
+    // Each answered a plain request with 403 or a challenge page on 2026-11-24. GuineaPing does not get round that.
+    for (const no of ["iconstudies.com", "trialmed.com", "miamiresearch.com", "www.cc.nih.gov", "www.hopkinsmedicine.org"]) expect(hosts).not.toContain(no);
   });
   it("each get a turn every hour: there are at least as many runs an hour as sources", () => {
     const config = readFileSync(join(import.meta.dirname, "..", "..", "..", "wrangler.jsonc"), "utf8");

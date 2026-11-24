@@ -113,5 +113,5 @@ A visit to the Clinic that an Opening asks for besides its stay: what Clinics ca
 _Avoid_: Follow-up on its own, follow (a Follow is of a Watch), outpatient visit and return visit (the Clinics’ words: say them only to explain what counts), check-up
 
 **Clinic read**:
-One look at a Clinic’s list, at most once an hour, that records which Openings are there now and which of them are new: an entry the list did not have before, one that had gone and is back, or one whose study code or dates have changed. A Clinic’s first read finds nothing new. Only some Clinics are read. A Clinic whose robots.txt forbids its list, or whose site turns automated tools away, is never visited: Members open its list themselves.
+One look at a Clinic’s list, at most once an hour, that records which Openings are there now and which of them are new: an entry the list did not have before, one that had gone and is back, or one whose study code or dates have changed. A Clinic’s first read finds nothing new. Only some Clinics are read. A Clinic whose site turns automated tools away is never visited: Members open its list themselves.
 _Avoid_: Scrape, crawl, Check (a Check is of ClinicalTrials.gov)
