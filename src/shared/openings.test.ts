@@ -208,6 +208,8 @@ describe("the follow-up visits in a Clinic's wording", () => {
     expect(followUpVisits("This study requires 16 outpatient visits (includes screening) plus one separate 4-night stay at our Phase 1 unit in Cincinnati, OH.")).toBe(15);
     expect(followUpVisits("This study requires 6 outpatient visits, (includes screening) plus 1, 2-night stay at our Phase 1 unit in Cincinnati , OH.")).toBe(5);
     expect(followUpVisits("This study includes 18 outpatient visits (includes screening) plus 4 separate 3-night stays at our Phase 1 unit in Cincinnati , OH.")).toBe(17);
+    // Made up, to pin the rule: a labelled number still counts as one visit, never as nothing.
+    expect(followUpVisits("a Day 14 follow-up visit (includes screening)")).toBe(1);
     // A number in words is not read, so it counts as none: low, never high.
     expect(followUpVisits("This study requires four outpatient visits (includes screening) plus one separate 6-night stay at our Phase 1 unit in Cincinnati, OH.")).toBe(0);
   });

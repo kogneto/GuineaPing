@@ -18,7 +18,7 @@ function cards(answer: string): string[] {
 }
 
 /** The text of the card's paragraph with this class, or null. */
-const part = (card: string, name: string) => text(new RegExp(`<p class="em-study-card__${name}"[^>]*>([\\s\\S]*?)</p>`).exec(card)?.[1] ?? "") || null;
+const cardText = (card: string, name: string) => text(new RegExp(`<p class="em-study-card__${name}"[^>]*>([\\s\\S]*?)</p>`).exec(card)?.[1] ?? "") || null;
 
 /**
  * Medpace, Cincinnati: its list page fetches its study cards from its own site, as HTML inside
@@ -32,11 +32,12 @@ export const medpace: Source = {
     const found: Found[] = [];
     for (const card of cards(answer)) {
       const url = link(card, FEED);
-      const title = part(card, "title");
+      const title = cardText(card, "title");
       if (!url || !title) continue;
-      const label = part(card, "label");
+      const label = cardText(card, "label");
       const excerpt = between(card, /<p class="em-study-card__excerpt"[^>]*>/, /<div class="em-study-card__details"|<\/a>/) ?? "";
-      const first = /^.*?\.(?=\s|$)/.exec(excerpt)?.[0] ?? null;
+      // The first sentence, or, where the excerpt is cut short before one ends, all of it but the "…".
+      const first = /^.*?\.(?=\s|$)/.exec(excerpt)?.[0] ?? (excerpt.replace(/\s*…$/, "") || null);
       const details = [...(/<div class="em-study-card__details"[^>]*>([\s\S]*?)<\/div>/.exec(card)?.[1] ?? "").matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/g)].map((m) => text(m[1] ?? "")).filter(Boolean);
       found.push({
         key: new URL(url).pathname,

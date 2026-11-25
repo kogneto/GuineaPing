@@ -331,6 +331,13 @@ describe("Medpace", () => {
     expect(glp1).toMatchObject({ title: "Have You Previously Taken, or Are Currently Taking a GLP-1 Medication?", pay: null, stay: null, who: null });
   });
 
+  it("takes the stay from an excerpt cut short before its first sentence ends", () => {
+    const answer = JSON.stringify(JSON.stringify({ posts: [
+      '<a class="em-study-card" href="https://www.medpace.com/study-participants/browse-studies/a/"><p class="em-study-card__title">A study</p><p class="em-study-card__excerpt"><p>This study requires 6 outpatient visits plus one 3-night stay at our Phase 1 unit in\u2026</p></a>',
+    ] }));
+    expect(medpace.parse([answer])[0]?.stay).toBe("This study requires 6 outpatient visits plus one 3-night stay at our Phase 1 unit in");
+  });
+
   it("reads the answer encoded once, and finds nothing in one that isn't the list", () => {
     const once = JSON.parse(fixture("medpace.json")) as string;
     expect(medpace.parse([once])).toHaveLength(6);

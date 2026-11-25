@@ -81,9 +81,10 @@ const INCLUDES_SCREENING = /^\s*,?\s*\(\s*(?:includes|including)\s+(?:the\s+|a\s
 /**
  * How many Follow-up visits an Opening asks for, read from the Clinic's wording about its stay:
  * outpatient, return and follow-up visits, and the bare "15 visits" of a study that is all visits.
- * Screening visits and phone calls are not counted, also where a Clinic counts the screening visit
- * in with the outpatient visits and says so, nor is a kind of visit no Clinic has been seen
- * to use. Null when the Clinic gives no wording: that is "doesn't say", not none.
+ * Screening visits and phone calls are not counted, nor is a kind of visit no Clinic has been seen
+ * to use. Where a Clinic counts the screening visit in with the others and says so, "16 outpatient
+ * visits (includes screening)", it is taken out: 15. Null when the Clinic gives no wording: that
+ * is "doesn't say", not none.
  *
  * It is only for filtering: what a Member reads is always the Clinic's own wording. So it reads
  * low, because a filter that guessed high would hide an Opening that might fit:
@@ -96,9 +97,10 @@ const INCLUDES_SCREENING = /^\s*,?\s*\(\s*(?:includes|including)\s+(?:the\s+|a\s
 export function followUpVisits(stay: string | null): number | null {
   if (!stay?.trim()) return null;
   const figures = [...stay.matchAll(VISITS)].map((m) => {
+    const lowest = Math.min(...m[1]!.match(/\d+/g)!.map(Number));
+    if (LABELS_A_NUMBER.test(stay.slice(0, m.index))) return Math.min(lowest, 1);
     // "16 outpatient visits (includes screening)": one of them is the screening visit.
-    const lowest = Math.min(...m[1]!.match(/\d+/g)!.map(Number)) - (INCLUDES_SCREENING.test(stay.slice(m.index + m[0].length)) ? 1 : 0);
-    return Math.max(0, LABELS_A_NUMBER.test(stay.slice(0, m.index)) ? Math.min(lowest, 1) : lowest);
+    return INCLUDES_SCREENING.test(stay.slice(m.index + m[0].length)) ? Math.max(0, lowest - 1) : lowest;
   });
   return figures.length ? Math.min(...figures) : 0;
 }
