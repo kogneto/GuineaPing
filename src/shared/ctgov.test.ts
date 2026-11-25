@@ -346,7 +346,7 @@ describe("Clinics", () => {
     expect(linkOf("qps-springfield")).toBe("https://www.facebook.com/share/1PpbLQQ92a/");
     expect(linkOf("parexel-glendale")).toBe("https://pxlcrs.my.site.com/portal/s/triallistla?loc=LA&language=en_US");
     expect(linkOf("axis-dilworth")).toBe("https://axispays.com/browse-current-studies/");
-    expect(linkOf("cenexel-englewood")).toBe("https://cenexelclinicaltrials.com/search-result-new/");
+    expect(linkOf("cenexel-englewood")).toBe("https://cenexelresearch.com/rmcr/all-studies/");
   });
 
   it("names the Clinics on a Trial without changing its places", () => {

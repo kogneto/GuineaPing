@@ -7,6 +7,7 @@ const UNITS = [
   { path: "/cns/", clinicId: "cenexel-los-alamitos" },
   { path: "/iresearch-atlanta/", clinicId: "cenexel-decatur" },
   { path: "/hri/", clinicId: "cenexel-marlton" },
+  { path: "/rmcr/", clinicId: "cenexel-englewood" },
 ] as const;
 const BASE = "https://cenexelresearch.com";
 
@@ -14,7 +15,8 @@ const BASE = "https://cenexelresearch.com";
 const cell = (row: string, column: string) => text(new RegExp(`class='column-study-${column}'>([\\s\\S]*?)<\\/div>`).exec(row)?.[1] ?? "") || null;
 
 /**
- * CenExel's units in Anaheim, Los Alamitos, Decatur and Marlton: one table each, one row per study,
+ * CenExel's units in Anaheim, Los Alamitos, Decatur, Marlton and Englewood (which CenExel calls
+ * Denver): one table each, one row per study,
  * with its status, sexes, ages and pay. A study marked "Ongoing" has stopped enrolling and is left
  * out; "Enrolling" and "Upcoming" are kept. The unit is read from the study's own link.
  */
