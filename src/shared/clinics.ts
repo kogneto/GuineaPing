@@ -112,7 +112,7 @@ export const CLINICS: Clinic[] = [
   // Its other place, at Lady Lake and The Villages, is left out: it is sixty miles off.
   c("charter-orlando", "Charter Research", "Orlando, FL", 28.5383, -81.3792, null, null, ["Charter Research"], ["Orlando", "Winter Park"]),
   // Not "Rocky Mountain" alone: cancer, movement-disorder and ear centres in Englewood begin that way.
-  c("cenexel-englewood", "CenExel RMCR", "Englewood, CO", 39.6478, -104.9878, "https://cenexelclinicaltrials.com/search-result-new/", null, ["CenExel", "CenExcel", "Rocky Mountain Clinical Research"]),
+  c("cenexel-englewood", "CenExel RMCR", "Englewood, CO", 39.6478, -104.9878, "https://cenexelresearch.com/rmcr/all-studies/", "cenexel", ["CenExel", "CenExcel", "Rocky Mountain Clinical Research"]),
 ];
 
 /** A Clinic's distinct name for a sentence: "Fortrea, Madison, WI". */

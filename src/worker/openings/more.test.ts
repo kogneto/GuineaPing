@@ -183,12 +183,12 @@ describe("Axis", () => {
 });
 
 describe("CenExel", () => {
-  const pages = ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html"].map(fixture);
+  const pages = ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html", "cenexel-rmcr.html"].map(fixture);
   const found = cenexel.parse(pages);
   it("reads each unit's list into its own Clinic, leaving out studies that have stopped enrolling", () => {
     const count = (id: string) => found.filter((f) => f.clinicId === id).length;
-    // Enrolling or upcoming on 2026-11-24: 4 + 7 at ACT, 2 + 1 at CNS, 4 + 1 at iResearch, 12 at HRI. "Ongoing" ones are left out.
-    expect([count("cenexel-anaheim"), count("cenexel-los-alamitos"), count("cenexel-decatur"), count("cenexel-marlton")]).toEqual([11, 3, 5, 12]);
+    // Enrolling or upcoming on 2026-11-24: 4 + 7 at ACT, 2 + 1 at CNS, 4 + 1 at iResearch, 12 at HRI, 5 at RMCR. "Ongoing" ones are left out.
+    expect([count("cenexel-anaheim"), count("cenexel-los-alamitos"), count("cenexel-decatur"), count("cenexel-marlton"), count("cenexel-englewood")]).toEqual([11, 3, 5, 12, 5]);
     expect(new Set(found.map((f) => f.key)).size).toBe(found.length);
     expect(found.every((f) => new URL(f.url).host === "cenexelresearch.com")).toBe(true);
   });
@@ -203,6 +203,20 @@ describe("CenExel", () => {
       who: "M / F, Age 18 -70",
       code: null,
       url: "https://cenexelresearch.com/act/trials/celiac-disease/",
+    });
+  });
+  it("reads RMCR's list into its Englewood Clinic", () => {
+    // CenExel calls it CenExel Denver, at 701 E Hampden Ave, Englewood.
+    expect(found.find((f) => f.key === "/rmcr/trials/parkinsons-disease/")).toEqual({
+      key: "/rmcr/trials/parkinsons-disease/",
+      clinicId: "cenexel-englewood",
+      title: "Parkinson\u2019s Disease",
+      pay: "TBD",
+      when: null,
+      stay: null,
+      who: "M / F, Age 30-85",
+      code: null,
+      url: "https://cenexelresearch.com/rmcr/trials/parkinsons-disease/",
     });
   });
   it("finds nothing in a page that isn't a list", () => {
@@ -416,7 +430,7 @@ describe("the sources read since 2026-11-24", () => {
       [drVince, ["dr-vince.html"]],
       [syneos, ["syneos.html"]],
       [axis, ["axis.html"]],
-      [cenexel, ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html"]],
+      [cenexel, ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html", "cenexel-rmcr.html"]],
       [prosciento, ["prosciento.html"]],
       [abbvie, ["abbvie.json"]],
       [cpmi, ["cpmi.json"]],
