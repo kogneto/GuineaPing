@@ -7,7 +7,7 @@
  * GuineaPing has no address for its list. The Member opens the link, if there is one, and reads it
  * themselves. Every Clinic can be named in a Watch, which asks ClinicalTrials.gov, not the Clinic.
  */
-export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento" | "abbvie" | "cpmi" | "medpace";
+export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento" | "abbvie" | "cpmi" | "medpace" | "parexel";
 
 export type Clinic = {
   id: string;
@@ -80,7 +80,7 @@ export const CLINICS: Clinic[] = [
   c("trialmed-austin", "Trialmed (PPD)", "Austin, TX", 30.2672, -97.7431, TRIALMED, null, TRIALMED_NAMES),
   c("trialmed-las-vegas", "Trialmed (PPD)", "Las Vegas, NV", 36.175, -115.1372, TRIALMED, null, TRIALMED_NAMES),
   c("medpace", "Medpace", "Cincinnati, OH", 39.1271, -84.5144, "https://www.medpace.com/study-participants/browse-studies/", "medpace", ["Medpace"]),
-  c("parexel-baltimore", "Parexel", "Baltimore, MD", 39.2904, -76.6122, "https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US", null, ["Parexel"]),
+  c("parexel-baltimore", "Parexel", "Baltimore, MD", 39.2904, -76.6122, "https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US", "parexel", ["Parexel"]),
   c("syneos-miami", "Syneos Health", "Miami, FL", 25.7743, -80.1937, "https://www.us-participants.syneoshealth.com/en/avalaible-studies/", "syneos", ["Syneos"]),
   c("dr-vince", "Dr. Vince Clinical Research", "Overland Park, KS", 38.9822, -94.6708, "https://drvince.com/current-studies/", "dr-vince", ["Vince"]),
   c("qps-miami", "QPS", "South Miami, FL", 25.7076, -80.2934, "https://miamiresearch.com/", null, ["QPS", "Quest Pharmaceutical Services"], ["South Miami", "Miami"]),
@@ -98,7 +98,7 @@ export const CLINICS: Clinic[] = [
   c("qps-springfield", "QPS", "Springfield, MO", 37.2153, -93.2982, "https://www.facebook.com/share/1PpbLQQ92a/", null, ["QPS", "Bio-Kinetic", "BioKinetic"]),
   // "Worldwide Clinical", not the whole name: listings also write "Trial" and "Trails".
   c("worldwide-san-antonio", "Worldwide Clinical Trials", "San Antonio, TX", 29.4241, -98.4936, null, null, ["Worldwide Clinical"]),
-  c("parexel-glendale", "Parexel", "Glendale, CA", 34.1425, -118.2551, "https://pxlcrs.my.site.com/portal/s/triallistla?loc=LA&language=en_US", null, ["Parexel", "California Clinical Trials", "CCTMG", "EPCU"]),
+  c("parexel-glendale", "Parexel", "Glendale, CA", 34.1425, -118.2551, "https://pxlcrs.my.site.com/portal/s/triallistla?loc=LA&language=en_US", "parexel", ["Parexel", "California Clinical Trials", "CCTMG", "EPCU"]),
   // "Genesis Clinical", so that Tampa General Hospital's "Genesis Clinic" is not taken for it.
   c("genesis-tampa", "Genesis Clinical Research", "Tampa, FL", 27.9475, -82.4584, null, null, ["Genesis Clinical"]),
   c("frontage-secaucus", "Frontage", "Secaucus, NJ", 40.7895, -74.0565, null, null, ["Frontage"], ["Secaucus", "Hackensack"]),

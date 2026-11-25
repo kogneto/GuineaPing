@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CLINICS } from "../../shared/clinics";
+import { pageUrl } from "./read";
 import { SOURCES } from "./sources";
 
 /** The minutes of the hour a cron string's minute field fires on: "1-59/3", "3,9,15", "17", "*". */
@@ -21,10 +22,10 @@ describe("the sources that are read", () => {
     expect(SOURCES.map((s) => s.id).sort()).toEqual(wanted);
   });
   it("are fetched over https only", () => {
-    for (const s of SOURCES) for (const page of s.pages) expect(page).toMatch(/^https:\/\//);
+    for (const s of SOURCES) for (const page of s.pages) expect(pageUrl(page)).toMatch(/^https:\/\//);
   });
   it("never include a Clinic whose site turned a plain request away", () => {
-    const hosts = SOURCES.flatMap((s) => s.pages).map((p) => new URL(p).host);
+    const hosts = SOURCES.flatMap((s) => s.pages).map((p) => new URL(pageUrl(p)).host);
     // Each answered a plain request with 403 or a challenge page on 2026-11-24. GuineaPing does not get round that.
     for (const no of ["iconstudies.com", "trialmed.com", "miamiresearch.com", "www.cc.nih.gov", "www.hopkinsmedicine.org"]) expect(hosts).not.toContain(no);
   });

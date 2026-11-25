@@ -3,17 +3,22 @@
  * - each source is read at most once an hour, one source per run;
  * - a site that says no (401, 403, 429, or a challenge page) is not tried again until someone
  *   clears the refusal by hand;
- * - requests carry no made-up browser identity: no headers are set at all;
+ * - requests carry no made-up browser identity: no headers are set at all (a form, where a page
+ *   has one, goes as the body, and the runtime says what it is);
  * - only https links on the Clinic's own host are kept, and text is stored as plain text.
  */
 import { CLINICS } from "../../shared/clinics";
 import { sameHost } from "./html";
-import type { Found, Source } from "./types";
+import type { Found, Page, Source } from "./types";
 
-export type Fetcher = (url: string) => Promise<Response>;
+/** Fetches a page: with its form as the body where it has one. */
+export type Fetcher = (url: string, form?: Record<string, string>) => Promise<Response>;
 
 /** The plain request: no User-Agent, no cookies, nothing a browser would add. */
-export const plainFetch: Fetcher = (url) => fetch(url, { redirect: "follow" });
+export const plainFetch: Fetcher = (url, form) => fetch(url, form ? { method: "POST", body: new URLSearchParams(form), redirect: "follow" } : { redirect: "follow" });
+
+/** The URL of a page, with or without a form. */
+export const pageUrl = (page: Page) => (typeof page === "string" ? page : page.url);
 
 /**
  * How long a source rests between reads. The runs are three minutes apart and each source's turn
@@ -56,7 +61,7 @@ const looksLikeChallenge = (html: string) => /<title>\s*(Attention Required|Just
 
 /** Keeps only what is safe to store and show: known Clinic, https link on the Clinic's own host, short plain text. */
 export function clean(found: Found[], source: Source): Found[] {
-  const base = source.site ?? source.pages[0] ?? "";
+  const base = source.site ?? (source.pages[0] ? pageUrl(source.pages[0]) : "");
   const short = (s: string | null) => (s ? s.slice(0, MAX_TEXT) : null);
   const seen = new Set<string>();
   const out: Found[] = [];
@@ -103,11 +108,12 @@ export async function readDueSource(db: D1Database, sources: Source[], get: Fetc
   };
 
   const pages: string[] = [];
-  for (const [i, url] of due.pages.entries()) {
+  for (const [i, page] of due.pages.entries()) {
     if (i) await wait(GAP_MS);
+    const url = pageUrl(page);
     let res: Response;
     try {
-      res = await get(url);
+      res = typeof page === "string" ? await get(url) : await get(url, page.form);
     } catch (err) {
       return finish({ source: due.id, status: "failed", found: 0, detail: String(err instanceof Error ? err.message : err).slice(0, 100) });
     }
