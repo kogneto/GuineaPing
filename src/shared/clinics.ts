@@ -7,7 +7,7 @@
  * GuineaPing has no address for its list. The Member opens the link, if there is one, and reads it
  * themselves. Every Clinic can be named in a Watch, which asks ClinicalTrials.gov, not the Clinic.
  */
-export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento" | "abbvie" | "cpmi";
+export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento" | "abbvie" | "cpmi" | "medpace";
 
 export type Clinic = {
   id: string;
@@ -79,7 +79,7 @@ export const CLINICS: Clinic[] = [
   c("cenexel-marlton", "CenExel HRI", "Marlton, NJ", 39.8912, -74.9218, "https://cenexelresearch.com/hri/all-studies/", "cenexel", ["CenExel", "Hassman"]),
   c("trialmed-austin", "Trialmed (PPD)", "Austin, TX", 30.2672, -97.7431, TRIALMED, null, TRIALMED_NAMES),
   c("trialmed-las-vegas", "Trialmed (PPD)", "Las Vegas, NV", 36.175, -115.1372, TRIALMED, null, TRIALMED_NAMES),
-  c("medpace", "Medpace", "Cincinnati, OH", 39.1271, -84.5144, "https://www.medpace.com/study-participants/browse-studies/", null, ["Medpace"]),
+  c("medpace", "Medpace", "Cincinnati, OH", 39.1271, -84.5144, "https://www.medpace.com/study-participants/browse-studies/", "medpace", ["Medpace"]),
   c("parexel-baltimore", "Parexel", "Baltimore, MD", 39.2904, -76.6122, "https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US", null, ["Parexel"]),
   c("syneos-miami", "Syneos Health", "Miami, FL", 25.7743, -80.1937, "https://www.us-participants.syneoshealth.com/en/avalaible-studies/", "syneos", ["Syneos"]),
   c("dr-vince", "Dr. Vince Clinical Research", "Overland Park, KS", 38.9822, -94.6708, "https://drvince.com/current-studies/", "dr-vince", ["Vince"]),

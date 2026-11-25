@@ -75,11 +75,14 @@ export function asItStood(o: { code: string | null; when: string | null; firstSe
 const VISITS = /(\d+(?:\s*(?:-|–|to|or|and|&|,)\s*\d+)*)\s+(?:(?:return|follow[- ]?up|out[- ]?patient)\s+)*visits?\b/gi;
 /** What stands just before a number that is a day, a week, a price or part of a code, not a count. */
 const LABELS_A_NUMBER = /(?:\b(?:days?|weeks?|months?|cycles?|periods?|visits?|cohorts?|parts?|groups?)\s*|[$#\w./-])$/i;
+/** What follows a count of visits that has the screening visit in it: "(includes screening)". */
+const INCLUDES_SCREENING = /^\s*,?\s*\(\s*(?:includes|including)\s+(?:the\s+|a\s+)?screening(?:\s+visit)?\s*\)/i;
 
 /**
  * How many Follow-up visits an Opening asks for, read from the Clinic's wording about its stay:
  * outpatient, return and follow-up visits, and the bare "15 visits" of a study that is all visits.
- * Screening visits and phone calls are not counted, nor is a kind of visit no Clinic has been seen
+ * Screening visits and phone calls are not counted, also where a Clinic counts the screening visit
+ * in with the outpatient visits and says so, nor is a kind of visit no Clinic has been seen
  * to use. Null when the Clinic gives no wording: that is "doesn't say", not none.
  *
  * It is only for filtering: what a Member reads is always the Clinic's own wording. So it reads
@@ -93,8 +96,9 @@ const LABELS_A_NUMBER = /(?:\b(?:days?|weeks?|months?|cycles?|periods?|visits?|c
 export function followUpVisits(stay: string | null): number | null {
   if (!stay?.trim()) return null;
   const figures = [...stay.matchAll(VISITS)].map((m) => {
-    const lowest = Math.min(...m[1]!.match(/\d+/g)!.map(Number));
-    return LABELS_A_NUMBER.test(stay.slice(0, m.index)) ? Math.min(lowest, 1) : lowest;
+    // "16 outpatient visits (includes screening)": one of them is the screening visit.
+    const lowest = Math.min(...m[1]!.match(/\d+/g)!.map(Number)) - (INCLUDES_SCREENING.test(stay.slice(m.index + m[0].length)) ? 1 : 0);
+    return Math.max(0, LABELS_A_NUMBER.test(stay.slice(0, m.index)) ? Math.min(lowest, 1) : lowest);
   });
   return figures.length ? Math.min(...figures) : 0;
 }

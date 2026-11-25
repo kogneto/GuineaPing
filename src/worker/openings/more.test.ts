@@ -12,6 +12,7 @@ import { syneos } from "./syneos";
 import { axis } from "./axis";
 import { cenexel } from "./cenexel";
 import { drVince } from "./drVince";
+import { medpace } from "./medpace";
 import { tkl } from "./tkl";
 import { clean } from "./read";
 import type { Source } from "./types";
@@ -306,6 +307,38 @@ describe("Clinical Pharmacology of Miami", () => {
   });
 });
 
+describe("Medpace", () => {
+  // The feed's answer on 2026-11-24, in its shape: JSON encoded once more as a string, each study a card of HTML.
+  it("reads each study card, in the Clinic's own words", () => {
+    const found = basics(medpace, "medpace.json", "www.medpace.com");
+    expect(found).toHaveLength(6);
+    expect(found[0]).toEqual({
+      key: "/study-participants/browse-studies/healthy-adults-with-mild-to-moderate-hypertension-ages-18-65-11700/",
+      clinicId: "medpace",
+      title: "Healthy Adults with Mild to Moderate Hypertension, Ages 18-65, $13,900",
+      pay: "$13,900 - Study Calendars Available",
+      when: null,
+      stay: "This study requires 16 outpatient visits (includes screening) plus one separate 4-night stay at our Phase 1 unit in Cincinnati, OH.",
+      who: "Age: 18-65, BMI: 18-35, No Nicotine Use",
+      code: null,
+      url: "https://www.medpace.com/study-participants/browse-studies/healthy-adults-with-mild-to-moderate-hypertension-ages-18-65-11700/",
+    });
+    expect(found[3]).toMatchObject({ stay: "This study requires 6 outpatient visits, (includes screening) plus 1, 2-night stay at our Phase 1 unit in Cincinnati , OH.", who: "Age: 18-60, BMI: 18-30" });
+  });
+
+  it("gives no pay or stay where a card names none", () => {
+    const glp1 = medpace.parse([fixture("medpace.json")])[5];
+    expect(glp1).toMatchObject({ title: "Have You Previously Taken, or Are Currently Taking a GLP-1 Medication?", pay: null, stay: null, who: null });
+  });
+
+  it("reads the answer encoded once, and finds nothing in one that isn't the list", () => {
+    const once = JSON.parse(fixture("medpace.json")) as string;
+    expect(medpace.parse([once])).toHaveLength(6);
+    expect(medpace.parse(['"just a string"'])).toEqual([]);
+    expect(medpace.parse(['{"foundPosts":0,"posts":[]}'])).toEqual([]);
+  });
+});
+
 describe("the sources read since 2026-11-24", () => {
   it("lose no Opening to the read's own checks of Clinic and link", () => {
     const cases: [Source, string[]][] = [
@@ -316,6 +349,7 @@ describe("the sources read since 2026-11-24", () => {
       [prosciento, ["prosciento.html"]],
       [abbvie, ["abbvie.json"]],
       [cpmi, ["cpmi.json"]],
+      [medpace, ["medpace.json"]],
     ];
     for (const [source, files] of cases) {
       const found = source.parse(files.map(fixture));

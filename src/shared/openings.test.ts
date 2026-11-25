@@ -204,6 +204,12 @@ describe("the follow-up visits in a Clinic's wording", () => {
     expect(followUpVisits("Up to 10 months")).toBe(0);
     // AbbVie gives only the kind of stay.
     expect(followUpVisits("Overnight")).toBe(0);
+    // Medpace counts the screening visit in with the outpatient visits, and says so.
+    expect(followUpVisits("This study requires 16 outpatient visits (includes screening) plus one separate 4-night stay at our Phase 1 unit in Cincinnati, OH.")).toBe(15);
+    expect(followUpVisits("This study requires 6 outpatient visits, (includes screening) plus 1, 2-night stay at our Phase 1 unit in Cincinnati , OH.")).toBe(5);
+    expect(followUpVisits("This study includes 18 outpatient visits (includes screening) plus 4 separate 3-night stays at our Phase 1 unit in Cincinnati , OH.")).toBe(17);
+    // A number in words is not read, so it counts as none: low, never high.
+    expect(followUpVisits("This study requires four outpatient visits (includes screening) plus one separate 6-night stay at our Phase 1 unit in Cincinnati, OH.")).toBe(0);
   });
 
   it("counts the visits of a study that is all visits", () => {
