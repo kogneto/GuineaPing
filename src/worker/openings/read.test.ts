@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ClinicItem } from "../../shared/api";
 import { as, createWorkerEnv } from "../../test/worker-env";
 import { app } from "../app";
@@ -32,7 +32,7 @@ const opening = (key: string, over: Partial<Found> = {}): Found => ({
   ...over,
 });
 /** A source whose "page" is a JSON list of entries, so each test says plainly what the site shows. */
-const source = (id: Source["id"] = "fortrea", pages = [PAGE]): Source => ({ id, pages, parse: (htmls) => htmls.flatMap((h) => JSON.parse(h) as Found[]) });
+const source = (id: Source["id"] = "fortrea", pages: Source["pages"] = [PAGE]): Source => ({ id, pages, parse: (htmls) => htmls.flatMap((h) => JSON.parse(h) as Found[]) });
 const serving =
   (entries: Found[], calls: string[] = []): Fetcher =>
   async (url) => {
@@ -529,5 +529,36 @@ describe("the Clinics page", () => {
     const { json } = await ann<ClinicItem[]>("/api/clinics");
     expect(json[0]).toMatchObject({ id: "celerion-lincoln" });
     expect(json[0]?.miles).toBeLessThan(10);
+  });
+});
+
+describe("the request a read sends", () => {
+  it("sends a page's form only where it has one, and the plain request everywhere else", async () => {
+    const calls: unknown[][] = [];
+    const get: Fetcher = async (...args) => {
+      calls.push(args);
+      return new Response(JSON.stringify([opening("a")]));
+    };
+    const form = { message: "{}", "aura.token": "null" };
+    await readDueSource(env.DB, [source("fortrea", [PAGE, { url: `${PAGE}?list`, form }])], get, DAY1, noWait);
+    expect(calls).toEqual([[PAGE], [`${PAGE}?list`, form]]);
+  });
+
+  it("sets no header itself: a form goes as the body, and the runtime says what it is", async () => {
+    const seen: [string, RequestInit | undefined][] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+      seen.push([url, init]);
+      return new Response("ok");
+    });
+    try {
+      await plainFetch(PAGE);
+      await plainFetch(PAGE, { a: "1", "aura.token": "null" });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+    expect(seen[0]).toEqual([PAGE, { redirect: "follow" }]);
+    expect(seen[1]?.[1]).toMatchObject({ method: "POST", redirect: "follow" });
+    expect(seen[1]?.[1]?.headers).toBeUndefined();
+    expect(String(seen[1]?.[1]?.body)).toBe("a=1&aura.token=null");
   });
 });

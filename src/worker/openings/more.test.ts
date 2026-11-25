@@ -5,6 +5,7 @@ import { abbvie } from "./abbvie";
 import { cpmi } from "./cpmi";
 import { novum } from "./novum";
 import { ocrc } from "./ocrc";
+import { parexel } from "./parexel";
 import { pfizer } from "./pfizer";
 import { pharmaron } from "./pharmaron";
 import { prosciento } from "./prosciento";
@@ -301,7 +302,7 @@ describe("Clinical Pharmacology of Miami", () => {
 
   it("links its Openings to the Clinic's own site, though the list comes from another company's", () => {
     const found = cpmi.parse([fixture("cpmi.json")]);
-    expect(cpmi.pages.map((p) => new URL(p).host)).toEqual(["realtime-host01.com"]);
+    expect(cpmi.pages).toEqual(["https://realtime-host01.com/erg-cpm/web/v1/studies?"]);
     expect(clean(found, cpmi)).toHaveLength(found.length);
     expect(clean([{ ...found[0]!, url: "https://realtime-host01.com/erg-cpm/web/v1/studies?" }], cpmi)).toEqual([]);
   });
@@ -346,6 +347,69 @@ describe("Medpace", () => {
   });
 });
 
+describe("Parexel", () => {
+  // A trimmed copy of the Baltimore list's answer on 2026-11-24: the list and the actions around it,
+  // without the privacy notice's text and most of the referral texts.
+  const BAL = "https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US";
+
+  it("reads each study on the Baltimore list, in the Clinic's own words", () => {
+    const found = parexel.parse([fixture("parexel-bal.json"), ""]);
+    expect(found).toHaveLength(7);
+    expect(found[0]).toEqual({
+      key: "a2BP7000000ReqzMAC",
+      clinicId: "parexel-baltimore",
+      title: "Healthy Volunteers with BMI 27+",
+      pay: "Compensation Up to $100",
+      when: null,
+      stay: "1 pre-screening visit",
+      who: "Healthy Males & Females with BMI of 27 or higher, Ages 18+",
+      code: "289935",
+      url: BAL,
+    });
+    expect(found[1]).toMatchObject({
+      stay: "1 screening visit, 1 in-house stay of 4 days/3 nights, 1 in-house stay of 3 days/2 nights, 2 follow-up phone calls, 25 in-person follow-up visits",
+      who: "Healthy Males and Females, with or without Type 2 Diabetes. Ages 18-75",
+      when: null,
+    });
+    expect(found[2]).toMatchObject({ code: "292912 D", who: "Healthy Males and Females, 18-55", stay: "1 Screening visit, 1 in-house stay of 8 Days / 7 Nights and 7 follow-up visits" });
+  });
+
+  it("keeps two groups of one study apart, and reads a stay split over two lines", () => {
+    const found = parexel.parse([fixture("parexel-bal.json"), ""]);
+    expect(found.filter((f) => f.code?.startsWith("292912")).map((f) => [f.key, f.code])).toEqual([
+      ["a2BP70000019gkDMAQ", "292912 D"],
+      ["a2BP7000001KjwTMAS", "292912 C"],
+    ]);
+    expect(found[4]?.stay).toBe("1 Screening visit, 1 in-house stay of 8 Days / 7 Nights and 7 follow-up visits");
+  });
+
+  it("puts each list's studies at its own Clinic", () => {
+    const glendale = parexel.parse(["", fixture("parexel-bal.json")]);
+    expect(new Set(glendale.map((f) => f.clinicId))).toEqual(new Set(["parexel-glendale"]));
+    expect(glendale[0]?.url).toBe("https://pxlcrs.my.site.com/portal/s/triallistla?loc=LA&language=en_US");
+  });
+
+  it("finds nothing when Salesforce answers that the page is out of date, or with an error", () => {
+    expect(parexel.parse(['*/{"event":{"descriptor":"markup://aura:clientOutOfSync","attributes":{"values":{}}},"exceptionEvent":true}/*ERROR*/'])).toEqual([]);
+    expect(parexel.parse(['{"actions":[{"id":"118;a","state":"ERROR","returnValue":null,"error":[{"message":"An internal server error has occurred"}]}]}'])).toEqual([]);
+    expect(parexel.parse(["<html>nothing</html>", ""])).toEqual([]);
+    expect(parexel.parse([])).toEqual([]);
+  });
+
+  it("asks for each list with the form its page sends, and no sign-in", () => {
+    expect(parexel.pages).toHaveLength(2);
+    for (const [i, loc] of ["BAL", "LA"].entries()) {
+      const page = parexel.pages[i];
+      if (typeof page === "string" || !page) throw new Error("a form page");
+      expect(page.url).toBe("https://pxlcrs.my.site.com/portal/s/sfsites/aura?r=2&aura.ApexAction.execute=5");
+      expect(page.form["aura.token"]).toBe("null");
+      const message = JSON.parse(page.form.message!) as { actions: { params: { method: string; params: Record<string, unknown> } }[] };
+      expect(message.actions.map((a) => a.params.method)).toEqual(["getConsentForm", "getPortalContentData", "getPickValues", "getPickValues", "getPickValues"]);
+      expect(message.actions[1]?.params.params).toEqual({ loc, lang: "en_US", isfeatured: null });
+    }
+  });
+});
+
 describe("the sources read since 2026-11-24", () => {
   it("lose no Opening to the read's own checks of Clinic and link", () => {
     const cases: [Source, string[]][] = [
@@ -357,6 +421,7 @@ describe("the sources read since 2026-11-24", () => {
       [abbvie, ["abbvie.json"]],
       [cpmi, ["cpmi.json"]],
       [medpace, ["medpace.json"]],
+      [parexel, ["parexel-bal.json"]],
     ];
     for (const [source, files] of cases) {
       const found = source.parse(files.map(fixture));

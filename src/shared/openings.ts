@@ -72,7 +72,7 @@ export function asItStood(o: { code: string | null; when: string | null; firstSe
 }
 
 /** A number, or several the Clinic gives together ("12 to 16", "2 or 5", "14 and 28"), and the visits they count. */
-const VISITS = /(\d+(?:\s*(?:-|–|to|or|and|&|,)\s*\d+)*)\s+(?:(?:return|follow[- ]?up|out[- ]?patient)\s+)*visits?\b/gi;
+const VISITS = /(\d+(?:\s*(?:-|–|to|or|and|&|,)\s*\d+)*)\s+(?:(?:return|follow[- ]?ups?|out[- ]?patient|in[- ]person)\s+)*visits?\b/gi;
 /** What stands just before a number that is a day, a week, a price or part of a code, not a count. */
 const LABELS_A_NUMBER = /(?:\b(?:days?|weeks?|months?|cycles?|periods?|visits?|cohorts?|parts?|groups?)\s*|[$#\w./-])$/i;
 /** What follows a count of visits that has the screening visit in it: "(includes screening)". */
@@ -80,7 +80,8 @@ const INCLUDES_SCREENING = /^\s*,?\s*\(\s*(?:includes|including)\s+(?:the\s+|a\s
 
 /**
  * How many Follow-up visits an Opening asks for, read from the Clinic's wording about its stay:
- * outpatient, return and follow-up visits, and the bare "15 visits" of a study that is all visits.
+ * outpatient, return, in-person and follow-up visits, and the bare "15 visits" of a study that is
+ * all visits.
  * Screening visits and phone calls are not counted, nor is a kind of visit no Clinic has been seen
  * to use. Where a Clinic counts the screening visit in with the others and says so, "16 outpatient
  * visits (includes screening)", it is taken out: 15. Null when the Clinic gives no wording: that

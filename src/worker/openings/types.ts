@@ -16,10 +16,16 @@ export type Found = {
   url: string;
 };
 
+/**
+ * A page to fetch: a URL, or a URL and the form a Clinic's own list page sends with it (Parexel's
+ * does). A form is sent as the request's body, nothing else.
+ */
+export type Page = string | { url: string; form: Record<string, string> };
+
 export type Source = {
   id: SourceId;
   /** The pages to fetch, in order. Usually one. */
-  pages: string[];
+  pages: Page[];
   /**
    * The Clinic's own site, where its Openings link, when the pages come from another host (a
    * recruitment company's). Openings must link to its host. Unset, that is the first page's host.
