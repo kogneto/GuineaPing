@@ -35,13 +35,23 @@ const LISTS = [
 ];
 
 /** The form a list's page sends, with no sign-in: its token is "null", as the page's own is. */
-const form = (loc: string, list: string): Page => ({
+const callFor = (loc: string, list: string): Page => ({
   url: CALL,
   form: { message: message(loc), "aura.context": CONTEXT, "aura.pageURI": new URL(list).pathname + "?language=en_US", "aura.token": "null" },
 });
 
 type Study = Record<string, unknown>;
 const str = (study: Study, name: string) => (typeof study[name] === "string" ? (study[name] as string) : "");
+
+/** Who a study is for: its population line, and its ages where that line doesn't give them. */
+function whoOf(study: Study): string | null {
+  const population = text(/<p\b[^>]*>([\s\S]*?)<\/p>/.exec(str(study, "shortDetails"))?.[1] ?? "").replace(/^Population\s*:?\s*/i, "");
+  const ages = text(str(study, "ages"));
+  return [population, ages && !population.includes(ages.replace(/^Ages?\s+/i, "")) ? ages : ""].filter(Boolean).join(", ") || null;
+}
+
+/** The stay: what the study involves, as its card puts it after "This study involves:". */
+const stayOf = (study: Study) => /\b(?:involves|includes)\b(?:\s+up\s+to)?\s*:\s*(.+)$/i.exec(text(str(study, "shortDetails")))?.[1] ?? null;
 
 /** The studies in one answer: the action that returned a list of them, found by its shape. */
 function studiesIn(answer: string): Study[] {
@@ -67,7 +77,7 @@ function studiesIn(answer: string): Study[] {
  */
 export const parexel: Source = {
   id: "parexel",
-  pages: LISTS.map(({ loc, list }) => form(loc, list)),
+  pages: LISTS.map(({ loc, list }) => callFor(loc, list)),
   parse(answers) {
     const found: Found[] = [];
     for (const [i, { clinicId, list }] of LISTS.entries()) {
@@ -75,19 +85,16 @@ export const parexel: Source = {
         const key = str(study, "rpcid").trim();
         const title = text(str(study, "trialName"));
         if (!key || !title) continue;
-        const details = text(str(study, "shortDetails"));
-        const population = text(/<p\b[^>]*>([\s\S]*?)<\/p>/.exec(str(study, "shortDetails"))?.[1] ?? "").replace(/^Population\s*:?\s*/i, "");
-        const ages = text(str(study, "ages"));
-        const stay = /\b(?:involves|includes)\b(?:\s+up\s+to)?\s*:\s*(.+)$/i.exec(details)?.[1] ?? null;
         found.push({
           key,
           clinicId,
           title,
           pay: text(str(study, "payment")) || null,
           when: null,
-          stay,
-          who: [population, ages && !population.includes(ages.replace(/^Ages?\s+/i, "")) ? ages : ""].filter(Boolean).join(", ") || null,
-          code: text(str(study, "trialNumber")).replace(/﻿/g, "").trim() || text(str(study, "studyName")) || null,
+          stay: stayOf(study),
+          who: whoOf(study),
+          // text() also drops the invisible mark some numbers begin with.
+          code: text(str(study, "trialNumber")) || text(str(study, "studyName")) || null,
           url: list,
         });
       }
