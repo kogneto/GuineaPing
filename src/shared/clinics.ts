@@ -7,7 +7,7 @@
  * GuineaPing has no address for its list. The Member opens the link, if there is one, and reads it
  * themselves. Every Clinic can be named in a Watch, which asks ClinicalTrials.gov, not the Clinic.
  */
-export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento";
+export type SourceId = "fortrea" | "celerion" | "altasciences-kc" | "altasciences-la" | "pharmaron" | "ocrc" | "pfizer" | "novum" | "tkl" | "dr-vince" | "syneos" | "axis" | "cenexel" | "prosciento" | "abbvie" | "cpmi" | "medpace";
 
 export type Clinic = {
   id: string;
@@ -79,7 +79,7 @@ export const CLINICS: Clinic[] = [
   c("cenexel-marlton", "CenExel HRI", "Marlton, NJ", 39.8912, -74.9218, "https://cenexelresearch.com/hri/all-studies/", "cenexel", ["CenExel", "Hassman"]),
   c("trialmed-austin", "Trialmed (PPD)", "Austin, TX", 30.2672, -97.7431, TRIALMED, null, TRIALMED_NAMES),
   c("trialmed-las-vegas", "Trialmed (PPD)", "Las Vegas, NV", 36.175, -115.1372, TRIALMED, null, TRIALMED_NAMES),
-  c("medpace", "Medpace", "Cincinnati, OH", 39.1271, -84.5144, "https://www.medpace.com/study-participants/browse-studies/", null, ["Medpace"]),
+  c("medpace", "Medpace", "Cincinnati, OH", 39.1271, -84.5144, "https://www.medpace.com/study-participants/browse-studies/", "medpace", ["Medpace"]),
   c("parexel-baltimore", "Parexel", "Baltimore, MD", 39.2904, -76.6122, "https://pxlcrs.my.site.com/portal/s/trials-listing-bal?loc=BAL&language=en_US", null, ["Parexel"]),
   c("syneos-miami", "Syneos Health", "Miami, FL", 25.7743, -80.1937, "https://www.us-participants.syneoshealth.com/en/avalaible-studies/", "syneos", ["Syneos"]),
   c("dr-vince", "Dr. Vince Clinical Research", "Overland Park, KS", 38.9822, -94.6708, "https://drvince.com/current-studies/", "dr-vince", ["Vince"]),
@@ -88,14 +88,13 @@ export const CLINICS: Clinic[] = [
   c("prosciento", "ProSciento", "Chula Vista, CA", 32.6401, -117.0842, "https://myproscientostudy.com/current-studies/", "prosciento", ["ProSciento"], ["Chula Vista", "San Diego"]),
   c("nucleus-saint-paul", "Nucleus Network", "Saint Paul, MN", 44.9444, -93.0933, "https://www.nucleusnetwork.com/participants/find-a-trial/", null, ["Nucleus Network", "Prism Research"]),
   c("nih-clinical-center", "NIH Clinical Center", "Bethesda, MD", 38.9807, -77.1003, "https://www.cc.nih.gov/recruit/protocols", null, ["National Institutes of Health Clinical Center", "NIH Clinical Center"]),
-  // AbbVie's site turns automated tools away (docs/research/paid-study-sources.md). Listings mostly
-  // call this Clinic "Acpru /Id# …" and seldom use AbbVie's name (checked 2026-11-24).
-  c("abbvie-grayslake", "AbbVie", "Grayslake, IL", 42.3445, -88.0418, "https://abbviephase1.com/#/available-trials", null, ["ACPRU", "AbbVie"]),
+  // Listings mostly call this Clinic "Acpru /Id# …" and seldom use AbbVie's name (checked 2026-11-24).
+  c("abbvie-grayslake", "AbbVie", "Grayslake, IL", 42.3445, -88.0418, "https://abbviephase1.com/#/available-trials", "abbvie", ["ACPRU", "AbbVie"]),
   c("johns-hopkins-bpru", "Johns Hopkins BPRU", "Baltimore, MD", 39.2904, -76.6122, "https://www.hopkinsmedicine.org/psychiatry/research/bpru/research-volunteers", null, ["Behavioral Pharmacology Research Unit", "BPRU"]),
 
   // Added on 2026-11-24 from docs/research/paid-study-sources.md. Names are the spellings listings
   // used that day. The links are the addresses the owner gave; GuineaPing has not opened them.
-  c("clinical-pharmacology-miami", "Clinical Pharmacology of Miami", "Miami, FL", 25.7743, -80.1937, "https://cpmiclinical.com/studies/#!/", null, ["Clinical Pharmacology of Miami", "CPMI"], ["Miami", "Hialeah"]),
+  c("clinical-pharmacology-miami", "Clinical Pharmacology of Miami", "Miami, FL", 25.7743, -80.1937, "https://cpmiclinical.com/studies/#!/", "cpmi", ["Clinical Pharmacology of Miami", "CPMI"], ["Miami", "Hialeah"]),
   c("qps-springfield", "QPS", "Springfield, MO", 37.2153, -93.2982, "https://www.facebook.com/share/1PpbLQQ92a/", null, ["QPS", "Bio-Kinetic", "BioKinetic"]),
   // "Worldwide Clinical", not the whole name: listings also write "Trial" and "Trails".
   c("worldwide-san-antonio", "Worldwide Clinical Trials", "San Antonio, TX", 29.4241, -98.4936, null, null, ["Worldwide Clinical"]),

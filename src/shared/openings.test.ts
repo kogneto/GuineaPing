@@ -202,6 +202,16 @@ describe("the follow-up visits in a Clinic's wording", () => {
     // ProSciento gives only how long a study runs: no visit is named, so it counts as none.
     expect(followUpVisits("Up to 88 days")).toBe(0);
     expect(followUpVisits("Up to 10 months")).toBe(0);
+    // AbbVie gives only the kind of stay.
+    expect(followUpVisits("Overnight")).toBe(0);
+    // Medpace counts the screening visit in with the outpatient visits, and says so.
+    expect(followUpVisits("This study requires 16 outpatient visits (includes screening) plus one separate 4-night stay at our Phase 1 unit in Cincinnati, OH.")).toBe(15);
+    expect(followUpVisits("This study requires 6 outpatient visits, (includes screening) plus 1, 2-night stay at our Phase 1 unit in Cincinnati , OH.")).toBe(5);
+    expect(followUpVisits("This study includes 18 outpatient visits (includes screening) plus 4 separate 3-night stays at our Phase 1 unit in Cincinnati , OH.")).toBe(17);
+    // Made up, to pin the rule: a labelled number still counts as one visit, never as nothing.
+    expect(followUpVisits("a Day 14 follow-up visit (includes screening)")).toBe(1);
+    // A number in words is not read, so it counts as none: low, never high.
+    expect(followUpVisits("This study requires four outpatient visits (includes screening) plus one separate 6-night stay at our Phase 1 unit in Cincinnati, OH.")).toBe(0);
   });
 
   it("counts the visits of a study that is all visits", () => {
@@ -455,6 +465,13 @@ describe("the day an Opening starts, in a Clinic's wording", () => {
     expect(startDay("2027-01-06 to Feb 3", SEEN)).toBeNull();
     expect(startDay("Dec 2026 - Feb 5", SEEN)).toBeNull();
     expect(startDay("12/3 - Dec 20", SEEN)).toBeNull();
+  });
+
+  it("gives no start day for AbbVie's either-or check-in", () => {
+    // Either day may be the start: taking one could hide the Opening from a Member whose timeframe holds the other.
+    expect(startDay("13 or 14 December 2026", SEEN)).toBeNull();
+    expect(startDay("Dec 13 or 14, 2026", SEEN)).toBeNull();
+    expect(startDay("13/14 December 2026", SEEN)).toBeNull();
   });
 
   it("reads Syneos's dates, and nothing from its note where a date would be", () => {

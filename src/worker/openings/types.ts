@@ -20,6 +20,11 @@ export type Source = {
   id: SourceId;
   /** The pages to fetch, in order. Usually one. */
   pages: string[];
+  /**
+   * The Clinic's own site, where its Openings link, when the pages come from another host (a
+   * recruitment company's). Openings must link to its host. Unset, that is the first page's host.
+   */
+  site?: string;
   /** Turns the fetched pages into entries. Returns [] when it recognises nothing. */
   parse(pages: string[]): Found[];
 };

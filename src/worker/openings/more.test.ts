@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { abbvie } from "./abbvie";
+import { cpmi } from "./cpmi";
 import { novum } from "./novum";
 import { ocrc } from "./ocrc";
 import { pfizer } from "./pfizer";
@@ -10,6 +12,7 @@ import { syneos } from "./syneos";
 import { axis } from "./axis";
 import { cenexel } from "./cenexel";
 import { drVince } from "./drVince";
+import { medpace } from "./medpace";
 import { tkl } from "./tkl";
 import { clean } from "./read";
 import type { Source } from "./types";
@@ -224,6 +227,125 @@ describe("ProSciento", () => {
   });
 });
 
+describe("AbbVie", () => {
+  // A copy of the feed's answer on 2026-11-24. The feed also sends each study's flyer as a PDF
+  // inside the list; that is left out here (AttachmentContent), as it names its author.
+  it("reads each study in the feed, in the Clinic's own words", () => {
+    const found = basics(abbvie, "abbvie.json", "abbviephase1.com");
+    expect(found).toEqual([
+      {
+        key: "7175",
+        clinicId: "abbvie-grayslake",
+        title: "Champagne",
+        pay: "$4,200",
+        when: "13 or 14 December 2026",
+        stay: "Overnight",
+        who: "Men and Women, Age 18-45, BMI 18-32",
+        code: null,
+        url: "https://abbviephase1.com/#/available-trials",
+      },
+    ]);
+  });
+
+  it("finds nothing in an answer that isn't the list, and skips an entry with no number or name", () => {
+    expect(abbvie.parse(['{"Message":"An error has occurred."}'])).toEqual([]);
+    expect(abbvie.parse(["<ArrayOfTrial><Trial><Title>Champagne</Title></Trial></ArrayOfTrial>"])).toEqual([]);
+    expect(abbvie.parse(['[{"Title":"No number"},{"TrialID":7176},{"TrialID":7177,"Title":"  "},null]'])).toEqual([]);
+  });
+
+  it("gives a bare sum as dollars, with cents only where it has them, and other pay as the Clinic wrote it", () => {
+    const one = (entry: object) => abbvie.parse([JSON.stringify([{ TrialID: 1, Title: "A study", ...entry }])])[0];
+    expect(one({ Stipend: "1234.50" })?.pay).toBe("$1,234.50");
+    expect(one({ Stipend: "950" })?.pay).toBe("$950");
+    expect(one({ Stipend: 4200 })?.pay).toBe("$4,200");
+    expect(one({ Stipend: "Up to $4,200" })?.pay).toBe("Up to $4,200");
+    // A sum of nothing is no pay given, not a study that pays nothing.
+    expect(one({ Stipend: "0.00" })?.pay).toBeNull();
+  });
+
+  it("keeps the Clinic's words as they are, and leaves out what it doesn't give", () => {
+    const one = (entry: object) => abbvie.parse([JSON.stringify([{ TrialID: 1, Title: "A study", ...entry }])])[0];
+    expect(one({ Stipend: "" })).toMatchObject({ pay: null, when: null, stay: null, who: null });
+    expect(one({ Gender: "Women", Age: "", BMI: "<32 and >18" })?.who).toBe("Women, BMI <32 and >18");
+    expect(one({ Title: "  Champagne &amp;\n Brut " })?.title).toBe("Champagne &amp; Brut");
+  });
+});
+
+describe("Clinical Pharmacology of Miami", () => {
+  // A trimmed copy of the feed's answer on 2026-11-24: 6 of its 11 studies, without the doctors'
+  // names, the images and the long story text.
+  it("reads each study's name and code, leaving out the wait-lists for future studies", () => {
+    const found = cpmi.parse([fixture("cpmi.json")]);
+    expect(found.map((f) => f.title)).toEqual(["Healthy Volunteers", "Healthy Senior Volunteers", "Kidney Disease", "Abdominoplasty"]);
+    expect(found[0]).toEqual({
+      key: "408",
+      clinicId: "clinical-pharmacology-miami",
+      title: "Healthy Volunteers",
+      pay: null,
+      when: null,
+      stay: null,
+      who: null,
+      code: "M26-134",
+      url: "https://cpmiclinical.com/studies/#!/",
+    });
+  });
+
+  it("finds nothing in an answer that isn't the list, and skips an entry with no number or name", () => {
+    expect(cpmi.parse(["<html>nothing</html>"])).toEqual([]);
+    expect(cpmi.parse([])).toEqual([]);
+    expect(cpmi.parse(['[{"StudyID":"1","Title":"A study"}]'])).toEqual([]);
+    expect(cpmi.parse(['{"studies":[{"Title":"No number"},{"StudyID":"2"},{"StudyID":"3","Title":" "},null]}'])).toEqual([]);
+    // However the wait-list is spelt.
+    expect(cpmi.parse(['{"studies":[{"StudyID":"4","Title":"Obesity","Protocol":"Wait List: Future Obesity Study"},{"StudyID":"5","Title":"Gout","Protocol":"Waitlist"}]}'])).toEqual([]);
+  });
+
+  it("links its Openings to the Clinic's own site, though the list comes from another company's", () => {
+    const found = cpmi.parse([fixture("cpmi.json")]);
+    expect(cpmi.pages.map((p) => new URL(p).host)).toEqual(["realtime-host01.com"]);
+    expect(clean(found, cpmi)).toHaveLength(found.length);
+    expect(clean([{ ...found[0]!, url: "https://realtime-host01.com/erg-cpm/web/v1/studies?" }], cpmi)).toEqual([]);
+  });
+});
+
+describe("Medpace", () => {
+  // The feed's answer on 2026-11-24, in its shape: JSON encoded once more as a string, each study a card of HTML.
+  it("reads each study card, in the Clinic's own words", () => {
+    const found = basics(medpace, "medpace.json", "www.medpace.com");
+    expect(found).toHaveLength(6);
+    expect(found[0]).toEqual({
+      key: "/study-participants/browse-studies/healthy-adults-with-mild-to-moderate-hypertension-ages-18-65-11700/",
+      clinicId: "medpace",
+      title: "Healthy Adults with Mild to Moderate Hypertension, Ages 18-65, $13,900",
+      pay: "$13,900 - Study Calendars Available",
+      when: null,
+      stay: "This study requires 16 outpatient visits (includes screening) plus one separate 4-night stay at our Phase 1 unit in Cincinnati, OH.",
+      who: "Age: 18-65, BMI: 18-35, No Nicotine Use",
+      code: null,
+      url: "https://www.medpace.com/study-participants/browse-studies/healthy-adults-with-mild-to-moderate-hypertension-ages-18-65-11700/",
+    });
+    expect(found[3]).toMatchObject({ stay: "This study requires 6 outpatient visits, (includes screening) plus 1, 2-night stay at our Phase 1 unit in Cincinnati , OH.", who: "Age: 18-60, BMI: 18-30" });
+  });
+
+  it("gives no pay or stay where a card names none", () => {
+    const glp1 = medpace.parse([fixture("medpace.json")])[5];
+    expect(glp1).toMatchObject({ title: "Have You Previously Taken, or Are Currently Taking a GLP-1 Medication?", pay: null, stay: null, who: null });
+  });
+
+  it("takes the stay from an excerpt cut short before its first sentence ends", () => {
+    const answer = JSON.stringify(JSON.stringify({ posts: [
+      '<a class="em-study-card" href="https://www.medpace.com/study-participants/browse-studies/a/"><p class="em-study-card__title">A study</p><p class="em-study-card__excerpt"><p>This study requires 6 outpatient visits plus one 3-night stay at our Phase 1 unit in\u2026</p></a>',
+    ] }));
+    expect(medpace.parse([answer])[0]?.stay).toBe("This study requires 6 outpatient visits plus one 3-night stay at our Phase 1 unit in");
+  });
+
+  it("reads the answer encoded once, and finds nothing in one that isn't the list", () => {
+    const once = JSON.parse(fixture("medpace.json")) as string;
+    expect(medpace.parse([once])).toHaveLength(6);
+    expect(medpace.parse(['"just a string"'])).toEqual([]);
+    expect(medpace.parse(['{"foundPosts":0,"posts":[]}'])).toEqual([]);
+  });
+});
+
 describe("the sources read since 2026-11-24", () => {
   it("lose no Opening to the read's own checks of Clinic and link", () => {
     const cases: [Source, string[]][] = [
@@ -232,6 +354,9 @@ describe("the sources read since 2026-11-24", () => {
       [axis, ["axis.html"]],
       [cenexel, ["cenexel-act.html", "cenexel-cns.html", "cenexel-iresearch.html", "cenexel-hri.html"]],
       [prosciento, ["prosciento.html"]],
+      [abbvie, ["abbvie.json"]],
+      [cpmi, ["cpmi.json"]],
+      [medpace, ["medpace.json"]],
     ];
     for (const [source, files] of cases) {
       const found = source.parse(files.map(fixture));
